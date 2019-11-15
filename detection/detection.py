@@ -12,8 +12,6 @@
 """
 import os
 from pathlib import Path
-
-import cv2
 import imutils
 import numpy as np
 from log import logger
