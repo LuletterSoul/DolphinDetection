@@ -1,0 +1,40 @@
+{
+  "videos": [
+    {
+      "index": 0,
+      "name": "video1",
+      "ip": "222.190.243.176",
+      "port": "8081",
+      "suffix": "cHZnNjcxLWF2LzE2LzE",
+      "headers": {
+        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)"
+      },
+      "m3u8_url": "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE%3D.m3u8/",
+      "url": "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE=/",
+      "roi": {
+        "x": 100,
+        "y": 100,
+        "width": 1000,
+        "height": 1000
+      }
+    },
+    {
+      "index": 0,
+      "name": "video1",
+      "ip": "222.190.243.176",
+      "port": "8081",
+      "suffix": "cHZnNjcxLWF2LzE2LzE",
+      "headers": {
+        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)"
+      },
+      "m3u8_url": "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE%3D.m3u8/",
+      "url": "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE=/",
+      "roi": {
+        "x": 100,
+        "y": 100,
+        "width": 1000,
+        "height": 1000
+      }
+    }
+  ]
+}
