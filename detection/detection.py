@@ -10,15 +10,16 @@
 @version 1.0
 @desc:
 """
-import os
-from pathlib import Path
-import imutils
-import numpy as np
-from utils.log import logger
-from utils import *
 import time
-from config import VideoConfig
+import numpy as np
 from multiprocessing import Queue
+
+import imutils
+
+from config import VideoConfig
+from utils import *
+
+# from utils.log import logger
 
 # initialize the motion saliency object and start the video stream
 saliency = None

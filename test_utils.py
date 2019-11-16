@@ -30,5 +30,11 @@ def test_crop_by_roi():
     cv2.waitKey(0)
 
 
+def test_label():
+    labeler = Labeler(LABEL_IMAGE_PATH, LABEL_SAVE_PATH, LABEL_SAVE_PATH, LABEL_TARGET_PATH)
+    labeler.label()
+
+
 if __name__ == '__main__':
-    test_crop_by_roi()
+    test_label()
+    # test_crop_by_roi()

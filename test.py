@@ -84,5 +84,5 @@ if __name__ == '__main__':
     # test_read_steam()
     # test_read_frame()
     # test_detect()
-    # test_detect_monitor()
-    test_adaptive_thresh()
+    test_detect_monitor()
+    # test_adaptive_thresh()
