@@ -9,7 +9,7 @@ import cv2
 from multiprocessing import Queue
 
 
-def read(stream_save_path: Path, vcfg: VideoConfig, mq):
+def read(stream_save_path: Path, vcfg: VideoConfig, mq: Queue):
     # ts_localpath = "TS"  # 下载的视频段存放路径
     # if not os.path.exists(ts_localpath):
     # os.makedirs(ts_localpath)

@@ -3,10 +3,12 @@
 import cv2
 import os
 from utils.log import logger
+from pathlib import Path
 
 
-def process_video(inpath, outpath, frame_num=10):
-    cap = cv2.VideoCapture(inpath)
+def process_video(inpath: Path, outpath: Path, frame_num=10):
+    outpath.mkdir(exist_ok=True, parents=True)
+    cap = cv2.VideoCapture(str(inpath))
     # num_frame = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
     if not cap.isOpened():
@@ -14,14 +16,17 @@ def process_video(inpath, outpath, frame_num=10):
 
     cnt = 0
     count = 0
+    samples = []
     while 1:
         ret, frame = cap.read()
         cnt += 1
         if cnt % frame_num == 0:
             count += 1
             cv2.imwrite(os.path.join(outpath, str(count) + ".jpg"), frame)
+            samples.append(frame)
         if not ret:
             break
+    return samples
 
 
 if __name__ == '__main__':
