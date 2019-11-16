@@ -101,8 +101,12 @@ class Labeler(object):
         while True:
             cv2.imshow(window_name, img)
             if cv2.waitKey(0) & 0xFF == ord('y'):
-                logger.info('Select Center')
-                break
+                if self.center is None:
+                    logger.info('Pleas select a center')
+                    continue
+                else:
+                    logger.info('Select Center')
+                    break
             else:
                 logger.info('Re-select Center')
 
@@ -113,8 +117,11 @@ class Labeler(object):
         while True:
             cv2.imshow(window_name, img)
             if cv2.waitKey(0) & 0xFF == ord('y'):
-                logger.info('Crop roi done')
-                break
+                if self.start is None or self.end is None:
+                    logger.info('Pleas select a valid roi')
+                else:
+                    logger.info('Crop roi done')
+                    break
             else:
                 logger.info('Re-select roi')
 
