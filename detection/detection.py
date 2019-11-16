@@ -87,12 +87,15 @@ def detect(video_path: Path, candidate_save_path: Path, mq: Queue, cfg: VideoCon
     global bg_mean_intensity, dolphin_mean_intensity
     saliency = None
     target_cnt = 0
+    save_path = Path(candidate_save_path)
+    save_path.mkdir(exist_ok=True, parents=True)
     while True:
         if mq.empty():
             logger.debug('Empty cache section wait....')
             time.sleep(1)
             continue
-        ts_path = str(video_path / mq.get())
+        ts_poxis = video_path / mq.get()
+        ts_path = str(ts_poxis)
 
         if not os.path.exists(ts_path):
             logger.debug('Ts path not exist: [{}]'.format(ts_path))
@@ -103,9 +106,6 @@ def detect(video_path: Path, candidate_save_path: Path, mq: Queue, cfg: VideoCon
         # if vs.isOpened():
         #     logger.error('Video Open Failed: [{}]'.format(ts_path))
         #     continue
-
-        save_path = Path(candidate_save_path)
-        save_path.mkdir(exist_ok=True, parents=True)
 
         while True:
             # grab the frame from the threaded video stream and resize it
@@ -201,7 +201,11 @@ def detect(video_path: Path, candidate_save_path: Path, mq: Queue, cfg: VideoCon
                 if key == ord("q"):
                     break
 
+        # clean ts file
+        ts_poxis.unlink()
+
         # do a bit of cleanup
+        logger.info('Detect Done: [{}]'.format(ts_path))
         cv2.destroyAllWindows()
         vs.release()
 
