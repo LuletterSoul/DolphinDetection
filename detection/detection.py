@@ -75,10 +75,13 @@ def not_belong_bg(candidate_mean, thresh=20):
     return bg_dist > thresh
 
 
-def detect(video_path, candidate_save_path, mq, cfg: VideoConfig):
+def detect(video_path: Path, candidate_save_path: Path, mq, cfg: VideoConfig):
     # if not isinstance(mq, Queue):
     #     raise Exception('Queue must be capable of multi-processing safety.')
     logger.info('Init detection process......')
+
+    video_path.mkdir(exist_ok=True, parents=True)
+    candidate_save_path.mkdir(exist_ok=True, parents=True)
 
     global bg_mean_intensity, dolphin_mean_intensity
     saliency = None
@@ -187,13 +190,16 @@ def detect(video_path, candidate_save_path, mq, cfg: VideoConfig):
                         candidate = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
                         cv2.imwrite(str(save_path / str(target_cnt) / '.png'), candidate)
                         target_cnt += 1
+
             # display the image to our screen
-            cv2.imshow("Frame", frame)
-            cv2.imshow("Map", dilated)
-            key = cv2.waitKey(1) & 0xFF
-            # if the `q` key was pressed, break from the loop
-            if key == ord("q"):
-                break
+            if cfg.show_window:
+                cv2.imshow("Frame", frame)
+                cv2.imshow("Map", dilated)
+                key = cv2.waitKey(1) & 0xFF
+                # if the `q` key was pressed, break from the loop
+                if key == ord("q"):
+                    break
+
         # do a bit of cleanup
         cv2.destroyAllWindows()
         vs.release()

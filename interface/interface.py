@@ -17,11 +17,13 @@ import detection
 import stream
 from config import *
 from utils.log import logger
+from typing import List
 
 
 def detect(video_path, candidate_save_path, mq, cfg):
     try:
         detection.detect(video_path, candidate_save_path, mq, cfg)
+        return True
     except Exception as e:
         traceback.print_exc()
         logger.error(e)
@@ -31,15 +33,16 @@ def thresh(frame_path):
     detection.adaptive_thresh(frame_path)
 
 
-def read_stream(sream_save_path, vcfg, mq):
-    stream.read(sream_save_path, vcfg, mq)
+def read_stream(stream_save_path, vcfg, mq):
+    stream.read(stream_save_path, vcfg, mq)
+    return True
 
 
 def read_frame(input_path, output_path):
     return stream.process_video(input_path, output_path)
 
 
-def load_video_config(cfg_path):
+def load_video_config(cfg_path: Path) -> List[VideoConfig]:
     cfg_objs = json.load(open(cfg_path))['videos']
     cfgs = [VideoConfig.from_json(c) for c in cfg_objs]
     return cfgs

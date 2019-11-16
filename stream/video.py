@@ -9,7 +9,7 @@ import cv2
 from multiprocessing import Queue
 
 
-def read(stream_save_path, vcfg: VideoConfig, mq):
+def read(stream_save_path: Path, vcfg: VideoConfig, mq):
     # ts_localpath = "TS"  # 下载的视频段存放路径
     # if not os.path.exists(ts_localpath):
     # os.makedirs(ts_localpath)
@@ -23,6 +23,7 @@ def read(stream_save_path, vcfg: VideoConfig, mq):
         raise Exception('Multi-processing queue cannot be None.')
     # if not isinstance(mq, ):
     #     raise Exception('Queue must be capable of multi-processing safety.')
+    stream_save_path.mkdir(exist_ok=True, parents=True)
 
     pre_index = -1
     # index = []

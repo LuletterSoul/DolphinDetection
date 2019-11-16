@@ -12,6 +12,9 @@
 """
 import os
 from pathlib import Path
+import logging
+
+LOG_LEVER = logging.INFO
 
 PROJECT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 CANDIDATE_SAVE_DIR = PROJECT_DIR / 'data/candidates'
@@ -35,7 +38,7 @@ import json
 
 
 class VideoConfig:
-    def __init__(self, index, name, ip, port, suffix, headers, m3u8_url, url, roi, resize):
+    def __init__(self, index, name, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window=True):
         self.index = index
         self.name = name
         self.ip = ip
@@ -46,6 +49,7 @@ class VideoConfig:
         self.url = url
         self.roi = roi
         self.resize = resize
+        self.show_window = show_window
 
     def to_json(self):
         return json.dumps(self.__dict__)

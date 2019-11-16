@@ -15,8 +15,8 @@ import json
 from config import *
 import interface as I
 from utils import *
-from multiprocessing import Manager, Pool
-
+from multiprocessing import Manager, Pool, Queue
+from concurrent.futures import ThreadPoolExecutor
 
 def test_video_config():
     cfg = I.load_video_config(VIDEO_CONFIG_DIR / 'video.json')
@@ -33,19 +33,39 @@ def test_read_steam():
     # clean all exist streams
     q = Manager().Queue()
     cfg = I.load_video_config(VIDEO_CONFIG_DIR / 'video.json')
-    I.read_stream(STREAM_SAVE_DIR, cfg[0], q)
+    I.read_stream(STREAM_SAVE_DIR / str(cfg.index), cfg[0], q)
+
+    # I.read_stream(STREAM_SAVE_DIR, cfg['videos'][0], q)
 
 
 def test_detect():
     clean_dir(STREAM_SAVE_DIR)
-    q = Manager().Queue()
-    cfg = I.load_video_config(VIDEO_CONFIG_DIR / 'video.json')
-    # I.read_stream(STREAM_SAVE_DIR, cfg['videos'][0], q)
+    cfgs = I.load_video_config(VIDEO_CONFIG_DIR / 'video.json')
+    # for i, cfg in enumerate(cfgs[:1]):
     p = Pool()
-    p.apply_async(I.read_stream, (STREAM_SAVE_DIR, cfg[0], q,))
-    p.apply_async(I.detect, (STREAM_SAVE_DIR, CANDIDATE_SAVE_DIR, q, cfg[0],))
+    for i, cfg in enumerate(cfgs):
+        q = Manager().Queue()
+        # q = Queue()
+        p.apply_async(I.read_stream, (STREAM_SAVE_DIR / str(cfg.index), cfg, q,))
+        p.apply_async(I.detect, (STREAM_SAVE_DIR / str(cfg.index), CANDIDATE_SAVE_DIR, q, cfg,))
+        # p.apply_async(init_detect, (STREAM_SAVE_DIR / str(cfg.index), cfg,))
     p.close()
     p.join()
+    print('Init Done')
+
+
+def init_detect(stream_path: Path, cfg: VideoConfig):
+    # q = Queue()
+    print('Init')
+    try:
+        with ThreadPoolExecutor() as p:
+            q = Manager().Queue()
+            p.apply_async(I.read_stream, (stream_path, cfg, q,))
+            p.apply_async(I.detect, (stream_path, cfg, q, cfg))
+            p.close()
+            p.join()
+    except Exception as e:
+        print(e)
 
 
 def test_read_img():
