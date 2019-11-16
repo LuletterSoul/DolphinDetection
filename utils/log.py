@@ -13,7 +13,7 @@
 import logging
 from logging import Formatter
 from logging.handlers import RotatingFileHandler
-from config import LOG_DIR
+from config import LOG_DIR, LOG_LEVER
 
 
 def setup_logging(log_dir, logger_name='main', level=logging.DEBUG):
@@ -43,4 +43,4 @@ def setup_logging(log_dir, logger_name='main', level=logging.DEBUG):
     return logger
 
 
-logger = setup_logging(LOG_DIR)
+logger = setup_logging(LOG_DIR, level=LOG_LEVER)
