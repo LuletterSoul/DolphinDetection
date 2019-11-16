@@ -34,6 +34,10 @@
 │           ├── 002.ts
 │           └── ...
 │       └── ...
+│   └── labels        // Related label work
+│       ├── image     // Put images ready to be labeled
+│       ├── targets   // Save ROI images
+│       └── samples_template.json // template of ROI labels
 ├── detection       // Module of building object detection
 │   └── detection.py
 │   └── thresh.py
@@ -56,7 +60,9 @@
 ├──  config.py      // Unified constants and path definitions in the whole project
 ```
 
-# Testing
+# Label
+
+
 
 
 
