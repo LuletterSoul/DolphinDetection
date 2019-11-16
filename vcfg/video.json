@@ -24,7 +24,11 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": true
+      "show_window": true,
+      "window_position": {
+        "x": 100,
+        "y": 100
+      }
     },
     {
       "index": 1,
@@ -50,7 +54,11 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": true
+      "show_window": true,
+      "window_position": {
+        "x": 100,
+        "y": 100
+      }
     }
   ]
 }
