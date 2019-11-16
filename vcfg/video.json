@@ -1,0 +1,64 @@
+{
+  "videos": [
+    {
+      "index": 0,
+      "name": "video1",
+      "ip": "222.190.243.176",
+      "port": "8081",
+      "suffix": "cHZnNjcxLWF2LzE2LzE=/",
+      "headers": {
+        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)",
+        "Referer": "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE%3D.m3u8",
+        "Accept-Encoding": "identity"
+      },
+      "m3u8_url": "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE%3D.m3u8",
+      "url": "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE=/",
+      "roi": {
+        "x": 0,
+        "y": 170,
+        "width": -1,
+        "height": -1
+      },
+      "resize": {
+        "width": 1000,
+        "height": -1,
+        "scale": -1
+      },
+      "show_window": true,
+      "window_position": {
+        "x": 100,
+        "y": 100
+      }
+    },
+    {
+      "index": 1,
+      "name": "video2",
+      "ip": "222.190.243.176",
+      "port": "8081",
+      "suffix": "stream_13-",
+      "headers": {
+        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)",
+        "Referer": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
+        "Accept-Encoding": "identity"
+      },
+      "m3u8_url": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
+      "url": "http://222.190.243.243:8081/hls/stream_13/stream_13-",
+      "roi": {
+        "x": 0,
+        "y": 0,
+        "width": -1,
+        "height": -1
+      },
+      "resize": {
+        "width": 1000,
+        "height": -1,
+        "scale": -1
+      },
+      "show_window": true,
+      "window_position": {
+        "x": 100,
+        "y": 100
+      }
+    }
+  ]
+}
