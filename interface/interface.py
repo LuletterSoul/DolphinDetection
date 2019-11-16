@@ -11,17 +11,15 @@
 @desc:
 """
 
+import traceback
+
 import detection
 import stream
-import json
 from config import *
-import shutil
-from log import logger
-import traceback
+from utils.log import logger
 
 
 def detect(video_path, candidate_save_path, mq, cfg):
-    # shutil.rmtree()
     try:
         detection.detect(video_path, candidate_save_path, mq, cfg)
     except Exception as e:

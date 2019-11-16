@@ -3,7 +3,7 @@
 import requests
 import time
 from config import *
-from log import logger
+from utils.log import logger
 import queue
 import cv2
 from multiprocessing import Queue

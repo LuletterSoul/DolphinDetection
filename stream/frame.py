@@ -2,7 +2,7 @@
 
 import cv2
 import os
-from log import logger
+from utils.log import logger
 
 
 def process_video(inpath, outpath, frame_num=10):

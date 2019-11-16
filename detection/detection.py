@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 import imutils
 import numpy as np
-from log import logger
+from utils.log import logger
 from utils import *
 import time
 from config import VideoConfig
