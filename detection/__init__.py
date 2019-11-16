@@ -11,6 +11,6 @@
 @desc:
 """
 
-
 from .detection import *
 from .thresh import *
+from .manager import DetectionMonitor

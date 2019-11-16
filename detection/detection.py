@@ -18,6 +18,7 @@ from utils.log import logger
 from utils import *
 import time
 from config import VideoConfig
+from multiprocessing import Queue
 
 # initialize the motion saliency object and start the video stream
 saliency = None
@@ -75,7 +76,7 @@ def not_belong_bg(candidate_mean, thresh=20):
     return bg_dist > thresh
 
 
-def detect(video_path: Path, candidate_save_path: Path, mq, cfg: VideoConfig):
+def detect(video_path: Path, candidate_save_path: Path, mq: Queue, cfg: VideoConfig):
     # if not isinstance(mq, Queue):
     #     raise Exception('Queue must be capable of multi-processing safety.')
     logger.info('Init detection process......')
