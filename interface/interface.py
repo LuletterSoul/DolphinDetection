@@ -18,9 +18,18 @@ import stream
 from config import *
 from utils.log import logger
 from typing import List
+from multiprocessing import Queue
 
 
-def detect(video_path, candidate_save_path, mq, cfg):
+def detect(video_path, candidate_save_path, mq: Queue, cfg):
+    """
+    run object detection algorithm
+    :param video_path: video stream save path
+    :param candidate_save_path: the region candidates
+    :param mq: process communication pipe in which alg will read the newest stream index
+    :param cfg: video configuration
+    :return:
+    """
     try:
         detection.detect(video_path, candidate_save_path, mq, cfg)
         return True
@@ -29,20 +38,45 @@ def detect(video_path, candidate_save_path, mq, cfg):
         logger.error(e)
 
 
-def thresh(frame_path):
-    detection.adaptive_thresh(frame_path)
+def thresh(frame, cfg):
+    """
+    do frame binarization based adaptive thresh
+    :param frame:
+    :param cfg:
+    :return:
+    """
+    return detection.adaptive_thresh(frame, cfg)
 
 
-def read_stream(stream_save_path, vcfg, mq):
+def read_stream(stream_save_path, vcfg, mq: Queue):
+    """
+    read real-time video stream from provided configuration
+    :param stream_save_path: streams of each video will be save here
+    :param vcfg: video configurations
+    :param mq: process communication pipe in which stream receiver will write
+    the newest stream index,coorperated with # object detector
+    :return:
+    """
     stream.read(stream_save_path, vcfg, mq)
     return True
 
 
-def read_frame(input_path, output_path):
+def read_frame(input_path: Path, output_path: Path):
+    """
+    read frames from a stream
+    :param input_path:
+    :param output_path:
+    :return:
+    """
     return stream.process_video(input_path, output_path)
 
 
 def load_video_config(cfg_path: Path) -> List[VideoConfig]:
+    """
+    load video configuration into a dict object from json file
+    :param cfg_path:
+    :return:
+    """
     cfg_objs = json.load(open(cfg_path))['videos']
     cfgs = [VideoConfig.from_json(c) for c in cfg_objs]
     return cfgs
