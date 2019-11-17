@@ -34,6 +34,12 @@ FRAME_SAVE_DIR \
 VIDEO_CONFIG_DIR = PROJECT_DIR / 'vcfg'
 VIDEO_CONFIG_DIR.mkdir(exist_ok=True, parents=True)
 
+LABEL_IMAGE_PATH = PROJECT_DIR / 'data/labels/image'
+LABEL_TARGET_PATH = PROJECT_DIR / 'data/labels/target'
+LABEL_IMAGE_PATH.mkdir(exist_ok=True, parents=True)
+LABEL_TARGET_PATH.mkdir(exist_ok=True, parents=True)
+LABEL_SAVE_PATH = PROJECT_DIR / 'data/labels'
+
 import json
 
 

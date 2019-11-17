@@ -58,3 +58,20 @@ def crop_by_roi(img, roi):
             return img[y:, x:]
     if not is_in_range:
         raise Exception('Crop range out of bound.')
+
+
+def crop_by_se(img, start, end):
+    assert start[0] <= end[0] and start[1] <= end[1]
+    shape = img.shape
+    x1 = start[0]
+    y1 = start[1]
+    x2 = end[0]
+    y2 = end[1]
+    is_in_range = in_range(y1, shape[0]) and in_range(x1, shape[1]) \
+                  and in_range(y2, shape[0]) \
+                  and in_range(x2, shape[1])
+
+    if is_in_range:
+        return img[y1:y2, x1:x2]
+    else:
+        raise Exception('Crop rnage out of bound.')
