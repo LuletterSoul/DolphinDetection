@@ -25,7 +25,7 @@ class Labeler(object):
 
     def __init__(self, img_path: Path, save_path: Path, json_path: Path, target_path: Path, json_name='samples.json',
                  template_name='samples_template.json', scale=0.5,
-                 suffix='*.png') -> None:
+                 suffix='*.png', use_template=False) -> None:
         """
 
         :param img_path:
@@ -50,6 +50,7 @@ class Labeler(object):
         self.json_path = json_path
         self.template_name = template_name
         self.json_name = json_name
+        self.use_template = use_template
 
     def label(self):
         all_path = list(self.img_path.glob(self.suffix))
@@ -57,9 +58,10 @@ class Labeler(object):
             logger.info(
                 "Empty dir:[{}] or cannot match the suffix:[{}] with filenames.".format(self.img_path, self.suffix))
         self.json_path.mkdir(exist_ok=True, parents=True)
-        template_json = self.json_path / self.template_name
-        if not template_json.exists():
-            raise Exception('Template not exists')
+        if self.use_template:
+            template_json = self.json_path / self.template_name
+            if not template_json.exists():
+                raise Exception('Template not exists')
         # template_json, _ = buildWritableConfigFile(template_json)
         SELECT_ROI_WINDOW_NAME = 'Select Image ROI'
         SELECT_CENTER_WINDOW_NAME = 'Select ROI Center'
@@ -67,7 +69,8 @@ class Labeler(object):
         # sample_json, _ = buildWritableConfigFile()
         sample_jsons = {}
         for idx, p in enumerate(all_path):
-            js = json.load(open(template_json))
+            # js = json.load(open(template_json))
+            js = {} if not self.use_template else json.load(open(template_json))
             base_name = os.path.basename(str(p))
             img = cv2.imread(str(p))
             if img is None:
