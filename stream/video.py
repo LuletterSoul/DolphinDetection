@@ -78,7 +78,7 @@ def read(stream_save_path: Path, vcfg: VideoConfig, mq: Queue):
         # caches the stream index which has been completed by HTTP request.
         # note that the Queue is p
         mq.put(format_index)
-        logger.info("%03d.ts Download~" % current_index)
+        logger.debug("%03d.ts Download~" % current_index)
 
         # if __name__ == '__main__':
         #     read()

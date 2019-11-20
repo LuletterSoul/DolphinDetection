@@ -23,7 +23,7 @@ class DetectionMonitor(object):
 
     def __init__(self, video_config_path: Path, stream_path: Path, candidate_path: Path) -> None:
         super().__init__()
-        self.cfgs = I.load_video_config(video_config_path)
+        self.cfgs = I.load_video_config(video_config_path)[:1]
         # Communication Pipe between detector and stream receiver
         self.pipes = [Manager().Queue() for c in self.cfgs]
         self.stream_path = stream_path
