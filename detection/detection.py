@@ -38,18 +38,125 @@ beta = 15
 
 
 class Detector(object):
-    def __init__(self, chunk, cfg: VideoConfig) -> None:
+    def __init__(self, row_step, col_step, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
+                 region_save_path: Path) -> None:
         super().__init__()
         # self.video_path = video_path
         # self.region_save_path = region_save_path
         self.cfg = cfg
-        self.routine = cfg.routine
+        # self.routine = cfg.routine
         self.global_std = None
         self.global_mean = None
-        self.chunks = Queue()
+        self.row_step = row_step
+        self.col_step = col_step
+        self.row_index = row_index
+        self.col_index = col_index
+        self.start = [self.row_index * row_step, self.col_index * col_step]
+        self.end = [(self.row_index + 1) * row_index, (self.col_index + 1) * col_index]
+        self.sq = sq
+        self.rq = rq
+        self.region_save_path = region_save_path
+        self.region_save_path.mkdir(exist_ok=True, parents=True)
         self.saliency = cv2.saliency.MotionSaliencyBinWangApr2014_create()
+        self.saliency.init()
+        self.global_mean = np.array([80, 80, 80])
+        self.global_std = np.array([50, 50, 50])
+        self.alpha = 15
+        self.beta = 15
 
-    # def setChunks(self, frame):
+    def get_frame(self):
+        return self.crop(self.sq.get())
+
+    def crop(self, frame):
+        return crop_by_se(frame, self.start, self.end)
+
+    def detect(self):
+        # if not isinstance(mq, Queue):
+        #     raise Exception('Queue must be capable of multi-processing safety.')
+        logger.info('Init detection process......')
+        global global_mean, global_std, dolphin_mean_intensity
+
+        frame = self.get_frame()
+        self.saliency.setImagesize(frame.shape[1], frame.shape[0])
+        # if vs.isOpened():
+        #     logger.error('Video Open Failed: [{}]'.format(ts_path))
+        #     continue
+        while True:
+            frame = self.get_frame()
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            success, saliency_map = self.saliency.computeSaliency(gray)
+            saliency_map = (saliency_map * 255).astype("uint8")
+            # do dilation to connect the splited small components
+            dilated = cv2.dilate(saliency_map, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=1)
+            # dilated = saliency_map
+
+            # 获取所有检测框
+            connectivity = 8
+            # image, contours, hier = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            num_labels, label_map, stats, centroids = cv2.connectedComponentsWithStatsWithAlgorithm(dilated,
+                                                                                                    connectivity,
+                                                                                                    cv2.CV_16U,
+                                                                                                    cv2.CCL_DEFAULT)
+            # centroids = centroids.astype(np.int)
+            if num_labels == 0:
+                logger.debug('Not found connected components')
+            continue
+            # stats = [s for s in stats if in_range(s[0], frame.shape[1]) and in_range(s[1], frame.shape[0])]
+            # sorted(stats, key=lambda s: s[4], reverse=False)
+            # background components
+            logger.debug('Components num: [{}].'.format(num_labels))
+            # logger.debug('Background label: [{}]'.format(label_map[centroids[0][1], centroids[0][0]]))
+            old_b = global_mean
+            old_d = dolphin_mean_intensity
+            # new_b = np.reshape(frame, (-1, 3)).mean(axis=0)
+            new_b, global_std = cv2.meanStdDev(frame)
+            # in case env become dark suddenly
+            if np.mean(old_b - new_b) > alpha:
+                dolphin_mean_intensity -= beta
+            logger.info('Down dolphin mean intensity from [{}] to [{}]'.format(old_d, dolphin_mean_intensity))
+            # in case env become light suddenly
+            if np.mean(new_b - old_b) > alpha:
+                dolphin_mean_intensity += beta
+            logger.info('Increase dolphin mean intensity from [{}] to [{}]'.format(old_d, dolphin_mean_intensity))
+            logger.debug(
+                'Update mean global background pixel intensity from [{}] to [{}].'.format(old_b, new_b))
+            global_mean = new_b
+
+            logger.debug('Current mean of bg: [{}].'.format(np.reshape(new_b, (1, -1))))
+            logger.debug('Current std of bg: [{}]'.format(np.reshape(global_std, (1, -1))))
+
+            for idx, s in enumerate(stats):
+                # potential dolphin target components
+                if s[0] and s[1] and in_range(s[0], frame.shape[1]) and in_range(s[1], frame.shape[0]):
+                    region_mean, mask_frame = cal_mean_intensity(frame, idx, label_map, s[4])
+                    region = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
+                    _, region_std = cv2.meanStdDev(region)
+                    # logger.info(region_std)
+                    is_dolphin, bg_dist, gt_dist = do_decision(region_mean, region_std)
+                    if is_dolphin:
+                        logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
+                    color = np.random.randint(0, 255, size=(3,))
+                    color = [int(c) for c in color]
+                    cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10), color, 2)
+                    candidate = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
+                    cv2.imwrite(str(self.region_save_path / str(target_cnt) / '.png'), candidate)
+                    target_cnt += 1
+
+            # display the image to our screen
+            if cfg.show_window:
+                cv2.imshow("Frame", frame)
+            # cv2.imshow("Map", dilated)
+            key = cv2.waitKey(1) & 0xFF
+            # if the `q` key was pressed, break from the loop
+            if key == ord("q"):
+                break
+
+        # do a bit of cleanup
+        cv2.destroyAllWindows()
+        vs.release()
+
+
+# def setChunks(self, frame):
 
 
 class DetectorController(object):
