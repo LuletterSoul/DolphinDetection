@@ -19,8 +19,8 @@ class TestDetection(object):
 
     def test_detect_embadding_monitor(self):
         # monitor = detection.DetectionMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR, CANDIDATE_SAVE_DIR)
-        monitor = detection.DetectionEmbeddingControlMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
-                                                             CANDIDATE_SAVE_DIR)
+        monitor = detection.EmbeddingControlBasedProcessMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
+                                                                CANDIDATE_SAVE_DIR)
         monitor.monitor()
 
     def test_control(self):
