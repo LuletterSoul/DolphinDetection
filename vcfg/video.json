@@ -32,7 +32,8 @@
       "routine": {
         "row": 2,
         "col": 2
-      }
+      },
+      "sample_rate": 3
     },
     {
       "index": 1,
@@ -66,7 +67,8 @@
       "routine": {
         "row": 2,
         "col": 2
-      }
+      },
+      "sample_rate": 3
     }
   ]
 }

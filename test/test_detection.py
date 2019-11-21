@@ -13,14 +13,29 @@
 from unittest import TestCase
 import detection
 from config import *
+import traceback
 
 
 class TestDetection(object):
 
-    def test_detect_embadding_monitor(self):
+    def test_detect_embedding_based_process_monitor(self):
         # monitor = detection.DetectionMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR, CANDIDATE_SAVE_DIR)
         monitor = detection.EmbeddingControlBasedProcessMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
                                                                 CANDIDATE_SAVE_DIR)
+        monitor.monitor()
+
+    def test_detect_embedding_based_thread_monitor(self):
+        try:
+            monitor = detection.EmbeddingControlBasedThreadMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
+                                                                   CANDIDATE_SAVE_DIR)
+            monitor.monitor()
+        except Exception as e:
+            traceback.print_exc()
+
+    def test_detect_embedding_based_thread_and_process_monitor(self):
+        monitor = detection.EmbeddingControlBasedThreadAndProcessMonitor(VIDEO_CONFIG_DIR / 'video.json',
+                                                                         STREAM_SAVE_DIR,
+                                                                         CANDIDATE_SAVE_DIR)
         monitor.monitor()
 
     def test_control(self):
@@ -31,4 +46,6 @@ class TestDetection(object):
 
 if __name__ == '__main__':
     test_detection = TestDetection()
-    test_detection.test_detect_embadding_monitor()
+    # test_detection.test_detect_embedding_based_process_monitor()
+    # test_detection.test_detect_embedding_based_thread_monitor()
+    test_detection.test_detect_embedding_based_thread_and_process_monitor()

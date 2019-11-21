@@ -181,7 +181,7 @@ class Detector(object):
                             logger.info('dedede')
                         is_dolphin, bg_dist, gt_dist = self.do_decision(region_mean, region_std)
                         if is_dolphin:
-                            logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
+                            # logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
                             color = np.random.randint(0, 255, size=(3,))
                             color = [int(c) for c in color]
                             cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10), color, 2)

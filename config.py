@@ -45,7 +45,7 @@ import json
 
 class VideoConfig:
     def __init__(self, index, name, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
-                 window_position,routine):
+                 window_position, routine, sample_rate):
         self.index = index
         self.name = name
         self.ip = ip
@@ -59,6 +59,7 @@ class VideoConfig:
         self.show_window = show_window
         self.window_position = window_position
         self.routine = routine
+        self.sample_rate = sample_rate
 
     def to_json(self):
         return json.dumps(self.__dict__)
