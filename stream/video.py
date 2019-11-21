@@ -14,7 +14,6 @@ def read(stream_save_path: Path, vcfg: VideoConfig, mq: Queue):
     # if not os.path.exists(ts_localpath):
     # os.makedirs(ts_localpath)
     # m3u8_url = "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE%3D.m3u8"
-    logger.info('Init stream reading process.....')
     if stream_save_path is None:
         raise Exception('Stream save path cannot be None.')
     if vcfg is None:

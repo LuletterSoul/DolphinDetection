@@ -11,8 +11,8 @@
 @desc:
 """
 import time
-import numpy as np
 from multiprocessing import Queue
+import traceback
 
 import imutils
 
@@ -51,18 +51,21 @@ class Detector(object):
         self.col_step = col_step
         self.row_index = row_index
         self.col_index = col_index
-        self.start = [self.row_index * row_step, self.col_index * col_step]
-        self.end = [(self.row_index + 1) * row_index, (self.col_index + 1) * col_index]
+        self.start = [self.col_index * col_step, self.row_index * row_step]
+        self.end = [(self.col_index + 1) * col_step, (self.row_index + 1) * row_step]
         self.sq = sq
         self.rq = rq
         self.region_save_path = region_save_path
         self.region_save_path.mkdir(exist_ok=True, parents=True)
-        self.saliency = cv2.saliency.MotionSaliencyBinWangApr2014_create()
-        self.saliency.init()
+        logger.debug(
+            'Detector [{},{}]: region save to: [{}]'.format(self.row_index, self.row_index, str(self.region_save_path)))
         self.global_mean = np.array([80, 80, 80])
         self.global_std = np.array([50, 50, 50])
+        self.dolphin_mean_intensity = np.array([80, 80, 80])
         self.alpha = 15
         self.beta = 15
+        self.region_cnt = 0
+        self.detect_cnt = 0
 
     def get_frame(self):
         return self.crop(self.sq.get())
@@ -70,90 +73,145 @@ class Detector(object):
     def crop(self, frame):
         return crop_by_se(frame, self.start, self.end)
 
+    def not_belong_do(self, candidate_mean, thresh=10):
+        # global global_mean, dolphin_mean_intensity
+        # bg_dist = euclidean_distance(candidate_mean, bg_mean_intensity)
+        gt_dist = euclidean_distance(candidate_mean, self.dolphin_mean_intensity)
+        # logger.debug('Distance with background threshold: [{}].'.format(bg_dist))
+        logger.debug('Distance with Ground Truth threshold: [{}].'.format(gt_dist))
+        # the smaller euclidean distance with class, it's more reliable towards the correct detection
+        return gt_dist < thresh
+
+    def do_decision(self, region_mean, region_std):
+        # global global_mean, dolphin_mean_intensity, global_std
+        bg_dist = euclidean_distance(region_mean, self.global_mean)
+        gt_dist = euclidean_distance(region_mean, self.dolphin_mean_intensity)
+        std_dist = euclidean_distance(region_std, self.global_std)
+        logger.debug('Mean Distance with background threshold: [{}].'.format(bg_dist))
+        logger.debug('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
+        logger.debug('Std Distance with global: [{}].'.format(std_dist))
+        # the smaller euclidean distance with class, it's more reliable towards the correct detection
+        return gt_dist < bg_dist, bg_dist, gt_dist
+
+    def not_belong_bg(self, region_mean, thresh=20):
+        bg_dist = euclidean_distance(region_mean, self.global_mean)
+        logger.debug('Distance with background threshold: [{}].'.format(bg_dist))
+        return bg_dist > thresh
+
     def detect(self):
-        # if not isinstance(mq, Queue):
-        #     raise Exception('Queue must be capable of multi-processing safety.')
-        logger.info('Init detection process......')
-        global global_mean, global_std, dolphin_mean_intensity
+        try:
+            # if not isinstance(mq, Queue):
+            #     raise Exception('Queue must be capable of multi-processing safety.')
+            logger.info(
+                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.row_index,
+                                                                           self.col_index))
+            # global global_mean, global_std, dolphin_mean_intensity
 
-        frame = self.get_frame()
-        self.saliency.setImagesize(frame.shape[1], frame.shape[0])
-        # if vs.isOpened():
-        #     logger.error('Video Open Failed: [{}]'.format(ts_path))
-        #     continue
-        while True:
             frame = self.get_frame()
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            success, saliency_map = self.saliency.computeSaliency(gray)
-            saliency_map = (saliency_map * 255).astype("uint8")
-            # do dilation to connect the splited small components
-            dilated = cv2.dilate(saliency_map, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=1)
-            # dilated = saliency_map
 
-            # 获取所有检测框
-            connectivity = 8
-            # image, contours, hier = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            num_labels, label_map, stats, centroids = cv2.connectedComponentsWithStatsWithAlgorithm(dilated,
-                                                                                                    connectivity,
-                                                                                                    cv2.CV_16U,
-                                                                                                    cv2.CCL_DEFAULT)
-            # centroids = centroids.astype(np.int)
-            if num_labels == 0:
-                logger.debug('Not found connected components')
-            continue
-            # stats = [s for s in stats if in_range(s[0], frame.shape[1]) and in_range(s[1], frame.shape[0])]
-            # sorted(stats, key=lambda s: s[4], reverse=False)
-            # background components
-            logger.debug('Components num: [{}].'.format(num_labels))
-            # logger.debug('Background label: [{}]'.format(label_map[centroids[0][1], centroids[0][0]]))
-            old_b = global_mean
-            old_d = dolphin_mean_intensity
-            # new_b = np.reshape(frame, (-1, 3)).mean(axis=0)
-            new_b, global_std = cv2.meanStdDev(frame)
-            # in case env become dark suddenly
-            if np.mean(old_b - new_b) > alpha:
-                dolphin_mean_intensity -= beta
-            logger.info('Down dolphin mean intensity from [{}] to [{}]'.format(old_d, dolphin_mean_intensity))
-            # in case env become light suddenly
-            if np.mean(new_b - old_b) > alpha:
-                dolphin_mean_intensity += beta
-            logger.info('Increase dolphin mean intensity from [{}] to [{}]'.format(old_d, dolphin_mean_intensity))
             logger.debug(
-                'Update mean global background pixel intensity from [{}] to [{}].'.format(old_b, new_b))
-            global_mean = new_b
+                'Detector [{},{}]: init saliency detector'.format(self.row_index, self.row_index))
+            self.saliency = cv2.saliency.MotionSaliencyBinWangApr2014_create()
+            self.saliency.setImagesize(frame.shape[1], frame.shape[0])
+            self.saliency.init()
+            # if vs.isOpened():
+            #     logger.error('Video Open Failed: [{}]'.format(ts_path))
+            #     continue
+            while True:
+                # logger.info('Detector: [{},{}] Fetch frame'.format(self.row_index, self.col_index))
+                frame = self.get_frame()
+                if frame is None:
+                    logger.info('Detector: [{},{}] empty frame')
+                    continue
+                # logger.info('Detector: [{},{}] Fetch frame done..'.format(self.row_index, self.col_index))
+                original_frame = frame.copy()
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                success, saliency_map = self.saliency.computeSaliency(gray)
+                saliency_map = (saliency_map * 255).astype("uint8")
+                # do dilation to connect the splited small components
+                dilated = cv2.dilate(saliency_map, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=1)
+                # dilated = saliency_map
 
-            logger.debug('Current mean of bg: [{}].'.format(np.reshape(new_b, (1, -1))))
-            logger.debug('Current std of bg: [{}]'.format(np.reshape(global_std, (1, -1))))
+                # 获取所有检测框
+                connectivity = 8
+                # image, contours, hier = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                num_labels, label_map, stats, centroids = cv2.connectedComponentsWithStatsWithAlgorithm(dilated,
+                                                                                                        connectivity,
+                                                                                                        cv2.CV_16U,
+                                                                                                        cv2.CCL_DEFAULT)
+                # centroids = centroids.astype(np.int)
+                if num_labels == 0:
+                    logger.debug('Not found connected components')
+                    continue
+                # stats = [s for s in stats if in_range(s[0], frame.shape[1]) and in_range(s[1], frame.shape[0])]
+                # sorted(stats, key=lambda s: s[4], reverse=False)
+                # background components
+                logger.debug('Components num: [{}].'.format(num_labels))
+                # logger.debug('Background label: [{}]'.format(label_map[centroids[0][1], centroids[0][0]]))
+                old_b = self.global_mean
+                old_d = self.dolphin_mean_intensity
+                # new_b = np.reshape(frame, (-1, 3)).mean(axis=0)
+                new_b, self.global_std = cv2.meanStdDev(frame)
+                # in case env become dark suddenly
+                if np.mean(old_b - new_b) > alpha:
+                    self.dolphin_mean_intensity -= beta
+                    logger.info(
+                        'Down dolphin mean intensity from [{}] to [{}]'.format(old_d, self.dolphin_mean_intensity))
+                # in case env become light suddenly
+                if np.mean(new_b - old_b) > alpha:
+                    self.dolphin_mean_intensity += beta
+                    logger.info(
+                        'Increase dolphin mean intensity from [{}] to [{}]'.format(old_d, self.dolphin_mean_intensity))
+                logger.debug(
+                    'Update mean global background pixel intensity from [{}] to [{}].'.format(old_b, new_b))
 
-            for idx, s in enumerate(stats):
-                # potential dolphin target components
-                if s[0] and s[1] and in_range(s[0], frame.shape[1]) and in_range(s[1], frame.shape[0]):
-                    region_mean, mask_frame = cal_mean_intensity(frame, idx, label_map, s[4])
-                    region = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
-                    _, region_std = cv2.meanStdDev(region)
-                    # logger.info(region_std)
-                    is_dolphin, bg_dist, gt_dist = do_decision(region_mean, region_std)
-                    if is_dolphin:
-                        logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
-                    color = np.random.randint(0, 255, size=(3,))
-                    color = [int(c) for c in color]
-                    cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10), color, 2)
-                    candidate = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
-                    cv2.imwrite(str(self.region_save_path / str(target_cnt) / '.png'), candidate)
-                    target_cnt += 1
+                self.global_mean = new_b
 
-            # display the image to our screen
-            if cfg.show_window:
-                cv2.imshow("Frame", frame)
-            # cv2.imshow("Map", dilated)
-            key = cv2.waitKey(1) & 0xFF
-            # if the `q` key was pressed, break from the loop
-            if key == ord("q"):
-                break
+                logger.debug('Current mean of bg: [{}].'.format(np.reshape(new_b, (1, -1))))
+                logger.debug('Current std of bg: [{}]'.format(np.reshape(self.global_std, (1, -1))))
 
-        # do a bit of cleanup
-        cv2.destroyAllWindows()
-        vs.release()
+                for idx, s in enumerate(stats):
+                    # potential dolphin target components
+                    if s[0] and s[1] and in_range(s[0], frame.shape[1]) and in_range(s[1], frame.shape[0]):
+                        region_mean, mask_frame = cal_mean_intensity(frame, idx, label_map, s[4])
+                        region = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
+                        _, region_std = cv2.meanStdDev(region)
+                        # logger.info(region_std)
+                        if region_std is None:
+                            logger.info('dedede')
+                        is_dolphin, bg_dist, gt_dist = self.do_decision(region_mean, region_std)
+                        if is_dolphin:
+                            logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
+                            color = np.random.randint(0, 255, size=(3,))
+                            color = [int(c) for c in color]
+                            cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10), color, 2)
+                            candidate = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
+                            cv2.imwrite(str(self.region_save_path / str(self.region_cnt) / '.png'), candidate)
+                        self.region_cnt += 1
+
+                # display the image to our screen
+                if self.cfg.show_window:
+                    cv2.imshow("Frame", frame)
+                    # cv2.imshow("Map", dilated)
+                    key = cv2.waitKey(1) & 0xFF
+                    # if the `q` key was pressed, break from the loop
+                    if key == ord("q"):
+                        break
+                self.detect_cnt += 1
+                logger.debug('Current mean of bg: [{}].'.format(np.reshape(new_b, (1, -1))))
+                logger.debug(
+                    'Detector: [{},{}] detect done [{}] frames..'.format(self.row_index, self.col_index,
+                                                                         self.detect_cnt))
+                self.rq.put(frame)
+
+            # do a bit of cleanup
+            cv2.destroyAllWindows()
+
+            # vs.release()
+
+        except Exception as msg:
+            traceback.print_exc()
+            logger.error(msg)
 
 
 # def setChunks(self, frame):
@@ -200,7 +258,7 @@ def do_decision(region_mean, region_std):
     std_dist = euclidean_distance(region_std, global_std)
     logger.debug('Mean Distance with background threshold: [{}].'.format(bg_dist))
     logger.debug('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
-    logger.info('Std Distance with global: [{}].'.format(std_dist))
+    logger.debug('Std Distance with global: [{}].'.format(std_dist))
     # the smaller euclidean distance with class, it's more reliable towards the correct detection
     return gt_dist < bg_dist, bg_dist, gt_dist
 
@@ -317,8 +375,8 @@ def detect(video_path: Path, region_save_path: Path, mq: Queue, cfg: VideoConfig
                         color = np.random.randint(0, 255, size=(3,))
                         color = [int(c) for c in color]
                         cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10), color, 2)
-                        candidate = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
-                        cv2.imwrite(str(save_path / str(target_cnt) / '.png'), candidate)
+                        # candidate = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
+                        # cv2.imwrite(str(save_path / str(target_cnt) / '.png'), candidate)
                         target_cnt += 1
 
             # display the image to our screen
@@ -333,8 +391,6 @@ def detect(video_path: Path, region_save_path: Path, mq: Queue, cfg: VideoConfig
         # clean ts file
         ts_poxis.unlink()
 
-        # do a bit of cleanup
-        logger.info('Detect Done: [{}]'.format(ts_path))
         cv2.destroyAllWindows()
         vs.release()
 
