@@ -15,7 +15,7 @@
       "url": "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE=/",
       "roi": {
         "x": 0,
-        "y": 170,
+        "y": 200,
         "width": -1,
         "height": -1
       },
@@ -24,11 +24,18 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": true,
+      "show_window": false,
       "window_position": {
         "x": 100,
         "y": 100
-      }
+      },
+      "routine": {
+        "row": 2,
+        "col": 2
+      },
+      "sample_rate": 3,
+      "draw_boundary": true,
+      "enable": false
     },
     {
       "index": 1,
@@ -45,7 +52,7 @@
       "url": "http://222.190.243.243:8081/hls/stream_13/stream_13-",
       "roi": {
         "x": 0,
-        "y": 0,
+        "y": 300,
         "width": -1,
         "height": -1
       },
@@ -54,11 +61,18 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": true,
+      "show_window": false,
       "window_position": {
         "x": 100,
         "y": 100
-      }
+      },
+      "routine": {
+        "row": 2,
+        "col": 2
+      },
+      "sample_rate": 3,
+      "draw_boundary": true,
+      "enable": true
     }
   ]
 }

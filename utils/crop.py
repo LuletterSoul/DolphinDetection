@@ -22,6 +22,10 @@ def clean_dir(path):
         .mkdir(exist_ok=True, parents=True)
 
 
+def in_range_equal(val, up_bound, low_bound=0):
+    return up_bound >= val >= low_bound
+
+
 def in_range(val, up_bound, low_bound=0):
     return up_bound > val >= low_bound
 
@@ -61,17 +65,18 @@ def crop_by_roi(img, roi):
 
 
 def crop_by_se(img, start, end):
-    assert start[0] <= end[0] and start[1] <= end[1]
+    if not (start[0] <= end[0] and start[1] <= end[1]):
+        raise Exception('Start and end is invalid.')
     shape = img.shape
     x1 = start[0]
     y1 = start[1]
     x2 = end[0]
     y2 = end[1]
     is_in_range = in_range(y1, shape[0]) and in_range(x1, shape[1]) \
-                  and in_range(y2, shape[0]) \
-                  and in_range(x2, shape[1])
+                  and in_range_equal(y2, shape[0]) \
+                  and in_range_equal(x2, shape[1])
 
     if is_in_range:
         return img[y1:y2, x1:x2]
     else:
-        raise Exception('Crop rnage out of bound.')
+        raise Exception('Crop range out of bound.')

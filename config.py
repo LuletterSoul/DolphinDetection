@@ -40,12 +40,29 @@ LABEL_IMAGE_PATH.mkdir(exist_ok=True, parents=True)
 LABEL_TARGET_PATH.mkdir(exist_ok=True, parents=True)
 LABEL_SAVE_PATH = PROJECT_DIR / 'data/labels'
 
+from enum import Enum
+
+
+class MonitorType(Enum):
+    PROCESS_BASED = 1,
+    THREAD_BASED = 2,
+    PROCESS_THREAD_BASED = 3
+
+
+# select monitor type, process-based means the system will create a process for each component,such as detector,
+# stream receiver, frame dispatcher and frame collector...
+# Required much resources because system divide resources into process units,
+# which are limited by CPU cores
+# MONITOR = MonitorType.PROCESS_BASED
+
+
+MONITOR = MonitorType.PROCESS_THREAD_BASED
 import json
 
 
 class VideoConfig:
     def __init__(self, index, name, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
-                 window_position):
+                 window_position, routine, sample_rate, draw_boundary, enable):
         self.index = index
         self.name = name
         self.ip = ip
@@ -58,6 +75,10 @@ class VideoConfig:
         self.resize = resize
         self.show_window = show_window
         self.window_position = window_position
+        self.routine = routine
+        self.sample_rate = sample_rate
+        self.draw_boundary = draw_boundary
+        self.enable = enable
 
     def to_json(self):
         return json.dumps(self.__dict__)

@@ -77,6 +77,7 @@ def load_video_config(cfg_path: Path) -> List[VideoConfig]:
     :param cfg_path:
     :return:
     """
-    cfg_objs = json.load(open(cfg_path))['videos']
-    cfgs = [VideoConfig.from_json(c) for c in cfg_objs]
-    return cfgs
+    with open(cfg_path) as f:
+        cfg_objs = json.load(f)['videos']
+        cfgs = [VideoConfig.from_json(c) for c in cfg_objs]
+        return cfgs
