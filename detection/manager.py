@@ -34,6 +34,7 @@ class DetectionMonitor(object):
         super().__init__()
         # self.cfgs = I.load_video_config(video_config_path)[-1:]
         self.cfgs = I.load_video_config(video_config_path)
+        self.cfgs = [c for c in self.cfgs if c.enable]
         # Communication Pipe between detector and stream receiver
         self.pipes = [Manager().Queue() for c in self.cfgs]
         self.stream_path = stream_path
@@ -94,7 +95,6 @@ class EmbeddingControlMonitor(DetectionMonitor):
     def call(self):
         # Init stream receiver firstly, ensures video index that is arrived before detectors begin detection..
         for i, cfg in enumerate(self.cfgs):
-            logger.info('Init video [{}] stream receiver process.....'.format(cfg.index))
             self.init_stream_receiver(cfg, i)
 
         # Run video capture from stream
@@ -104,7 +104,6 @@ class EmbeddingControlMonitor(DetectionMonitor):
 
         # Init detector controller
         self.init_controller()
-        logger.info('~~~~~~~~~~~~~')
 
     def init_controller(self):
         pass
@@ -187,11 +186,11 @@ class DetectorController(object):
         self.region_path = region_path
         # self.process_pool = process_pool
         self.index_pool = index_pool
-        self.row = cfg.routine['row']
         self.col = cfg.routine['col']
+        self.raw = cfg.routine['row']
 
-        self.send_pipes = [Manager().Queue() for i in range(self.row * self.col)]
-        self.receive_pipes = [Manager().Queue() for i in range(self.row * self.col)]
+        self.send_pipes = [Manager().Queue() for i in range(self.col * self.raw)]
+        self.receive_pipes = [Manager().Queue() for i in range(self.col * self.raw)]
         self.frame_queue = frame_queue
 
         # def __getstate__(self):
@@ -207,19 +206,19 @@ class DetectorController(object):
         # read a frame, record frame size before running detectors
         frame = self.frame_queue.get()
         frame, original_frame = self.preprocess(frame)
-        self.row_step = int(frame.shape[0] / self.row)
-        self.col_step = int(frame.shape[1] / self.col)
+        self.col_step = int(frame.shape[0] / self.col)
+        self.row_step = int(frame.shape[1] / self.raw)
 
     def init_detectors(self):
-        logger.info('Init total [{}] detectors....'.format(self.row * self.col))
+        logger.info('Init total [{}] detectors....'.format(self.col * self.raw))
         self.detectors = []
-        for i in range(self.row):
-            for j in range(self.col):
+        for i in range(self.col):
+            for j in range(self.raw):
                 region_detector_path = self.region_path / str(self.cfg.index) / (str(i) + '-' + str(j))
-                index = self.row * i + j
+                index = self.col * i + j
                 logger.info(index)
                 self.detectors.append(
-                    Detector(self.row_step, self.col_step, i, j, self.cfg, self.send_pipes[index],
+                    Detector(self.col_step, self.row_step, i, j, self.cfg, self.send_pipes[index],
                              self.receive_pipes[index],
                              region_detector_path))
 
@@ -230,9 +229,9 @@ class DetectorController(object):
         if self.cfg.resize['scale'] != -1:
             frame = cv2.resize(frame, (0, 0), fx=self.cfg.resize['scale'], fy=self.cfg.resize['scale'])
         elif self.cfg.resize['width'] != -1:
-            frame = imutils.resize(frame, self.cfg.resize['width'])
-        elif self.cfg.resize['height '] != -1:
-            frame = imutils.resize(frame, self.cfg.resize['height'])
+            frame = imutils.resize(frame, width=self.cfg.resize['width'])
+        elif self.cfg.resize['height'] != -1:
+            frame = imutils.resize(frame, height=self.cfg.resize['height'])
         frame = crop_by_roi(frame, self.cfg.roi)
         # frame = imutils.resize(frame, width=1000)
         # frame = frame[340:, :, :]
@@ -261,11 +260,26 @@ class DetectorController(object):
             if cnt % 100 == 0:
                 end = time.time() - start
                 logger.info(
-                    'Detection controller [{}]: Operation Speed Rate [{}]s/100'.format(self.cfg.index, end))
+                    'Detection controller [{}]: Operation Speed Rate [{}]s/100fs, unit process rate: [{}]s/f'.format(
+                        self.cfg.index, round(end, 2), round(end / 100, 2)))
                 start = time.time()
+            if self.cfg.draw_boundary:
+                frame = self.draw_boundary(frame)
             # logger.info('Done constructing of sub-frames into a original frame....')
             cv2.imshow('Construected Frame', frame)
             cv2.waitKey(1)
+
+    def draw_boundary(self, frame):
+        shape = frame.shape
+        for i in range(self.col - 1):
+            start = (0, self.col_step * (i + 1))
+            end = (shape[1] - 1, self.col_step * (i + 1))
+            cv2.line(frame, start, end, (0, 0, 255), thickness=1)
+        for j in range(self.raw - 1):
+            start = (self.row_step * (j + 1), 0)
+            end = (self.row_step * (j + 1), shape[0] - 1)
+            cv2.line(frame, start, end, (0, 0, 255), thickness=1)
+        return frame
 
     def dispatch(self):
         logger.info('Dispatch frame to all detectors....')
@@ -283,9 +297,9 @@ class DetectorController(object):
 
     def construct(self, sub_frames):
         sub_frames = np.array(sub_frames)
-        sub_frames = np.reshape(sub_frames, (self.row, self.col, self.row_step, self.col_step, 3))
+        sub_frames = np.reshape(sub_frames, (self.col, self.raw, self.col_step, self.row_step, 3))
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3, 4))
-        sub_frames = np.reshape(sub_frames, (self.row * self.row_step, self.col * self.col_step, 3))
+        sub_frames = np.reshape(sub_frames, (self.col * self.col_step, self.raw * self.row_step, 3))
         return sub_frames
 
 
@@ -298,10 +312,10 @@ class ProcessBasedDetectorController(DetectorController):
         logger.info('Running detectors.......')
         detect_proc_res = []
         for idx, d in enumerate(self.detectors):
-            logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.row_index, d.col_index))
+            logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.col_index, d.raw_index))
             detect_proc_res.append(pool.apply_async(d.detect, ()))
             # detect_proc_res.append(pool.submit(d.detect, ()))
-            logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.row_index, d.col_index))
+            logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.col_index, d.raw_index))
         return res, detect_proc_res
         # self.monitor.wait_pool()
         # self.loop_work()
@@ -317,10 +331,10 @@ class ThreadBasedDetectorController(DetectorController):
             thread_res.append(pool.submit(self.dispatch))
             logger.info('Running detectors.......')
             for idx, d in enumerate(self.detectors):
-                logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.row_index, d.col_index))
+                logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.col_index, d.raw_index))
                 thread_res.append(pool.submit(d.detect))
                 # detect_proc_res.append(pool.submit(d.detect, ()))
-                logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.row_index, d.col_index))
+                logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.col_index, d.raw_index))
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
@@ -344,10 +358,10 @@ class ProcessAndThreadBasedDetectorController(DetectorController):
         logger.info('Running detectors.......')
         thread_res = []
         for idx, d in enumerate(self.detectors):
-            logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.row_index, d.col_index))
+            logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.col_index, d.raw_index))
             thread_res.append(thread_pool.submit(d.detect))
             # detect_proc_res.append(pool.submit(d.detect, ()))
-            logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.row_index, d.col_index))
+            logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.col_index, d.raw_index))
         return pool_res, thread_res
         # self.monitor.wait_pool()
         # self.loop_work()
@@ -390,7 +404,7 @@ class VideoCaptureThreading:
             # with self.read_lock:
             grabbed, frame = self.cap.read()
             if not grabbed:
-                logger.info('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
+                logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
                 logger.debug('Read next frame from video index pool..........')
                 self.cap.release()
                 self.posix.unlink()

@@ -38,7 +38,7 @@ beta = 15
 
 
 class Detector(object):
-    def __init__(self, row_step, col_step, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
+    def __init__(self, col_step, col_step_1, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
                  region_save_path: Path) -> None:
         super().__init__()
         # self.video_path = video_path
@@ -47,18 +47,18 @@ class Detector(object):
         # self.routine = cfg.routine
         self.global_std = None
         self.global_mean = None
-        self.row_step = row_step
-        self.col_step = col_step
-        self.row_index = row_index
-        self.col_index = col_index
-        self.start = [self.col_index * col_step, self.row_index * row_step]
-        self.end = [(self.col_index + 1) * col_step, (self.row_index + 1) * row_step]
+        self.row_step = col_step
+        self.col_step = col_step_1
+        self.col_index = row_index
+        self.raw_index = col_index
+        self.start = [self.raw_index * col_step_1, self.col_index * col_step]
+        self.end = [(self.raw_index + 1) * col_step_1, (self.col_index + 1) * col_step]
         self.sq = sq
         self.rq = rq
         self.region_save_path = region_save_path
         self.region_save_path.mkdir(exist_ok=True, parents=True)
         logger.debug(
-            'Detector [{},{}]: region save to: [{}]'.format(self.row_index, self.row_index, str(self.region_save_path)))
+            'Detector [{},{}]: region save to: [{}]'.format(self.col_index, self.col_index, str(self.region_save_path)))
         self.global_mean = np.array([80, 80, 80])
         self.global_std = np.array([50, 50, 50])
         self.dolphin_mean_intensity = np.array([80, 80, 80])
@@ -103,14 +103,14 @@ class Detector(object):
             # if not isinstance(mq, Queue):
             #     raise Exception('Queue must be capable of multi-processing safety.')
             logger.info(
-                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.row_index,
-                                                                           self.col_index))
+                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.col_index,
+                                                                           self.raw_index))
             # global global_mean, global_std, dolphin_mean_intensity
 
             frame = self.get_frame()
 
             logger.debug(
-                'Detector [{},{}]: init saliency detector'.format(self.row_index, self.row_index))
+                'Detector [{},{}]: init saliency detector'.format(self.col_index, self.col_index))
             self.saliency = cv2.saliency.MotionSaliencyBinWangApr2014_create()
             self.saliency.setImagesize(frame.shape[1], frame.shape[0])
             self.saliency.init()
@@ -177,16 +177,14 @@ class Detector(object):
                         region = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
                         _, region_std = cv2.meanStdDev(region)
                         # logger.info(region_std)
-                        if region_std is None:
-                            logger.info('dedede')
                         is_dolphin, bg_dist, gt_dist = self.do_decision(region_mean, region_std)
                         if is_dolphin:
                             # logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
                             color = np.random.randint(0, 255, size=(3,))
                             color = [int(c) for c in color]
                             cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10), color, 2)
-                            candidate = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
-                            cv2.imwrite(str(self.region_save_path / str(self.region_cnt) / '.png'), candidate)
+                            if region.shape[0] and region.shape[1]:
+                                cv2.imwrite(str(self.region_save_path / (str(self.region_cnt) + '.png')), region)
                         self.region_cnt += 1
 
                 # display the image to our screen
@@ -200,7 +198,7 @@ class Detector(object):
                 self.detect_cnt += 1
                 logger.debug('Current mean of bg: [{}].'.format(np.reshape(new_b, (1, -1))))
                 logger.debug(
-                    'Detector: [{},{}] detect done [{}] frames..'.format(self.row_index, self.col_index,
+                    'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.raw_index,
                                                                          self.detect_cnt))
                 self.rq.put(frame)
 
