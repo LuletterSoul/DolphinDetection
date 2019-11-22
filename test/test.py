@@ -25,6 +25,10 @@ def test_video_config():
     cfg = VideoConfig.from_json(cfg[0])
     print(cfg.resize)
 
+def test_load_label_json():
+    cfg = I.load_label_config(LABEL_SAVE_PATH / 'samples.json')
+    print(cfg[0].center)
+
 
 def test_load_video_json():
     cfg = I.load_video_config(VIDEO_CONFIG_DIR / 'video.json')
@@ -80,9 +84,10 @@ def test_read_frame():
 
 if __name__ == '__main__':
     # test_load_video_json()
+    test_load_label_json()
     # test_video_config()
     # test_read_steam()
     # test_read_frame()
     # test_detect()
-    test_detect_monitor()
+    # test_detect_monitor()
     # test_adaptive_thresh()

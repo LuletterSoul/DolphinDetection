@@ -81,3 +81,13 @@ def load_video_config(cfg_path: Path) -> List[VideoConfig]:
         cfg_objs = json.load(f)['videos']
         cfgs = [VideoConfig.from_json(c) for c in cfg_objs]
         return cfgs
+
+
+def load_label_config(cfg_path: Path) -> List[LabelConfig]:
+    """
+    load image label configuration into a dict object from json file
+    """
+    with open(cfg_path) as f:
+        cfg_objs = json.load(f)
+        cfgs = [LabelConfig.from_json(c) for c in cfg_objs.values()]
+        return cfgs

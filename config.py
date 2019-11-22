@@ -88,6 +88,23 @@ class VideoConfig:
         # json_dict = json.loads(json_str)
         return cls(**json_dict)
 
+
+class LabelConfig:
+    """
+    Image label class
+    """
+    def __init__(self, start, end, center):
+        self.start = start
+        self.end = end
+        self.center = center
+    
+    def to_json(self):
+        return json.dumps(self.__dict__)
+
+    @classmethod
+    def from_json(cls, json_dict):
+        return cls(**json_dict)
+
 # example usage
 # User("tbrown", "Tom Brown").to_json()
 # User.from_json(User("tbrown", "Tom Brown").to_json()).to_json()
