@@ -89,7 +89,7 @@ class Detector(object):
         std_dist = euclidean_distance(region_std, self.global_std)
         logger.debug('Mean Distance with background threshold: [{}].'.format(bg_dist))
         logger.debug('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
-        logger.debug('Std Distance with global: [{}].'.format(std_dist))
+        logger.info('Std Distance with global: [{}].'.format(std_dist))
         # the smaller euclidean distance with class, it's more reliable towards the correct detection
         return gt_dist < bg_dist, bg_dist, gt_dist
 
@@ -97,6 +97,9 @@ class Detector(object):
         bg_dist = euclidean_distance(region_mean, self.global_mean)
         logger.debug('Distance with background threshold: [{}].'.format(bg_dist))
         return bg_dist > thresh
+
+    def is_in_ratio(self, area, total):
+        return (area / total) * 100 <= self.cfg.filtered_ratio
 
     def detect(self):
         try:
@@ -114,6 +117,7 @@ class Detector(object):
             self.saliency = cv2.saliency.MotionSaliencyBinWangApr2014_create()
             self.saliency.setImagesize(frame.shape[1], frame.shape[0])
             self.saliency.init()
+            self.shape = frame.shape
             # if vs.isOpened():
             #     logger.error('Video Open Failed: [{}]'.format(ts_path))
             #     continue
@@ -176,15 +180,20 @@ class Detector(object):
                         region_mean, mask_frame = cal_mean_intensity(frame, idx, label_map, s[4])
                         region = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
                         _, region_std = cv2.meanStdDev(region)
-                        # logger.info(region_std)
+                        logger.info(
+                            'Area: [{}], ration: [{}]'.format(s[4],
+                                                              round(s[4] / (frame.shape[0] * frame.shape[1]) * 100, 3)))
+                        is_in_ratio = self.is_in_ratio(s[4], self.shape[0] * self.shape[1])
                         is_dolphin, bg_dist, gt_dist = self.do_decision(region_mean, region_std)
-                        if is_dolphin:
+                        if is_dolphin and is_in_ratio:
                             # logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
                             color = np.random.randint(0, 255, size=(3,))
                             color = [int(c) for c in color]
                             cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10), color, 2)
-                            if region.shape[0] and region.shape[1]:
-                                cv2.imwrite(str(self.region_save_path / (str(self.region_cnt) + '.png')), region)
+                            # if region.shape[0] and region.shape[1]:
+                            cv2.imwrite(str(self.region_save_path / (
+                                    str(self.region_cnt) +'-' + str(int(region_mean[0])) + '-' + str(int(region_mean[1])) + '-' +
+                                    str(int(region_mean[2])) + '.png')), region)
                         self.region_cnt += 1
 
                 # display the image to our screen

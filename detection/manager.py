@@ -407,7 +407,8 @@ class VideoCaptureThreading:
                 logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
                 logger.debug('Read next frame from video index pool..........')
                 self.cap.release()
-                self.posix.unlink()
+                if self.posix.exists():
+                    self.posix.unlink()
                 self.posix = self.video_path / self.index_pool.get()
                 self.src = str(self.posix)
                 if not os.path.exists(self.src):
