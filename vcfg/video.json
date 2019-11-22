@@ -33,7 +33,9 @@
         "row": 2,
         "col": 2
       },
-      "sample_rate": 3
+      "sample_rate": 3,
+      "draw_boundary": true,
+      "enable": false
     },
     {
       "index": 1,
@@ -68,7 +70,9 @@
         "row": 2,
         "col": 2
       },
-      "sample_rate": 3
+      "sample_rate": 3,
+      "draw_boundary": true,
+      "enable": true
     }
   ]
 }
