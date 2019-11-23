@@ -37,6 +37,15 @@ alpha = 15
 beta = 15
 
 
+class DetectionResult(object):
+
+    def __init__(self, frame, status, regions) -> None:
+        super().__init__()
+        self.frame= frame
+        self.status = status
+        self.regions = regions
+
+
 class Detector(object):
     def __init__(self, col_step, col_step_1, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
                  region_save_path: Path) -> None:
@@ -64,6 +73,7 @@ class Detector(object):
         self.dolphin_mean_intensity = np.array([80, 80, 80])
         self.alpha = 15
         self.beta = 15
+        self.std_thresh = 20
         self.region_cnt = 0
         self.detect_cnt = 0
 
@@ -91,7 +101,8 @@ class Detector(object):
         logger.debug('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
         logger.info('Std Distance with global: [{}].'.format(std_dist))
         # the smaller euclidean distance with class, it's more reliable towards the correct detection
-        return gt_dist < bg_dist, bg_dist, gt_dist
+        is_true = gt_dist < bg_dist and (std_dist > self.std_thresh)
+        return is_true, bg_dist, gt_dist
 
     def not_belong_bg(self, region_mean, thresh=20):
         bg_dist = euclidean_distance(region_mean, self.global_mean)
@@ -174,6 +185,8 @@ class Detector(object):
                 logger.debug('Current mean of bg: [{}].'.format(np.reshape(new_b, (1, -1))))
                 logger.debug('Current std of bg: [{}]'.format(np.reshape(self.global_std, (1, -1))))
 
+                regions = []
+                status = []
                 for idx, s in enumerate(stats):
                     # potential dolphin target components
                     if s[0] and s[1] and in_range(s[0], frame.shape[1]) and in_range(s[1], frame.shape[0]):
@@ -192,8 +205,11 @@ class Detector(object):
                             cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10), color, 2)
                             # if region.shape[0] and region.shape[1]:
                             cv2.imwrite(str(self.region_save_path / (
-                                    str(self.region_cnt) +'-' + str(int(region_mean[0])) + '-' + str(int(region_mean[1])) + '-' +
+                                    str(self.region_cnt) + '-' + str(int(region_mean[0])) + '-' + str(
+                                int(region_mean[1])) + '-' +
                                     str(int(region_mean[2])) + '.png')), region)
+                            regions.append(region)
+                            status.append(s)
                         self.region_cnt += 1
 
                 # display the image to our screen
@@ -209,7 +225,8 @@ class Detector(object):
                 logger.debug(
                     'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.raw_index,
                                                                          self.detect_cnt))
-                self.rq.put(frame)
+                # self.rq.put(frame)
+                self.rq.put(DetectionResult(frame, status, regions))
 
             # do a bit of cleanup
             cv2.destroyAllWindows()

@@ -19,7 +19,7 @@ from config import VideoConfig
 from utils import *
 from typing import List
 from utils import clean_dir, logger
-from detection import Detector
+from detection import Detector, DetectionResult
 import threading
 import cv2
 import imutils
@@ -35,6 +35,7 @@ class DetectionMonitor(object):
         # self.cfgs = I.load_video_config(video_config_path)[-1:]
         self.cfgs = I.load_video_config(video_config_path)
         self.cfgs = [c for c in self.cfgs if c.enable]
+
         # Communication Pipe between detector and stream receiver
         self.pipes = [Manager().Queue() for c in self.cfgs]
         self.stream_path = stream_path
@@ -184,6 +185,7 @@ class DetectorController(object):
         self.cfg = cfg
         self.stream_path = stream_path
         self.region_path = region_path
+        self.result_cnt = 0
         # self.process_pool = process_pool
         self.index_pool = index_pool
         self.col = cfg.routine['col']
@@ -192,6 +194,9 @@ class DetectorController(object):
         self.send_pipes = [Manager().Queue() for i in range(self.col * self.raw)]
         self.receive_pipes = [Manager().Queue() for i in range(self.col * self.raw)]
         self.frame_queue = frame_queue
+        self.result_queue = Manager().Queue()
+
+        self.quit = False
 
         # def __getstate__(self):
 
@@ -221,7 +226,8 @@ class DetectorController(object):
                     Detector(self.col_step, self.row_step, i, j, self.cfg, self.send_pipes[index],
                              self.receive_pipes[index],
                              region_detector_path))
-
+        self.result_path = self.region_path / str(self.cfg.index) / 'frames'
+        self.result_path.mkdir(exist_ok=True, parents=True)
         logger.info('Detectors init done....')
 
     def preprocess(self, frame):
@@ -247,15 +253,27 @@ class DetectorController(object):
         self.init_detectors()
         return None
 
-    def loop_work(self):
+    def write_work(self):
+        while True:
+            if self.quit:
+                break
+            r = self.result_queue.get()
+            self.result_cnt += 1
+            filename = str(self.result_path / (str(self.result_cnt) + '.png'))
+            cv2.imwrite(filename, r)
+        return True
+
+    def collect_and_reconstruct(self):
         logger.info('Detection controller [{}] start collect and construct'.format(self.cfg.index))
         cnt = 0
         start = time.time()
         while True:
-            sub_frames = self.collect()
+            if self.quit:
+                break
+            results = self.collect()
             # logger.info('Done collected from detectors.....')
             # logger.info('Constructing sub-frames into a original frame....')
-            frame = self.construct(sub_frames)
+            frame = self.construct(results)
             cnt += 1
             if cnt % 100 == 0:
                 end = time.time() - start
@@ -266,8 +284,9 @@ class DetectorController(object):
             if self.cfg.draw_boundary:
                 frame = self.draw_boundary(frame)
             # logger.info('Done constructing of sub-frames into a original frame....')
-            cv2.imshow('Construected Frame', frame)
+            cv2.imshow('Reconstructed Frame', frame)
             cv2.waitKey(1)
+        return True
 
     def draw_boundary(self, frame):
         shape = frame.shape
@@ -284,30 +303,37 @@ class DetectorController(object):
     def dispatch(self):
         logger.info('Dispatch frame to all detectors....')
         while True:
+            if self.quit:
+                break
             frame = self.frame_queue.get()
             frame, original_frame = self.preprocess(frame)
             for sp in self.send_pipes:
                 sp.put(frame)
+        return True
 
     def collect(self):
-        sub_frames = []
+        res = []
         for rp in self.receive_pipes:
-            sub_frames.append(rp.get())
-        return sub_frames
+            res.append(rp.get())
+        return res
 
-    def construct(self, sub_frames):
+    def construct(self, results: List[DetectionResult]):
+        sub_frames = [r.frame for r in results]
         sub_frames = np.array(sub_frames)
         sub_frames = np.reshape(sub_frames, (self.col, self.raw, self.col_step, self.row_step, 3))
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3, 4))
-        sub_frames = np.reshape(sub_frames, (self.col * self.col_step, self.raw * self.row_step, 3))
-        return sub_frames
+        constructed_frame = np.reshape(sub_frames, (self.col * self.col_step, self.raw * self.row_step, 3))
+        for r in results:
+            if len(r.regions):
+                self.result_queue.put(constructed_frame)
+        return constructed_frame
 
 
 class ProcessBasedDetectorController(DetectorController):
 
     def start(self, pool: Pool):
         super().start(pool)
-        res = pool.apply_async(self.loop_work, ())
+        res = pool.apply_async(self.collect_and_reconstruct, ())
         pool.apply_async(self.dispatch, ())
         logger.info('Running detectors.......')
         detect_proc_res = []
@@ -327,7 +353,7 @@ class ThreadBasedDetectorController(DetectorController):
         super().start(pool)
         thread_res = []
         try:
-            thread_res.append(pool.submit(self.loop_work))
+            thread_res.append(pool.submit(self.collect_and_reconstruct))
             thread_res.append(pool.submit(self.dispatch))
             logger.info('Running detectors.......')
             for idx, d in enumerate(self.detectors):
@@ -349,14 +375,17 @@ class ProcessAndThreadBasedDetectorController(DetectorController):
         process_pool = pool[0]
         thread_pool = pool[1]
         pool_res = []
-        super().start(process_pool)
-        pr1 = process_pool.apply_async(self.loop_work, ())
-        pool_res.append(pr1)
-        pr2 = process_pool.apply_async(self.dispatch, ())
-        pool_res.append(pr2)
-
-        logger.info('Running detectors.......')
         thread_res = []
+        super().start(process_pool)
+        # collect child frames and reconstruct frames from detectors asynchronously
+        pr1 = process_pool.apply_async(self.collect_and_reconstruct, ())
+        pool_res.append(pr1)
+        # dispatch child frames to detector asynchronously
+        pr2 = process_pool.apply_async(self.dispatch, ())
+        # write detection result asynchronously
+        thread_res.append(thread_pool.submit(self.write_work))
+        pool_res.append(pr2)
+        logger.info('Running detectors.......')
         for idx, d in enumerate(self.detectors):
             logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.col_index, d.raw_index))
             thread_res.append(thread_pool.submit(d.detect))
