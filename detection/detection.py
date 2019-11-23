@@ -13,6 +13,7 @@
 import time
 from multiprocessing import Queue
 import traceback
+import interface
 
 import imutils
 
@@ -39,12 +40,13 @@ beta = 15
 
 class DetectionResult(object):
 
-    def __init__(self, frame, status, regions, binary) -> None:
+    def __init__(self, frame, status, regions, binary, thresh) -> None:
         super().__init__()
         self.frame = frame
         self.status = status
         self.regions = regions
         self.binary = binary
+        self.thresh = thresh
 
 
 class Detector(object):
@@ -98,11 +100,11 @@ class Detector(object):
         bg_dist = euclidean_distance(region_mean, self.global_mean)
         gt_dist = euclidean_distance(region_mean, self.dolphin_mean_intensity)
         std_dist = euclidean_distance(region_std, self.global_std)
-        logger.debug('Mean Distance with background threshold: [{}].'.format(bg_dist))
-        logger.debug('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
-        logger.info('Std Distance with global: [{}].'.format(std_dist))
+        logger.info('Mean Distance with background threshold: [{}].'.format(bg_dist))
+        logger.info('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
+        logger.debug('Std Distance with global: [{}].'.format(std_dist))
         # the smaller euclidean distance with class, it's more reliable towards the correct detection
-        is_true = gt_dist < bg_dist
+        is_true = gt_dist < 60
         return is_true, bg_dist, gt_dist
 
     def not_belong_bg(self, region_mean, thresh=20):
@@ -143,7 +145,10 @@ class Detector(object):
                 original_frame = frame.copy()
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 success, saliency_map = self.saliency.computeSaliency(gray)
+                thresh = interface.thresh(frame)
                 saliency_map = (saliency_map * 255).astype("uint8")
+
+                saliency_map = cv2.bitwise_or(saliency_map, thresh)
                 # do dilation to connect the splited small components
                 dilated = cv2.dilate(saliency_map, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=1)
                 # dilated = saliency_map
@@ -155,6 +160,7 @@ class Detector(object):
                                                                                                         connectivity,
                                                                                                         cv2.CV_16U,
                                                                                                         cv2.CCL_DEFAULT)
+
                 # centroids = centroids.astype(np.int)
                 if num_labels == 0:
                     logger.debug('Not found connected components')
@@ -227,7 +233,7 @@ class Detector(object):
                     'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.raw_index,
                                                                          self.detect_cnt))
                 # self.rq.put(frame)
-                self.rq.put(DetectionResult(frame, status, regions, dilated))
+                self.rq.put(DetectionResult(frame, status, regions, dilated, thresh))
 
             # do a bit of cleanup
             cv2.destroyAllWindows()

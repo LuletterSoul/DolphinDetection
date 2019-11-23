@@ -38,11 +38,10 @@ def detect(video_path, candidate_save_path, mq: Queue, cfg):
         logger.error(e)
 
 
-def thresh(frame, cfg):
+def thresh(frame, cfg=None):
     """
     do frame binarization based adaptive thresh
     :param frame:
-    :param cfg:
     :return:
     """
     return detection.adaptive_thresh(frame, cfg)

@@ -283,7 +283,7 @@ class DetectorController(object):
             results = self.collect()
             # logger.info('Done collected from detectors.....')
             # logger.info('Constructing sub-frames into a original frame....')
-            frame, binary = self.construct(results)
+            frame, binary, thresh = self.construct(results)
             cnt += 1
             if cnt % 100 == 0:
                 end = time.time() - start
@@ -296,6 +296,7 @@ class DetectorController(object):
             # logger.info('Done constructing of sub-frames into a original frame....')
             cv2.imshow('Reconstructed Frame', frame)
             cv2.imshow('Reconstructed Binary', binary)
+            cv2.imshow('Reconstructed Thresh', thresh)
             cv2.waitKey(1)
         return True
 
@@ -331,12 +332,14 @@ class DetectorController(object):
     def construct(self, results: List[DetectionResult]):
         sub_frames = [r.frame for r in results]
         sub_binary = [r.binary for r in results]
+        sub_thresh = [r.thresh for r in results]
         constructed_frame = self.construct_rgb(sub_frames)
         constructed_binary = self.construct_gray(sub_binary)
+        constructed_thresh = self.construct_gray(sub_thresh)
         for r in results:
             if len(r.regions):
                 self.result_queue.put(constructed_frame)
-        return constructed_frame, constructed_binary
+        return constructed_frame, constructed_binary, constructed_thresh
 
     def construct_rgb(self, sub_frames):
         sub_frames = np.array(sub_frames)
