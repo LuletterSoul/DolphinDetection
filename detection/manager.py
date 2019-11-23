@@ -30,7 +30,8 @@ import time
 # Monitor will build multiple video stream receivers according the video configuration
 class DetectionMonitor(object):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path) -> None:
+    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path,
+                 offline_path: Path = None) -> None:
         super().__init__()
         # self.cfgs = I.load_video_config(video_config_path)[-1:]
         self.cfgs = I.load_video_config(video_config_path)
@@ -40,6 +41,7 @@ class DetectionMonitor(object):
         self.pipes = [Manager().Queue() for c in self.cfgs]
         self.stream_path = stream_path
         self.region_path = region_path
+        self.offline_path = offline_path
         self.process_pool = Pool(processes=cpu_count() - 1)
         self.thread_pool = ThreadPoolExecutor()
 
@@ -78,14 +80,21 @@ class DetectionMonitor(object):
 # But a controller will manager [row*col] concurrency threads or processes
 # row and col are definied in video configuration
 class EmbeddingControlMonitor(DetectionMonitor):
-    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path) -> None:
-        super().__init__(video_config_path, stream_path, region_path)
+    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path,
+                 offline_path: Path = None) -> None:
+        super().__init__(video_config_path, stream_path, region_path, offline_path)
         self.caps_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
-        self.caps = [
-            VideoCaptureThreading(self.stream_path / str(c.index), self.pipes[idx], self.caps_queue[idx], c.sample_rate)
-            for
-            idx, c in
-            enumerate(self.cfgs)]
+        self.caps = []
+        for idx, c in enumerate(self.cfgs):
+            if c.online:
+                self.caps.append(
+                    VideoCaptureThreading(self.stream_path / str(c.index), self.pipes[idx], self.caps_queue[idx], c,
+                                          c.sample_rate))
+            else:
+                self.caps.append(
+                    VideoOfflineCapture(self.stream_path / str(c.index), self.pipes[idx], self.caps_queue[idx], c,
+                                        offline_path / str(c.index),
+                                        c.sample_rate, delete_post=False))
 
         self.controllers = [
             DetectorController(cfg, self.stream_path / str(cfg.index), self.region_path, self.caps_queue[idx],
@@ -99,7 +108,6 @@ class EmbeddingControlMonitor(DetectionMonitor):
             self.init_stream_receiver(cfg, i)
 
         # Run video capture from stream
-
         for i in range(len(self.cfgs)):
             self.caps[i].read()
 
@@ -113,8 +121,9 @@ class EmbeddingControlMonitor(DetectionMonitor):
 # Concurrency based multi processes
 class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path) -> None:
-        super().__init__(video_config_path, stream_path, region_path)
+    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path,
+                 offline_path: Path = None) -> None:
+        super().__init__(video_config_path, stream_path, region_path, offline_path)
         self.controllers = [
             ProcessBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path,
                                            self.caps_queue[idx],
@@ -132,8 +141,8 @@ class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 # Concurrency based multi threads
 class EmbeddingControlBasedThreadMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path) -> None:
-        super().__init__(video_config_path, stream_path, region_path)
+    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path, offline_path=None) -> None:
+        super().__init__(video_config_path, stream_path, region_path, offline_path)
         self.controllers = [
             ThreadBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path,
                                           self.caps_queue[idx],
@@ -155,8 +164,9 @@ class EmbeddingControlBasedThreadMonitor(EmbeddingControlMonitor):
 # Concurrency based multiple threads and multiple processes
 class EmbeddingControlBasedThreadAndProcessMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path) -> None:
-        super().__init__(video_config_path, stream_path, region_path)
+    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path,
+                 offline_path: Path = None) -> None:
+        super().__init__(video_config_path, stream_path, region_path, offline_path)
         self.controllers = [
             ProcessAndThreadBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path,
                                                     self.caps_queue[idx],
@@ -273,7 +283,7 @@ class DetectorController(object):
             results = self.collect()
             # logger.info('Done collected from detectors.....')
             # logger.info('Constructing sub-frames into a original frame....')
-            frame = self.construct(results)
+            frame, binary = self.construct(results)
             cnt += 1
             if cnt % 100 == 0:
                 end = time.time() - start
@@ -285,6 +295,7 @@ class DetectorController(object):
                 frame = self.draw_boundary(frame)
             # logger.info('Done constructing of sub-frames into a original frame....')
             cv2.imshow('Reconstructed Frame', frame)
+            cv2.imshow('Reconstructed Binary', binary)
             cv2.waitKey(1)
         return True
 
@@ -319,13 +330,26 @@ class DetectorController(object):
 
     def construct(self, results: List[DetectionResult]):
         sub_frames = [r.frame for r in results]
+        sub_binary = [r.binary for r in results]
+        constructed_frame = self.construct_rgb(sub_frames)
+        constructed_binary = self.construct_gray(sub_binary)
+        for r in results:
+            if len(r.regions):
+                self.result_queue.put(constructed_frame)
+        return constructed_frame, constructed_binary
+
+    def construct_rgb(self, sub_frames):
         sub_frames = np.array(sub_frames)
         sub_frames = np.reshape(sub_frames, (self.col, self.raw, self.col_step, self.row_step, 3))
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3, 4))
         constructed_frame = np.reshape(sub_frames, (self.col * self.col_step, self.raw * self.row_step, 3))
-        for r in results:
-            if len(r.regions):
-                self.result_queue.put(constructed_frame)
+        return constructed_frame
+
+    def construct_gray(self, sub_frames):
+        sub_frames = np.array(sub_frames)
+        sub_frames = np.reshape(sub_frames, (self.col, self.raw, self.col_step, self.row_step))
+        sub_frames = np.transpose(sub_frames, (0, 2, 1, 3))
+        constructed_frame = np.reshape(sub_frames, (self.col * self.col_step, self.raw * self.row_step))
         return constructed_frame
 
 
@@ -397,7 +421,11 @@ class ProcessAndThreadBasedDetectorController(DetectorController):
 
 
 class VideoCaptureThreading:
-    def __init__(self, video_path: Path, index_pool: Queue, frame_queue: Queue, sample_rate=5, width=640, height=480):
+    def __init__(self, video_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig, sample_rate=5,
+                 width=640,
+                 height=480,
+                 delete_post=True):
+        self.cfg = cfg
         self.video_path = video_path
         self.index_pool = index_pool
         # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
@@ -408,6 +436,7 @@ class VideoCaptureThreading:
         self.thread = threading.Thread(target=self.update, args=())
         self.sample_rate = sample_rate
         self.frame_queue = frame_queue
+        self.delete_post = delete_post
 
     def set(self, var1, var2):
         self.cap.set(var1, var2)
@@ -416,16 +445,22 @@ class VideoCaptureThreading:
         if self.started:
             print('[!] Threaded video capturing has already been started.')
             return None
+        src = self.load_next_src()
+        logger.info('Loading next video stream from [{}]....'.format(src))
+        self.cap = cv2.VideoCapture(src)
+        logger.info('Loading done from: [{}]'.format(src))
+        self.started = True
+        self.thread.start()
+        return self
+
+    def load_next_src(self):
         logger.debug('Loading video stream from video index pool....')
         self.posix = self.video_path / self.index_pool.get()
         self.src = str(self.posix)
         if not os.path.exists(self.src):
             logger.debug('Video path not exist: [{}]'.format(self.src))
-        self.cap = cv2.VideoCapture(self.src)
-        logger.debug('Loading done ....')
-        self.started = True
-        self.thread.start()
-        return self
+            return -1
+        return self.src
 
     def update(self):
         cnt = 0
@@ -433,23 +468,27 @@ class VideoCaptureThreading:
             # with self.read_lock:
             grabbed, frame = self.cap.read()
             if not grabbed:
-                logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
-                logger.debug('Read next frame from video index pool..........')
-                self.cap.release()
-                if self.posix.exists():
-                    self.posix.unlink()
-                self.posix = self.video_path / self.index_pool.get()
-                self.src = str(self.posix)
-                if not os.path.exists(self.src):
-                    logger.debug('Video path not exist: [{}]'.format(self.src))
-                    continue
-                self.cap = cv2.VideoCapture(self.src)
-                logger.debug('Loading done from: [{}]'.format(self.src))
+                self.update_capture(cnt)
                 cnt = 0
                 continue
             if cnt % self.sample_rate == 0:
                 self.frame_queue.put(frame)
             cnt += 1
+        logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
+
+    def update_capture(self, cnt):
+        logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
+        logger.debug('Read next frame from video ....')
+        self.cap.release()
+        if self.posix.exists() and self.delete_post:
+            self.posix.unlink()
+        src = self.load_next_src()
+        if src == -1:
+            self.started = False
+        self.cap = cv2.VideoCapture(src)
+
+    def post_update(self):
+        pass
 
     def read(self):
         if not self.started:
@@ -467,3 +506,26 @@ class VideoCaptureThreading:
 
     def __exit__(self, exec_type, exc_value, traceback):
         self.cap.release()
+
+
+class VideoOfflineCapture(VideoCaptureThreading):
+    def __init__(self, video_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig, offline_path: Path,
+                 sample_rate=5,
+                 width=640, height=480, delete_post=False):
+        super().__init__(video_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+        self.offline_path = offline_path
+        self.streams_list = list(self.offline_path.glob('*'))
+        self.pos = 0
+
+    def load_next_src(self):
+        logger.debug('Loading next video stream ....')
+        if self.pos >= len(self.streams_list):
+            logger.info('Load completely for [{}]'.format(str(self.offline_path)))
+            return -1
+        self.posix = self.streams_list[self.pos]
+        self.src = str(self.posix)
+        self.pos += 1
+        if not os.path.exists(self.src):
+            logger.debug('Video path not exist: [{}]'.format(self.src))
+            return -1
+        return self.src

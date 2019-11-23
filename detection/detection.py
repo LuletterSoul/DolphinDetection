@@ -39,11 +39,12 @@ beta = 15
 
 class DetectionResult(object):
 
-    def __init__(self, frame, status, regions) -> None:
+    def __init__(self, frame, status, regions, binary) -> None:
         super().__init__()
-        self.frame= frame
+        self.frame = frame
         self.status = status
         self.regions = regions
+        self.binary = binary
 
 
 class Detector(object):
@@ -101,7 +102,7 @@ class Detector(object):
         logger.debug('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
         logger.info('Std Distance with global: [{}].'.format(std_dist))
         # the smaller euclidean distance with class, it's more reliable towards the correct detection
-        is_true = gt_dist < bg_dist and (std_dist > self.std_thresh)
+        is_true = gt_dist < bg_dist
         return is_true, bg_dist, gt_dist
 
     def not_belong_bg(self, region_mean, thresh=20):
@@ -226,7 +227,7 @@ class Detector(object):
                     'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.raw_index,
                                                                          self.detect_cnt))
                 # self.rq.put(frame)
-                self.rq.put(DetectionResult(frame, status, regions))
+                self.rq.put(DetectionResult(frame, status, regions, dilated))
 
             # do a bit of cleanup
             cv2.destroyAllWindows()
