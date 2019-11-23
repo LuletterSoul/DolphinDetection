@@ -83,11 +83,12 @@ def load_video_config(cfg_path: Path) -> List[VideoConfig]:
         return cfgs
 
 
-def load_label_config(cfg_path: Path) -> List[LabelConfig]:
+def load_label_config(cfg_path: Path):
     """
-    load image label configuration into a dict object from json file
+    load ground truth image label configuration into a dict object from json file
     """
     with open(cfg_path) as f:
         cfg_objs = json.load(f)
-        cfgs = [LabelConfig.from_json(c) for c in cfg_objs.values()]
-        return cfgs
+        cfgs_keys = [k for k in cfg_objs.keys()]
+        cfgs_vals = [LabelConfig.from_json(c) for c in cfg_objs.values()]
+        return cfgs_keys, cfgs_vals

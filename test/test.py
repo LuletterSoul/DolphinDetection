@@ -26,8 +26,8 @@ def test_video_config():
     print(cfg.resize)
 
 def test_load_label_json():
-    cfg = I.load_label_config(LABEL_SAVE_PATH / 'samples.json')
-    print(cfg[0].center)
+    cfg_key, cfg_val = I.load_label_config(LABEL_SAVE_PATH / 'samples.json')
+    print(cfg_key[0], cfg_val[0].center)
 
 
 def test_load_video_json():
