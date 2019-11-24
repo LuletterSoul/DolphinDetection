@@ -14,6 +14,7 @@
 from multiprocessing import Manager, Pool, Queue, cpu_count
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED, ProcessPoolExecutor
 import interface as I
+import stream
 from pathlib import Path
 from config import VideoConfig
 from utils import *
@@ -45,6 +46,10 @@ class DetectionMonitor(object):
         self.process_pool = Pool(processes=cpu_count() - 1)
         self.thread_pool = ThreadPoolExecutor()
 
+        self.stream_receivers = [
+            stream.StreamReceiver(self.stream_path / str(c.index), offline_path, c, self.pipes[idx]) for idx, c in
+            enumerate(self.cfgs)]
+
     def monitor(self):
         self.clean()
         self.call()
@@ -53,7 +58,7 @@ class DetectionMonitor(object):
     def call(self):
         for i, cfg in enumerate(self.cfgs):
             # clean all legacy streams and candidates files before initialization
-            self.init_stream_receiver(cfg, i)
+            self.init_stream_receiver(i)
             self.init_detection(cfg, i)
 
     def wait(self):
@@ -67,8 +72,10 @@ class DetectionMonitor(object):
                                       (self.stream_path / str(cfg.index), self.region_path / str(cfg.index),
                                        self.pipes[i], cfg,))
 
-    def init_stream_receiver(self, cfg, i):
-        self.process_pool.apply_async(I.read_stream, (self.stream_path / str(cfg.index), cfg, self.pipes[i],))
+    # def init_stream_receiver(self, cfg, i):
+    #     self.process_pool.apply_async(I.read_stream, (self.stream_path / str(cfg.index), cfg, self.pipes[i],))
+    def init_stream_receiver(self, i):
+        return self.process_pool.apply_async(self.stream_receivers[i].receive_online)
 
     def clean(self):
         clean_dir(self.stream_path)
@@ -105,7 +112,8 @@ class EmbeddingControlMonitor(DetectionMonitor):
     def call(self):
         # Init stream receiver firstly, ensures video index that is arrived before detectors begin detection..
         for i, cfg in enumerate(self.cfgs):
-            self.init_stream_receiver(cfg, i)
+            res = self.init_stream_receiver(i)
+            # logger.debug(res.get())
 
         # Run video capture from stream
         for i in range(len(self.cfgs)):
@@ -457,11 +465,11 @@ class VideoCaptureThreading:
         return self
 
     def load_next_src(self):
-        logger.debug('Loading video stream from video index pool....')
+        logger.info('Loading video stream from video index pool....')
         self.posix = self.video_path / self.index_pool.get()
         self.src = str(self.posix)
         if not os.path.exists(self.src):
-            logger.debug('Video path not exist: [{}]'.format(self.src))
+            logger.info('Video path not exist: [{}]'.format(self.src))
             return -1
         return self.src
 

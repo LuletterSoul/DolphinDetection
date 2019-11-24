@@ -11,19 +11,19 @@ from multiprocessing import Queue
 
 class StreamReceiver(object):
 
-    def __init__(self, stream_save_path : Path, offline_path: Path, cfg: VideoConfig, mq: Queue) -> None:
+    def __init__(self, stream_save_path: Path, offline_path: Path, cfg: VideoConfig, mq: Queue) -> None:
         super().__init__()
         self.stream_save_path = stream_save_path
         self.offline_path = offline_path
         self.cfg = cfg
         self.mq = mq
-        self.index_pool = queue.Queue()
 
     def receive_online(self):
         # ts_localpath = "TS"  # 下载的视频段存放路径
         # if not os.path.exists(ts_localpath):
         # os.makedirs(ts_localpath)
         # m3u8_url = "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE%3D.m3u8"
+        self.index_pool = queue.Queue()
         logger.info('Running video [{}] stream receiver process.....'.format(self.cfg.index))
         if self.stream_save_path is None:
             raise Exception('Stream save path cannot be None.')
@@ -38,6 +38,7 @@ class StreamReceiver(object):
         pre_index = -1
         # index = []
         # limit max cacheable streams in case storage explosion
+        try_cnt = 0
         while True:
             # if len(index) == 0:
             # content = requests.get(m3u8_url).text
@@ -60,6 +61,12 @@ class StreamReceiver(object):
 
             # avoid video stream sever lost response if HTTP was frequent
             if self.index_pool.empty():
+                try_cnt += 1
+                if try_cnt % 20 == 0:
+                    logger.info(
+                        'Video [{}]: Empty index response from online video. May please connect to video server to fix this network error '
+                        'or check the deployment server network connected.'.format(
+                            self.cfg.index))
                 time.sleep(1)
                 continue
             # n = index[0]
@@ -89,13 +96,6 @@ class StreamReceiver(object):
             # note that the Queue is p
             self.mq.put(format_index)
             logger.debug("%03d.ts Download~" % current_index)
-
-        def reciver_offline():
-
-            if not self.offline_path.exists():
-                raise Exception('Empty offline stream path.')
-
-            self.offline_path.glob('*')
 
 
 def read(stream_save_path: Path, cfg: VideoConfig, mq: Queue):

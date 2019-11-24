@@ -31,7 +31,6 @@ OFFLINE_STREAM_SAVE_DIR = PROJECT_DIR / 'data/offline'
 OFFLINE_STREAM_SAVE_DIR \
     .mkdir(exist_ok=True, parents=True)
 
-
 FRAME_SAVE_DIR = PROJECT_DIR / 'data/frames'
 FRAME_SAVE_DIR \
     .mkdir(exist_ok=True, parents=True)
