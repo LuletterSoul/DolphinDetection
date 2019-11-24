@@ -75,7 +75,7 @@
       },
       "sample_rate": 3,
       "draw_boundary": true,
-      "enable": true,
+      "enable": false,
       "filtered_ratio": 0.5,
       "max_streams_cache": 1000,
       "online": true
