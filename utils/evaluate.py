@@ -30,8 +30,6 @@ def evaluate_label(path):
         idx += 1
         origin = cv2.imread(img_path)
         crop = origin[crop_temperature:size[0], 0:size[1]]
-        # cv2.imshow("dila",crop)
-        # cv2.waitKey(0)
         gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)
         blur = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 1)
         ada_thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 21, 20)
@@ -39,13 +37,12 @@ def evaluate_label(path):
         dilation = cv2.dilate(edges, kernel_size)
         # cv2.imshow("dila",dilation)
         # cv2.waitKey(0)
+        # binary_path = BINARY_SAVE_PATH / ('10_22_{}.jpg').format(idx + 1)
+        # binary_path = osp.join(str(BINARY_SAVE_PATH), ('10_22_{}.png'.format(idx + 1)))
+        # cv2.imwrite(binary_path, dilation)
+
         x, y = label_vals[idx].center[0], label_vals[idx].center[1] - crop_temperature
         flag = 0
-        # contours, hierarchy = cv2.findContours(dilation, 1, 2)
-        # cnt = contours[0]
-        # M = cv2.moments(cnt)
-        # cx = int(M['m10']/M['m00'])
-        # cy = int(M['m01']/M['m00'])
         for i in range(temperature):
             for j in range(temperature):
                 if dilation[x - int(temperature / 2) - crop_temperature + i, y - int(temperature / 2) + j] == 255:

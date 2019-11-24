@@ -39,6 +39,7 @@ LABEL_TARGET_PATH = PROJECT_DIR / 'data/labels/target'
 LABEL_IMAGE_PATH.mkdir(exist_ok=True, parents=True)
 LABEL_TARGET_PATH.mkdir(exist_ok=True, parents=True)
 LABEL_SAVE_PATH = PROJECT_DIR / 'data/labels'
+BINARY_SAVE_PATH = PROJECT_DIR / 'data/labels/binarys'
 
 from enum import Enum
 
