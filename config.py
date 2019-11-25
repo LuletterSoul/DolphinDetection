@@ -27,6 +27,10 @@ STREAM_SAVE_DIR = PROJECT_DIR / 'data/videos'
 STREAM_SAVE_DIR \
     .mkdir(exist_ok=True, parents=True)
 
+OFFLINE_STREAM_SAVE_DIR = PROJECT_DIR / 'data/offline'
+OFFLINE_STREAM_SAVE_DIR \
+    .mkdir(exist_ok=True, parents=True)
+
 FRAME_SAVE_DIR = PROJECT_DIR / 'data/frames'
 FRAME_SAVE_DIR \
     .mkdir(exist_ok=True, parents=True)
@@ -63,7 +67,8 @@ import json
 
 class VideoConfig:
     def __init__(self, index, name, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
-                 window_position, routine, sample_rate, draw_boundary, enable):
+                 window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
+                 online):
         self.index = index
         self.name = name
         self.ip = ip
@@ -80,6 +85,9 @@ class VideoConfig:
         self.sample_rate = sample_rate
         self.draw_boundary = draw_boundary
         self.enable = enable
+        self.filtered_ratio = filtered_ratio
+        self.max_streams_cache = max_streams_cache
+        self.online = online
 
     def to_json(self):
         return json.dumps(self.__dict__)

@@ -33,9 +33,12 @@
         "row": 2,
         "col": 2
       },
-      "sample_rate": 3,
+      "sample_rate": 2,
       "draw_boundary": true,
-      "enable": false
+      "enable": true,
+      "filtered_ratio": 0.5,
+      "max_streams_cache": 1000,
+      "online": true
     },
     {
       "index": 1,
@@ -72,7 +75,10 @@
       },
       "sample_rate": 3,
       "draw_boundary": true,
-      "enable": true
+      "enable": false,
+      "filtered_ratio": 0.5,
+      "max_streams_cache": 1000,
+      "online": true
     }
   ]
 }

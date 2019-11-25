@@ -12,15 +12,15 @@
 """
 
 from multiprocessing import Manager, Pool, Queue, cpu_count
-from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED, ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 import interface as I
-from pathlib import Path
+import stream
 from config import VideoConfig
+from detection.capture import VideoCaptureThreading, VideoOfflineCapture
 from utils import *
 from typing import List
 from utils import clean_dir, logger
-from detection import Detector
-import threading
+from detection import Detector, DetectionResult
 import cv2
 import imutils
 import traceback
@@ -30,17 +30,24 @@ import time
 # Monitor will build multiple video stream receivers according the video configuration
 class DetectionMonitor(object):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path) -> None:
+    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path,
+                 offline_path: Path = None) -> None:
         super().__init__()
         # self.cfgs = I.load_video_config(video_config_path)[-1:]
         self.cfgs = I.load_video_config(video_config_path)
         self.cfgs = [c for c in self.cfgs if c.enable]
+
         # Communication Pipe between detector and stream receiver
         self.pipes = [Manager().Queue() for c in self.cfgs]
         self.stream_path = stream_path
         self.region_path = region_path
+        self.offline_path = offline_path
         self.process_pool = Pool(processes=cpu_count() - 1)
         self.thread_pool = ThreadPoolExecutor()
+
+        self.stream_receivers = [
+            stream.StreamReceiver(self.stream_path / str(c.index), offline_path, c, self.pipes[idx]) for idx, c in
+            enumerate(self.cfgs)]
 
     def monitor(self):
         self.clean()
@@ -50,7 +57,7 @@ class DetectionMonitor(object):
     def call(self):
         for i, cfg in enumerate(self.cfgs):
             # clean all legacy streams and candidates files before initialization
-            self.init_stream_receiver(cfg, i)
+            self.init_stream_receiver(i)
             self.init_detection(cfg, i)
 
     def wait(self):
@@ -64,8 +71,10 @@ class DetectionMonitor(object):
                                       (self.stream_path / str(cfg.index), self.region_path / str(cfg.index),
                                        self.pipes[i], cfg,))
 
-    def init_stream_receiver(self, cfg, i):
-        self.process_pool.apply_async(I.read_stream, (self.stream_path / str(cfg.index), cfg, self.pipes[i],))
+    # def init_stream_receiver(self, cfg, i):
+    #     self.process_pool.apply_async(I.read_stream, (self.stream_path / str(cfg.index), cfg, self.pipes[i],))
+    def init_stream_receiver(self, i):
+        return self.process_pool.apply_async(self.stream_receivers[i].receive_online)
 
     def clean(self):
         clean_dir(self.stream_path)
@@ -77,14 +86,21 @@ class DetectionMonitor(object):
 # But a controller will manager [row*col] concurrency threads or processes
 # row and col are definied in video configuration
 class EmbeddingControlMonitor(DetectionMonitor):
-    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path) -> None:
-        super().__init__(video_config_path, stream_path, region_path)
+    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path,
+                 offline_path: Path = None) -> None:
+        super().__init__(video_config_path, stream_path, region_path, offline_path)
         self.caps_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
-        self.caps = [
-            VideoCaptureThreading(self.stream_path / str(c.index), self.pipes[idx], self.caps_queue[idx], c.sample_rate)
-            for
-            idx, c in
-            enumerate(self.cfgs)]
+        self.caps = []
+        for idx, c in enumerate(self.cfgs):
+            if c.online:
+                self.caps.append(
+                    VideoCaptureThreading(self.stream_path / str(c.index), self.pipes[idx], self.caps_queue[idx], c,
+                                          c.sample_rate))
+            else:
+                self.caps.append(
+                    VideoOfflineCapture(self.stream_path / str(c.index), self.pipes[idx], self.caps_queue[idx], c,
+                                        offline_path / str(c.index),
+                                        c.sample_rate, delete_post=False))
 
         self.controllers = [
             DetectorController(cfg, self.stream_path / str(cfg.index), self.region_path, self.caps_queue[idx],
@@ -95,10 +111,10 @@ class EmbeddingControlMonitor(DetectionMonitor):
     def call(self):
         # Init stream receiver firstly, ensures video index that is arrived before detectors begin detection..
         for i, cfg in enumerate(self.cfgs):
-            self.init_stream_receiver(cfg, i)
+            res = self.init_stream_receiver(i)
+            # logger.debug(res.get())
 
         # Run video capture from stream
-
         for i in range(len(self.cfgs)):
             self.caps[i].read()
 
@@ -112,8 +128,9 @@ class EmbeddingControlMonitor(DetectionMonitor):
 # Concurrency based multi processes
 class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path) -> None:
-        super().__init__(video_config_path, stream_path, region_path)
+    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path,
+                 offline_path: Path = None) -> None:
+        super().__init__(video_config_path, stream_path, region_path, offline_path)
         self.controllers = [
             ProcessBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path,
                                            self.caps_queue[idx],
@@ -131,8 +148,8 @@ class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 # Concurrency based multi threads
 class EmbeddingControlBasedThreadMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path) -> None:
-        super().__init__(video_config_path, stream_path, region_path)
+    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path, offline_path=None) -> None:
+        super().__init__(video_config_path, stream_path, region_path, offline_path)
         self.controllers = [
             ThreadBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path,
                                           self.caps_queue[idx],
@@ -154,8 +171,9 @@ class EmbeddingControlBasedThreadMonitor(EmbeddingControlMonitor):
 # Concurrency based multiple threads and multiple processes
 class EmbeddingControlBasedThreadAndProcessMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path) -> None:
-        super().__init__(video_config_path, stream_path, region_path)
+    def __init__(self, video_config_path: Path, stream_path: Path, region_path: Path,
+                 offline_path: Path = None) -> None:
+        super().__init__(video_config_path, stream_path, region_path, offline_path)
         self.controllers = [
             ProcessAndThreadBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path,
                                                     self.caps_queue[idx],
@@ -184,6 +202,7 @@ class DetectorController(object):
         self.cfg = cfg
         self.stream_path = stream_path
         self.region_path = region_path
+        self.result_cnt = 0
         # self.process_pool = process_pool
         self.index_pool = index_pool
         self.col = cfg.routine['col']
@@ -192,6 +211,9 @@ class DetectorController(object):
         self.send_pipes = [Manager().Queue() for i in range(self.col * self.raw)]
         self.receive_pipes = [Manager().Queue() for i in range(self.col * self.raw)]
         self.frame_queue = frame_queue
+        self.result_queue = Manager().Queue()
+
+        self.quit = False
 
         # def __getstate__(self):
 
@@ -221,7 +243,8 @@ class DetectorController(object):
                     Detector(self.col_step, self.row_step, i, j, self.cfg, self.send_pipes[index],
                              self.receive_pipes[index],
                              region_detector_path))
-
+        self.result_path = self.region_path / str(self.cfg.index) / 'frames'
+        self.result_path.mkdir(exist_ok=True, parents=True)
         logger.info('Detectors init done....')
 
     def preprocess(self, frame):
@@ -247,15 +270,27 @@ class DetectorController(object):
         self.init_detectors()
         return None
 
-    def loop_work(self):
+    def write_work(self):
+        while True:
+            if self.quit:
+                break
+            r = self.result_queue.get()
+            self.result_cnt += 1
+            filename = str(self.result_path / (str(self.result_cnt) + '.png'))
+            cv2.imwrite(filename, r)
+        return True
+
+    def collect_and_reconstruct(self):
         logger.info('Detection controller [{}] start collect and construct'.format(self.cfg.index))
         cnt = 0
         start = time.time()
         while True:
-            sub_frames = self.collect()
+            if self.quit:
+                break
+            results = self.collect()
             # logger.info('Done collected from detectors.....')
             # logger.info('Constructing sub-frames into a original frame....')
-            frame = self.construct(sub_frames)
+            frame, binary, thresh = self.construct(results)
             cnt += 1
             if cnt % 100 == 0:
                 end = time.time() - start
@@ -266,8 +301,11 @@ class DetectorController(object):
             if self.cfg.draw_boundary:
                 frame = self.draw_boundary(frame)
             # logger.info('Done constructing of sub-frames into a original frame....')
-            cv2.imshow('Construected Frame', frame)
+            cv2.imshow('Reconstructed Frame', frame)
+            cv2.imshow('Reconstructed Binary', binary)
+            cv2.imshow('Reconstructed Thresh', thresh)
             cv2.waitKey(1)
+        return True
 
     def draw_boundary(self, frame):
         shape = frame.shape
@@ -284,30 +322,52 @@ class DetectorController(object):
     def dispatch(self):
         logger.info('Dispatch frame to all detectors....')
         while True:
+            if self.quit:
+                break
             frame = self.frame_queue.get()
             frame, original_frame = self.preprocess(frame)
             for sp in self.send_pipes:
                 sp.put(frame)
+        return True
 
     def collect(self):
-        sub_frames = []
+        res = []
         for rp in self.receive_pipes:
-            sub_frames.append(rp.get())
-        return sub_frames
+            res.append(rp.get())
+        return res
 
-    def construct(self, sub_frames):
+    def construct(self, results: List[DetectionResult]):
+        sub_frames = [r.frame for r in results]
+        sub_binary = [r.binary for r in results]
+        sub_thresh = [r.thresh for r in results]
+        constructed_frame = self.construct_rgb(sub_frames)
+        constructed_binary = self.construct_gray(sub_binary)
+        constructed_thresh = self.construct_gray(sub_thresh)
+        for r in results:
+            if len(r.regions):
+                self.result_queue.put(constructed_frame)
+        return constructed_frame, constructed_binary, constructed_thresh
+
+    def construct_rgb(self, sub_frames):
         sub_frames = np.array(sub_frames)
         sub_frames = np.reshape(sub_frames, (self.col, self.raw, self.col_step, self.row_step, 3))
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3, 4))
-        sub_frames = np.reshape(sub_frames, (self.col * self.col_step, self.raw * self.row_step, 3))
-        return sub_frames
+        constructed_frame = np.reshape(sub_frames, (self.col * self.col_step, self.raw * self.row_step, 3))
+        return constructed_frame
+
+    def construct_gray(self, sub_frames):
+        sub_frames = np.array(sub_frames)
+        sub_frames = np.reshape(sub_frames, (self.col, self.raw, self.col_step, self.row_step))
+        sub_frames = np.transpose(sub_frames, (0, 2, 1, 3))
+        constructed_frame = np.reshape(sub_frames, (self.col * self.col_step, self.raw * self.row_step))
+        return constructed_frame
 
 
 class ProcessBasedDetectorController(DetectorController):
 
     def start(self, pool: Pool):
         super().start(pool)
-        res = pool.apply_async(self.loop_work, ())
+        res = pool.apply_async(self.collect_and_reconstruct, ())
         pool.apply_async(self.dispatch, ())
         logger.info('Running detectors.......')
         detect_proc_res = []
@@ -327,7 +387,7 @@ class ThreadBasedDetectorController(DetectorController):
         super().start(pool)
         thread_res = []
         try:
-            thread_res.append(pool.submit(self.loop_work))
+            thread_res.append(pool.submit(self.collect_and_reconstruct))
             thread_res.append(pool.submit(self.dispatch))
             logger.info('Running detectors.......')
             for idx, d in enumerate(self.detectors):
@@ -349,14 +409,17 @@ class ProcessAndThreadBasedDetectorController(DetectorController):
         process_pool = pool[0]
         thread_pool = pool[1]
         pool_res = []
-        super().start(process_pool)
-        pr1 = process_pool.apply_async(self.loop_work, ())
-        pool_res.append(pr1)
-        pr2 = process_pool.apply_async(self.dispatch, ())
-        pool_res.append(pr2)
-
-        logger.info('Running detectors.......')
         thread_res = []
+        super().start(process_pool)
+        # collect child frames and reconstruct frames from detectors asynchronously
+        pr1 = process_pool.apply_async(self.collect_and_reconstruct, ())
+        pool_res.append(pr1)
+        # dispatch child frames to detector asynchronously
+        pr2 = process_pool.apply_async(self.dispatch, ())
+        # write detection result asynchronously
+        thread_res.append(thread_pool.submit(self.write_work))
+        pool_res.append(pr2)
+        logger.info('Running detectors.......')
         for idx, d in enumerate(self.detectors):
             logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.col_index, d.raw_index))
             thread_res.append(thread_pool.submit(d.detect))
@@ -367,73 +430,3 @@ class ProcessAndThreadBasedDetectorController(DetectorController):
         # self.loop_work()
 
 
-class VideoCaptureThreading:
-    def __init__(self, video_path: Path, index_pool: Queue, frame_queue: Queue, sample_rate=5, width=640, height=480):
-        self.video_path = video_path
-        self.index_pool = index_pool
-        # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        # self.grabbed, self.frame = self.cap.read()
-        self.started = False
-        self.read_lock = threading.Lock()
-        self.thread = threading.Thread(target=self.update, args=())
-        self.sample_rate = sample_rate
-        self.frame_queue = frame_queue
-
-    def set(self, var1, var2):
-        self.cap.set(var1, var2)
-
-    def __start__(self):
-        if self.started:
-            print('[!] Threaded video capturing has already been started.')
-            return None
-        logger.debug('Loading video stream from video index pool....')
-        self.posix = self.video_path / self.index_pool.get()
-        self.src = str(self.posix)
-        if not os.path.exists(self.src):
-            logger.debug('Video path not exist: [{}]'.format(self.src))
-        self.cap = cv2.VideoCapture(self.src)
-        logger.debug('Loading done ....')
-        self.started = True
-        self.thread.start()
-        return self
-
-    def update(self):
-        cnt = 0
-        while self.started:
-            # with self.read_lock:
-            grabbed, frame = self.cap.read()
-            if not grabbed:
-                logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
-                logger.debug('Read next frame from video index pool..........')
-                self.cap.release()
-                self.posix.unlink()
-                self.posix = self.video_path / self.index_pool.get()
-                self.src = str(self.posix)
-                if not os.path.exists(self.src):
-                    logger.debug('Video path not exist: [{}]'.format(self.src))
-                    continue
-                self.cap = cv2.VideoCapture(self.src)
-                logger.debug('Loading done from: [{}]'.format(self.src))
-                cnt = 0
-                continue
-            if cnt % self.sample_rate == 0:
-                self.frame_queue.put(frame)
-            cnt += 1
-
-    def read(self):
-        if not self.started:
-            self.__start__()
-        return self.frame_queue.get()
-        # with self.read_lock:
-        # frame = self.frame.copy()
-        # grabbed = self.grabbed
-        # return self.grabbed, self.frame
-
-    def stop(self):
-        self.started = False
-        self.cap.release()
-        self.thread.join()
-
-    def __exit__(self, exec_type, exc_value, traceback):
-        self.cap.release()

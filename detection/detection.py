@@ -13,6 +13,7 @@
 import time
 from multiprocessing import Queue
 import traceback
+import interface
 
 import imutils
 
@@ -35,6 +36,17 @@ global_std = None
 dolphin_mean_intensity = np.array([80, 80, 80])
 alpha = 15
 beta = 15
+
+
+class DetectionResult(object):
+
+    def __init__(self, frame, status, regions, binary, thresh) -> None:
+        super().__init__()
+        self.frame = frame
+        self.status = status
+        self.regions = regions
+        self.binary = binary
+        self.thresh = thresh
 
 
 class Detector(object):
@@ -64,6 +76,7 @@ class Detector(object):
         self.dolphin_mean_intensity = np.array([80, 80, 80])
         self.alpha = 15
         self.beta = 15
+        self.std_thresh = 20
         self.region_cnt = 0
         self.detect_cnt = 0
 
@@ -87,16 +100,20 @@ class Detector(object):
         bg_dist = euclidean_distance(region_mean, self.global_mean)
         gt_dist = euclidean_distance(region_mean, self.dolphin_mean_intensity)
         std_dist = euclidean_distance(region_std, self.global_std)
-        logger.debug('Mean Distance with background threshold: [{}].'.format(bg_dist))
-        logger.debug('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
+        logger.info('Mean Distance with background threshold: [{}].'.format(bg_dist))
+        logger.info('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
         logger.debug('Std Distance with global: [{}].'.format(std_dist))
         # the smaller euclidean distance with class, it's more reliable towards the correct detection
-        return gt_dist < bg_dist, bg_dist, gt_dist
+        is_true = gt_dist < 60
+        return is_true, bg_dist, gt_dist
 
     def not_belong_bg(self, region_mean, thresh=20):
         bg_dist = euclidean_distance(region_mean, self.global_mean)
         logger.debug('Distance with background threshold: [{}].'.format(bg_dist))
         return bg_dist > thresh
+
+    def is_in_ratio(self, area, total):
+        return (area / total) * 100 <= self.cfg.filtered_ratio
 
     def detect(self):
         try:
@@ -114,6 +131,7 @@ class Detector(object):
             self.saliency = cv2.saliency.MotionSaliencyBinWangApr2014_create()
             self.saliency.setImagesize(frame.shape[1], frame.shape[0])
             self.saliency.init()
+            self.shape = frame.shape
             # if vs.isOpened():
             #     logger.error('Video Open Failed: [{}]'.format(ts_path))
             #     continue
@@ -127,7 +145,10 @@ class Detector(object):
                 original_frame = frame.copy()
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 success, saliency_map = self.saliency.computeSaliency(gray)
+                thresh = interface.thresh(frame)
                 saliency_map = (saliency_map * 255).astype("uint8")
+
+                saliency_map = cv2.bitwise_or(saliency_map, thresh)
                 # do dilation to connect the splited small components
                 dilated = cv2.dilate(saliency_map, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=1)
                 # dilated = saliency_map
@@ -139,6 +160,7 @@ class Detector(object):
                                                                                                         connectivity,
                                                                                                         cv2.CV_16U,
                                                                                                         cv2.CCL_DEFAULT)
+
                 # centroids = centroids.astype(np.int)
                 if num_labels == 0:
                     logger.debug('Not found connected components')
@@ -170,21 +192,31 @@ class Detector(object):
                 logger.debug('Current mean of bg: [{}].'.format(np.reshape(new_b, (1, -1))))
                 logger.debug('Current std of bg: [{}]'.format(np.reshape(self.global_std, (1, -1))))
 
+                regions = []
+                status = []
                 for idx, s in enumerate(stats):
                     # potential dolphin target components
                     if s[0] and s[1] and in_range(s[0], frame.shape[1]) and in_range(s[1], frame.shape[0]):
                         region_mean, mask_frame = cal_mean_intensity(frame, idx, label_map, s[4])
                         region = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
                         _, region_std = cv2.meanStdDev(region)
-                        # logger.info(region_std)
+                        logger.info(
+                            'Area: [{}], ration: [{}]'.format(s[4],
+                                                              round(s[4] / (frame.shape[0] * frame.shape[1]) * 100, 3)))
+                        is_in_ratio = self.is_in_ratio(s[4], self.shape[0] * self.shape[1])
                         is_dolphin, bg_dist, gt_dist = self.do_decision(region_mean, region_std)
-                        if is_dolphin:
+                        if is_dolphin and is_in_ratio:
                             # logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
                             color = np.random.randint(0, 255, size=(3,))
                             color = [int(c) for c in color]
                             cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10), color, 2)
-                            if region.shape[0] and region.shape[1]:
-                                cv2.imwrite(str(self.region_save_path / (str(self.region_cnt) + '.png')), region)
+                            # if region.shape[0] and region.shape[1]:
+                            cv2.imwrite(str(self.region_save_path / (
+                                    str(self.region_cnt) + '-' + str(int(region_mean[0])) + '-' + str(
+                                int(region_mean[1])) + '-' +
+                                    str(int(region_mean[2])) + '.png')), region)
+                            regions.append(region)
+                            status.append(s)
                         self.region_cnt += 1
 
                 # display the image to our screen
@@ -200,7 +232,8 @@ class Detector(object):
                 logger.debug(
                     'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.raw_index,
                                                                          self.detect_cnt))
-                self.rq.put(frame)
+                # self.rq.put(frame)
+                self.rq.put(DetectionResult(frame, status, regions, dilated, thresh))
 
             # do a bit of cleanup
             cv2.destroyAllWindows()
