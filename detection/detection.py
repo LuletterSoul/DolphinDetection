@@ -40,9 +40,10 @@ beta = 15
 
 class DetectionResult(object):
 
-    def __init__(self, frame, status, regions, binary, thresh) -> None:
+    def __init__(self, frame, original_frame, status, regions, binary, thresh) -> None:
         super().__init__()
         self.frame = frame
+        self.original_frame = original_frame
         self.status = status
         self.regions = regions
         self.binary = binary
@@ -80,8 +81,12 @@ class Detector(object):
         self.region_cnt = 0
         self.detect_cnt = 0
 
+    # def get_frame(self):
+    #     f, of = self.sq.get()
+    #     return self.crop(f), of
     def get_frame(self):
-        return self.crop(self.sq.get())
+        f = self.sq.get()
+        return self.crop(f)
 
     def crop(self, frame):
         return crop_by_se(frame, self.start, self.end)
@@ -100,8 +105,8 @@ class Detector(object):
         bg_dist = euclidean_distance(region_mean, self.global_mean)
         gt_dist = euclidean_distance(region_mean, self.dolphin_mean_intensity)
         std_dist = euclidean_distance(region_std, self.global_std)
-        logger.info('Mean Distance with background threshold: [{}].'.format(bg_dist))
-        logger.info('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
+        logger.debug('Mean Distance with background threshold: [{}].'.format(bg_dist))
+        logger.debug('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
         logger.debug('Std Distance with global: [{}].'.format(std_dist))
         # the smaller euclidean distance with class, it's more reliable towards the correct detection
         is_true = gt_dist < 60
@@ -124,6 +129,7 @@ class Detector(object):
                                                                            self.raw_index))
             # global global_mean, global_std, dolphin_mean_intensity
 
+            # frame, of = self.get_frame()
             frame = self.get_frame()
 
             logger.debug(
@@ -132,17 +138,22 @@ class Detector(object):
             self.saliency.setImagesize(frame.shape[1], frame.shape[0])
             self.saliency.init()
             self.shape = frame.shape
+            mog = cv2.createBackgroundSubtractorMOG2(detectShadows=True)
+            mask = None
             # if vs.isOpened():
             #     logger.error('Video Open Failed: [{}]'.format(ts_path))
             #     continue
             while True:
                 # logger.info('Detector: [{},{}] Fetch frame'.format(self.row_index, self.col_index))
+                # frame, of = self.get_frame()
                 frame = self.get_frame()
                 if frame is None:
                     logger.info('Detector: [{},{}] empty frame')
                     continue
                 # logger.info('Detector: [{},{}] Fetch frame done..'.format(self.row_index, self.col_index))
                 original_frame = frame.copy()
+                # mask = mog.apply(frame)
+                # th = cv2.threshold(mask.copy(), 244, 255, cv2.THRESH_BINARY)[1]
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 success, saliency_map = self.saliency.computeSaliency(gray)
                 thresh = interface.thresh(frame)
@@ -177,12 +188,12 @@ class Detector(object):
                 # in case env become dark suddenly
                 if np.mean(old_b - new_b) > alpha:
                     self.dolphin_mean_intensity -= beta
-                    logger.info(
+                    logger.debug(
                         'Down dolphin mean intensity from [{}] to [{}]'.format(old_d, self.dolphin_mean_intensity))
                 # in case env become light suddenly
                 if np.mean(new_b - old_b) > alpha:
                     self.dolphin_mean_intensity += beta
-                    logger.info(
+                    logger.debug(
                         'Increase dolphin mean intensity from [{}] to [{}]'.format(old_d, self.dolphin_mean_intensity))
                 logger.debug(
                     'Update mean global background pixel intensity from [{}] to [{}].'.format(old_b, new_b))
@@ -200,7 +211,7 @@ class Detector(object):
                         region_mean, mask_frame = cal_mean_intensity(frame, idx, label_map, s[4])
                         region = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
                         _, region_std = cv2.meanStdDev(region)
-                        logger.info(
+                        logger.debug(
                             'Area: [{}], ration: [{}]'.format(s[4],
                                                               round(s[4] / (frame.shape[0] * frame.shape[1]) * 100, 3)))
                         is_in_ratio = self.is_in_ratio(s[4], self.shape[0] * self.shape[1])
@@ -209,31 +220,36 @@ class Detector(object):
                             # logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
                             color = np.random.randint(0, 255, size=(3,))
                             color = [int(c) for c in color]
-                            cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10), color, 2)
+                            if self.cfg.show_window:
+                                cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10),
+                                              color, 2)
                             # if region.shape[0] and region.shape[1]:
-                            cv2.imwrite(str(self.region_save_path / (
-                                    str(self.region_cnt) + '-' + str(int(region_mean[0])) + '-' + str(
-                                int(region_mean[1])) + '-' +
-                                    str(int(region_mean[2])) + '.png')), region)
+                            if self.cfg.save_box:
+                                cv2.imwrite(str(self.region_save_path / (
+                                        str(self.region_cnt) + '-' + str(int(region_mean[0])) + '-' + str(
+                                    int(region_mean[1])) + '-' +
+                                        str(int(region_mean[2])) + '.png')), region)
                             regions.append(region)
                             status.append(s)
                         self.region_cnt += 1
 
                 # display the image to our screen
-                if self.cfg.show_window:
-                    cv2.imshow("Frame", frame)
-                    # cv2.imshow("Map", dilated)
-                    key = cv2.waitKey(1) & 0xFF
-                    # if the `q` key was pressed, break from the loop
-                    if key == ord("q"):
-                        break
+                # if self.cfg.show_window:
+                #     cv2.imshow("Frame", frame)
+                # cv2.imshow('Mask', th)
+                # cv2.imshow("Map", dilated)
+                # key = cv2.waitKey(1) & 0xFF
+                # if the `q` key was pressed, break from the loop
+                # if key == ord("q"):
+                #     break
                 self.detect_cnt += 1
                 logger.debug('Current mean of bg: [{}].'.format(np.reshape(new_b, (1, -1))))
                 logger.debug(
                     'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.raw_index,
                                                                          self.detect_cnt))
                 # self.rq.put(frame)
-                self.rq.put(DetectionResult(frame, status, regions, dilated, thresh))
+                # self.rq.put(DetectionResult(frame,of, status, regions, dilated, thresh))
+                self.rq.put(DetectionResult(frame, None, status, regions, dilated, thresh))
 
             # do a bit of cleanup
             cv2.destroyAllWindows()
@@ -411,13 +427,13 @@ def detect(video_path: Path, region_save_path: Path, mq: Queue, cfg: VideoConfig
                         target_cnt += 1
 
             # display the image to our screen
-            if cfg.show_window:
-                cv2.imshow("Frame", frame)
-                # cv2.imshow("Map", dilated)
-                key = cv2.waitKey(1) & 0xFF
-                # if the `q` key was pressed, break from the loop
-                if key == ord("q"):
-                    break
+            # if cfg.show_window:
+            #     cv2.imshow("Frame", frame)
+            #     cv2.imshow("Map", dilated)
+            # key = cv2.waitKey(1) & 0xFF
+            # if the `q` key was pressed, break from the loop
+            # if key == ord("q"):
+            #     break
 
         # clean ts file
         ts_poxis.unlink()

@@ -19,15 +19,16 @@ import cv2
 
 from config import VideoConfig
 from utils import logger
+import time
+import shutil
 
 
 class VideoCaptureThreading:
-    def __init__(self, video_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig, sample_rate=5,
-                 width=640,
-                 height=480,
-                 delete_post=True):
+    def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+                 sample_rate=5, width=640, height=480, delete_post=True):
         self.cfg = cfg
         self.video_path = video_path
+        self.sample_path = sample_path
         self.index_pool = index_pool
         # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -38,6 +39,8 @@ class VideoCaptureThreading:
         self.sample_rate = sample_rate
         self.frame_queue = frame_queue
         self.delete_post = delete_post
+        self.runtime = 0
+        self.posix = None
 
     def set(self, var1, var2):
         self.cap.set(var1, var2)
@@ -65,6 +68,7 @@ class VideoCaptureThreading:
 
     def update(self):
         cnt = 0
+        start = time.time()
         while self.started:
             # with self.read_lock:
             grabbed, frame = self.cap.read()
@@ -75,18 +79,22 @@ class VideoCaptureThreading:
             if cnt % self.sample_rate == 0:
                 self.frame_queue.put(frame)
             cnt += 1
+            self.runtime = time.time() - start
         logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
 
     def update_capture(self, cnt):
         logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
         logger.debug('Read next frame from video ....')
         self.cap.release()
-        if self.posix.exists() and self.delete_post:
-            self.posix.unlink()
+        self.handle_history()
         src = self.load_next_src()
         if src == -1:
             self.started = False
         self.cap = cv2.VideoCapture(src)
+
+    def handle_history(self):
+        if self.posix.exists() and self.delete_post:
+            self.posix.unlink()
 
     def post_update(self):
         pass
@@ -110,10 +118,9 @@ class VideoCaptureThreading:
 
 
 class VideoOfflineCapture(VideoCaptureThreading):
-    def __init__(self, video_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig, offline_path: Path,
-                 sample_rate=5,
-                 width=640, height=480, delete_post=False):
-        super().__init__(video_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+    def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
+                 cfg: VideoConfig, sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
         self.offline_path = offline_path
         self.streams_list = list(self.offline_path.glob('*'))
         self.pos = 0
@@ -130,3 +137,21 @@ class VideoOfflineCapture(VideoCaptureThreading):
             logger.debug('Video path not exist: [{}]'.format(self.src))
             return -1
         return self.src
+
+
+# Sample video stream at intervals
+class VideoOnlineSampleCapture(VideoCaptureThreading):
+    def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+                 sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+        self.sample_cnt = 0
+        self.sample_path.mkdir(exist_ok=True, parents=True)
+
+    def handle_history(self):
+        if int(self.runtime / 60 + 1) % self.cfg.sample_internal == 0:
+            current_time = time.strftime('%m-%d-%H:%M-', time.localtime(time.time()))
+            filename = os.path.basename(str(self.posix))
+            target = self.sample_path / (current_time + filename)
+            logger.info('Sample video stream into: [{}]'.format(target))
+            shutil.copy(self.posix, target)
+        super().handle_history()

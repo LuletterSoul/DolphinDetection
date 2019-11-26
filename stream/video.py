@@ -23,7 +23,7 @@ class StreamReceiver(object):
         # if not os.path.exists(ts_localpath):
         # os.makedirs(ts_localpath)
         # m3u8_url = "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE%3D.m3u8"
-        self.index_pool = queue.Queue()
+        self.index_pool = queue.Queue(self.cfg.max_streams_cache)
         logger.info('Running video [{}] stream receiver process.....'.format(self.cfg.index))
         if self.stream_save_path is None:
             raise Exception('Stream save path cannot be None.')

@@ -10,9 +10,10 @@
 @version 1.0
 @desc:
 """
+import json
+import logging
 import os
 from pathlib import Path
-import logging
 
 LOG_LEVER = logging.INFO
 
@@ -25,6 +26,10 @@ LOG_DIR.mkdir(exist_ok=True, parents=True)
 
 STREAM_SAVE_DIR = PROJECT_DIR / 'data/videos'
 STREAM_SAVE_DIR \
+    .mkdir(exist_ok=True, parents=True)
+
+SAMPLE_SAVE_DIR = PROJECT_DIR / 'data/samples'
+SAMPLE_SAVE_DIR \
     .mkdir(exist_ok=True, parents=True)
 
 OFFLINE_STREAM_SAVE_DIR = PROJECT_DIR / 'data/offline'
@@ -61,14 +66,13 @@ class MonitorType(Enum):
 # MONITOR = MonitorType.PROCESS_BASED
 
 
-MONITOR = MonitorType.PROCESS_THREAD_BASED
-import json
+MONITOR = MonitorType.PROCESS_BASED
 
 
 class VideoConfig:
     def __init__(self, index, name, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
-                 online):
+                 online, sample_internal, save_box):
         self.index = index
         self.name = name
         self.ip = ip
@@ -88,6 +92,8 @@ class VideoConfig:
         self.filtered_ratio = filtered_ratio
         self.max_streams_cache = max_streams_cache
         self.online = online
+        self.sample_internal = sample_internal
+        self.save_box = save_box
 
     def to_json(self):
         return json.dumps(self.__dict__)
