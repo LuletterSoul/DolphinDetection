@@ -68,7 +68,7 @@ def test_detect():
 
 
 def test_detect_monitor():
-    monitor = DetectionMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR, CANDIDATE_SAVE_DIR)
+    monitor = DetectionMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR, None, CANDIDATE_SAVE_DIR, )
     monitor.monitor()
 
 

@@ -20,21 +20,21 @@ class TestDetection(object):
 
     def test_detect_embedding_based_process_monitor(self):
         # monitor = detection.DetectionMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR, CANDIDATE_SAVE_DIR)
-        monitor = detection.EmbeddingControlBasedProcessMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
+        monitor = detection.EmbeddingControlBasedProcessMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR, None,
                                                                 CANDIDATE_SAVE_DIR)
         monitor.monitor()
 
     def test_detect_embedding_based_thread_monitor(self):
         try:
             monitor = detection.EmbeddingControlBasedThreadMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
-                                                                   CANDIDATE_SAVE_DIR)
+                                                                   None, CANDIDATE_SAVE_DIR)
             monitor.monitor()
         except Exception as e:
             traceback.print_exc()
 
     def test_detect_embedding_based_thread_and_process_monitor(self):
         monitor = detection.EmbeddingControlBasedThreadAndProcessMonitor(VIDEO_CONFIG_DIR / 'video.json',
-                                                                         STREAM_SAVE_DIR,
+                                                                         STREAM_SAVE_DIR, None, None,
                                                                          CANDIDATE_SAVE_DIR)
         monitor.monitor()
 
