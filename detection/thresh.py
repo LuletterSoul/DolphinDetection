@@ -22,7 +22,7 @@ def adaptive_thresh(frame, cfg=None):
     # ret_otsu, th_otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     edges = cv2.Canny(th_atm, canny_lth, canny_hth)
     dilation = cv2.dilate(edges, kernel_size)
-    return dilation
+    return dilation  
 
 # def main():
 #     init_path = osp.join(path, 'Demo/picts/test_2.jpg')
