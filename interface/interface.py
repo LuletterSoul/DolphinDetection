@@ -38,11 +38,10 @@ def detect(video_path, candidate_save_path, mq: Queue, cfg):
         logger.error(e)
 
 
-def thresh(frame, cfg):
+def thresh(frame, cfg=None):
     """
     do frame binarization based adaptive thresh
     :param frame:
-    :param cfg:
     :return:
     """
     return detection.adaptive_thresh(frame, cfg)
@@ -77,6 +76,7 @@ def load_video_config(cfg_path: Path) -> List[VideoConfig]:
     :param cfg_path:
     :return:
     """
-    cfg_objs = json.load(open(cfg_path))['videos']
-    cfgs = [VideoConfig.from_json(c) for c in cfg_objs]
-    return cfgs
+    with open(cfg_path) as f:
+        cfg_objs = json.load(f)['videos']
+        cfgs = [VideoConfig.from_json(c) for c in cfg_objs]
+        return cfgs

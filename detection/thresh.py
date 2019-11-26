@@ -13,12 +13,12 @@ canny_hth = 125
 kernel_size = np.ones((3, 3), np.uint8)
 
 
-def adaptive_thresh(frame, cfg: VideoConfig):
+def adaptive_thresh(frame, cfg=None):
     # img = img[370:1080, 0:1980]
-    frame = crop_by_roi(frame, cfg.roi)
+    # frame = crop_by_roi(frame, cfg.roi)
     gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-    blur = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 1)
-    th_atm = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 21, 20)
+    # blur = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 1)
+    th_atm = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 21, 20)
     # ret_otsu, th_otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     edges = cv2.Canny(th_atm, canny_lth, canny_hth)
     dilation = cv2.dilate(edges, kernel_size)
