@@ -16,6 +16,7 @@ import traceback
 import interface
 
 import imutils
+import ray
 
 from config import VideoConfig
 from utils import *
@@ -249,7 +250,8 @@ class Detector(object):
                                                                          self.detect_cnt))
                 # self.rq.put(frame)
                 # self.rq.put(DetectionResult(frame,of, status, regions, dilated, thresh))
-                self.rq.put(DetectionResult(frame, None, status, regions, dilated, thresh))
+                res = DetectionResult(frame, None, status, regions, dilated, thresh)
+                self.pass_detection_result(res)
 
             # do a bit of cleanup
             cv2.destroyAllWindows()
@@ -260,17 +262,28 @@ class Detector(object):
             traceback.print_exc()
             logger.error(msg)
 
+    def pass_detection_result(self, res: DetectionResult):
+        self.rq.put(res)
 
-# def setChunks(self, frame):
 
+@ray.remote
+class RayDetector(Detector):
 
-class DetectorController(object):
-    def __init__(self, video_path: Path, region_save_path: Path, mq, cfg: VideoConfig) -> None:
-        super().__init__()
-        self.video_path = video_path
-        self.region_save_path = region_save_path
-        self.mq = mq
-        self.cfg = cfg
+    def __init__(self, col_step, col_step_1, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
+                 region_save_path: Path) -> None:
+        super().__init__(col_step, col_step_1, row_index, col_index, cfg, sq, rq, region_save_path)
+        # self.rq = ray.get(rq)
+        # self.sq = ray.get(sq)
+
+    def get_frame(self):
+        f = self.sq.get()
+        return self.crop(ray.get(f))
+
+    def pass_detection_result(self, res: DetectionResult):
+        res_id = ray.put(res)
+        self.rq.put(res_id)
+
+    # def setChunks(self, frame):
 
 
 def fetch_component_frame(frame, label_map, idx):

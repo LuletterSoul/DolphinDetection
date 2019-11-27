@@ -56,6 +56,7 @@ class MonitorType(Enum):
     PROCESS_BASED = 1,
     THREAD_BASED = 2,
     PROCESS_THREAD_BASED = 3
+    RAY_BASED = 4
 
 
 # select monitor type, process-based means the system will create a process for each component,such as detector,
@@ -65,7 +66,7 @@ class MonitorType(Enum):
 # MONITOR = MonitorType.PROCESS_BASED
 
 
-MONITOR = MonitorType.PROCESS_BASED
+MONITOR = MonitorType.RAY_BASED
 
 
 class VideoConfig:

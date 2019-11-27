@@ -6,6 +6,7 @@ from config import *
 from utils.log import logger
 import cv2
 import queue
+import ray
 from multiprocessing import Queue
 
 
@@ -94,8 +95,20 @@ class StreamReceiver(object):
             f.close()
             # caches the stream index which has been completed by HTTP request.
             # note that the Queue is p
-            self.mq.put(format_index)
+            self.pass_index(format_index)
             logger.debug("%03d.ts Download~" % current_index)
+        return True
+
+    def pass_index(self, format_index):
+        self.mq.put(format_index)
+
+
+@ray.remote
+class StreamRayReceiver(StreamReceiver):
+
+    def __init__(self, stream_save_path: Path, offline_path: Path, cfg: VideoConfig, mq: Queue) -> None:
+        super().__init__(stream_save_path, offline_path, cfg, mq)
+        # self.mq = ray.get(mq)
 
 
 def read(stream_save_path: Path, cfg: VideoConfig, mq: Queue):

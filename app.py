@@ -11,14 +11,22 @@
 @desc:
 """
 
-from multiprocessing import Process
+import ray
 
 import detection
-import interface
 from config import *
 
 if __name__ == '__main__':
-    if MONITOR == MonitorType.PROCESS_THREAD_BASED:
+    if MONITOR == MonitorType.RAY_BASED:
+        ray.init()
+        monitor = detection.EmbeddingControlBasedRayMonitor.remote(VIDEO_CONFIG_DIR / 'video.json',
+                                                                   STREAM_SAVE_DIR, SAMPLE_SAVE_DIR,
+                                                                   FRAME_SAVE_DIR,
+                                                                   CANDIDATE_SAVE_DIR)
+        m_id = monitor.monitor.remote()
+        ray.get(m_id)
+
+    elif MONITOR == MonitorType.PROCESS_THREAD_BASED:
         monitor = detection.EmbeddingControlBasedThreadAndProcessMonitor(VIDEO_CONFIG_DIR / 'video.json',
                                                                          STREAM_SAVE_DIR, SAMPLE_SAVE_DIR,
                                                                          FRAME_SAVE_DIR,

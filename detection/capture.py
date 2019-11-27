@@ -21,6 +21,7 @@ from config import VideoConfig
 from utils import logger
 import time
 import shutil
+import ray
 
 
 class VideoCaptureThreading:
@@ -59,12 +60,15 @@ class VideoCaptureThreading:
 
     def load_next_src(self):
         logger.debug('Loading video stream from video index pool....')
-        self.posix = self.video_path / self.index_pool.get()
+        self.posix = self.get_posix()
         self.src = str(self.posix)
         if not os.path.exists(self.src):
             logger.info('Video path not exist: [{}]'.format(self.src))
             return -1
         return self.src
+
+    def get_posix(self):
+        return self.video_path / self.index_pool.get()
 
     def update(self):
         cnt = 0
@@ -77,10 +81,13 @@ class VideoCaptureThreading:
                 cnt = 0
                 continue
             if cnt % self.sample_rate == 0:
-                self.frame_queue.put(frame)
+                self.pass_frame(frame)
             cnt += 1
             self.runtime = time.time() - start
         logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
+
+    def pass_frame(self, frame):
+        self.frame_queue.put(frame)
 
     def update_capture(self, cnt):
         logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
@@ -125,18 +132,24 @@ class VideoOfflineCapture(VideoCaptureThreading):
         self.streams_list = list(self.offline_path.glob('*'))
         self.pos = 0
 
-    def load_next_src(self):
-        logger.debug('Loading next video stream ....')
+    def get_posix(self):
         if self.pos >= len(self.streams_list):
             logger.info('Load completely for [{}]'.format(str(self.offline_path)))
             return -1
-        self.posix = self.streams_list[self.pos]
-        self.src = str(self.posix)
-        self.pos += 1
-        if not os.path.exists(self.src):
-            logger.debug('Video path not exist: [{}]'.format(self.src))
-            return -1
-        return self.src
+        return self.streams_list[self.pos]
+
+    # def load_next_src(self):
+    #     logger.debug('Loading next video stream ....')
+    #     if self.pos >= len(self.streams_list):
+    #         logger.info('Load completely for [{}]'.format(str(self.offline_path)))
+    #         return -1
+    #     self.posix = self.streams_list[self.pos]
+    #     self.src = str(self.posix)
+    #     self.pos += 1
+    #     if not os.path.exists(self.src):
+    #         logger.debug('Video path not exist: [{}]'.format(self.src))
+    #         return -1
+    #     return self.src
 
 
 # Sample video stream at intervals
@@ -155,3 +168,38 @@ class VideoOnlineSampleCapture(VideoCaptureThreading):
             logger.info('Sample video stream into: [{}]'.format(target))
             shutil.copy(self.posix, target)
         super().handle_history()
+
+
+@ray.remote
+class VideoOfflineRayCapture(VideoCaptureThreading):
+    def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
+                 cfg: VideoConfig, sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+        self.offline_path = offline_path
+        self.streams_list = list(self.offline_path.glob('*'))
+        self.pos = 0
+
+    def get_posix(self):
+        if self.pos >= len(self.streams_list):
+            logger.info('Load completely for [{}]'.format(str(self.offline_path)))
+            return -1
+        return self.streams_list[self.pos]
+
+
+@ray.remote
+class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
+    def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+                 sample_rate=5, width=640, height=480, ray_index_pool=None, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+        if ray_index_pool is None:
+            raise Exception('Invalid index pool object id.')
+        # self.ray_index_pool = ray.get(ray_index_pool)
+        # self.frame_queue = ray.get(frame_queue)
+
+    def pass_frame(self, frame):
+        # put the ray id of frame into global shared memory
+        frame_id = ray.put(frame)
+        self.frame_queue.put(frame_id)
+
+    def get_posix(self):
+        return self.video_path / ray.get(self.ray_index_pool.get())
