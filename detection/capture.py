@@ -155,3 +155,13 @@ class VideoOnlineSampleCapture(VideoCaptureThreading):
             logger.info('Sample video stream into: [{}]'.format(target))
             shutil.copy(self.posix, target)
         super().handle_history()
+
+
+# Read stream from rtsp
+class RtspVideoCapture(VideoCaptureThreading):
+    def __init__(self, video_path, sample_path, index_pool, frame_queue, cfg, sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate=sample_rate, width=width, height=height, delete_post=delete_post)
+
+    def load_next_src(self):
+        logger.debug("Loading next video stream ....")
+        return self.cfg.rtsp
