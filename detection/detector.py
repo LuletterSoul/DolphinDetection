@@ -147,6 +147,7 @@ class Detector(object):
             #     logger.error('Video Open Failed: [{}]'.format(ts_path))
             #     continue
             while True:
+                start = time.time()
                 # logger.info('Detector: [{},{}] Fetch frame'.format(self.row_index, self.col_index))
                 # frame, of = self.get_frame()
                 frame = self.get_frame()
@@ -208,33 +209,33 @@ class Detector(object):
 
                 regions = []
                 status = []
-                for idx, s in enumerate(stats):
-                    # potential dolphin target components
-                    if s[0] and s[1] and in_range(s[0], frame.shape[1]) and in_range(s[1], frame.shape[0]):
-                        region_mean, mask_frame = cal_mean_intensity(frame, idx, label_map, s[4])
-                        region = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
-                        _, region_std = cv2.meanStdDev(region)
-                        logger.debug(
-                            'Area: [{}], ration: [{}]'.format(s[4],
-                                                              round(s[4] / (frame.shape[0] * frame.shape[1]) * 100, 3)))
-                        is_in_ratio = self.is_in_ratio(s[4], self.shape[0] * self.shape[1])
-                        is_dolphin, bg_dist, gt_dist = self.do_decision(region_mean, region_std)
-                        if is_dolphin and is_in_ratio:
-                            # logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
-                            color = np.random.randint(0, 255, size=(3,))
-                            color = [int(c) for c in color]
-                            if self.cfg.show_window:
-                                cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10),
-                                              color, 2)
-                            # if region.shape[0] and region.shape[1]:
-                            if self.cfg.save_box:
-                                cv2.imwrite(str(self.region_save_path / (
-                                        str(self.region_cnt) + '-' + str(int(region_mean[0])) + '-' + str(
-                                    int(region_mean[1])) + '-' +
-                                        str(int(region_mean[2])) + '.png')), region)
-                            regions.append(region)
-                            status.append(s)
-                        self.region_cnt += 1
+                # for idx, s in enumerate(stats):
+                #     # potential dolphin target components
+                #     if s[0] and s[1] and in_range(s[0], frame.shape[1]) and in_range(s[1], frame.shape[0]):
+                #         region_mean, mask_frame = cal_mean_intensity(frame, idx, label_map, s[4])
+                #         region = original_frame[s[1] - 10: s[1] + s[3] + 10, s[0] - 10: s[0] + s[2] + 10]
+                #         _, region_std = cv2.meanStdDev(region)
+                #         logger.debug(
+                #             'Area: [{}], ration: [{}]'.format(s[4],
+                #                                               round(s[4] / (frame.shape[0] * frame.shape[1]) * 100, 3)))
+                #         is_in_ratio = self.is_in_ratio(s[4], self.shape[0] * self.shape[1])
+                #         is_dolphin, bg_dist, gt_dist = self.do_decision(region_mean, region_std)
+                #         if is_dolphin and is_in_ratio:
+                #             # logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
+                #             color = np.random.randint(0, 255, size=(3,))
+                #             color = [int(c) for c in color]
+                #             if self.cfg.show_box:
+                #                 cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10),
+                #                               color, 2)
+                #             # if region.shape[0] and region.shape[1]:
+                #             if self.cfg.save_box:
+                #                 cv2.imwrite(str(self.region_save_path / (
+                #                         str(self.region_cnt) + '-' + str(int(region_mean[0])) + '-' + str(
+                #                     int(region_mean[1])) + '-' +
+                #                         str(int(region_mean[2])) + '.png')), region)
+                #             regions.append(region)
+                #             status.append(s)
+                #         self.region_cnt += 1
 
                 # display the image to our screen
                 # if self.cfg.show_window:
@@ -254,6 +255,8 @@ class Detector(object):
                 # self.rq.put(DetectionResult(frame,of, status, regions, dilated, thresh))
                 res = DetectionResult(frame, None, status, regions, dilated, thresh)
                 self.pass_detection_result(res)
+                end = time.time() - start
+                logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.raw_index, end))
 
             # do a bit of cleanup
             cv2.destroyAllWindows()
@@ -268,12 +271,14 @@ class Detector(object):
         self.rq.put(res)
 
 
-@ray.remote
+@ray.remote(num_cpus=1)
 class RayDetector(Detector):
 
     def __init__(self, col_step, col_step_1, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
-                 region_save_path: Path) -> None:
+                 region_save_path: Path, shape) -> None:
         super().__init__(col_step, col_step_1, row_index, col_index, cfg, sq, rq, region_save_path)
+        self.saliency = None
+        self.shape = shape
         # self.rq = ray.get(rq)
         # self.sq = ray.get(sq)
 
@@ -286,11 +291,19 @@ class RayDetector(Detector):
     #     self.rq.put(res_id)
 
     def detect_task(self, frame):
+        start = time.time()
         if frame is None:
             logger.info('Detector: [{},{}] empty frame')
             return None
-        # logger.info('Detector: [{},{}] Fetch frame done..'.format(self.row_index, self.col_index))
+
         original_frame = frame.copy()
+        frame = self.crop(frame)
+        if self.saliency is None:
+            self.saliency = cv2.saliency.MotionSaliencyBinWangApr2014_create()
+            self.saliency.setImagesize(frame.shape[1], frame.shape[0])
+            self.saliency.init()
+
+        # logger.info('Detector: [{},{}] Fetch frame done..'.format(self.row_index, self.col_index))
         # mask = mog.apply(frame)
         # th = cv2.threshold(mask.copy(), 244, 255, cv2.THRESH_BINARY)[1]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -359,7 +372,7 @@ class RayDetector(Detector):
                     # logger.info('Bg dist: [{}]/ Gt dist: [{}].'.format(bg_dist, gt_dist))
                     color = np.random.randint(0, 255, size=(3,))
                     color = [int(c) for c in color]
-                    if self.cfg.show_window:
+                    if self.cfg.show_box:
                         cv2.rectangle(frame, (s[0] - 10, s[1] - 10), (s[0] + s[2] + 10, s[1] + s[3] + 10),
                                       color, 2)
                     # if region.shape[0] and region.shape[1]:
@@ -388,6 +401,8 @@ class RayDetector(Detector):
                                                                  self.detect_cnt))
         # self.rq.put(frame)
         # self.rq.put(DetectionResult(frame,of, status, regions, dilated, thresh))
+        end = time.time() - start
+        logger.info('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.raw_index, end))
         return DetectionResult(frame, None, status, regions, dilated, thresh)
     # def setChunks(self, frame):
 

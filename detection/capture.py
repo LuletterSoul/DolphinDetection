@@ -187,7 +187,7 @@ class VideoOfflineRayCapture(VideoCaptureThreading):
         return self.streams_list[self.pos]
 
 
-@ray.remote
+@ray.remote(num_cpus=0.5)
 class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
                  controller_actor,
@@ -197,13 +197,22 @@ class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
         #     raise Exception('Invalid index pool object id.')
         # self.ray_index_pool = ray.get(ray_index_pool)
         self.controller_actor = controller_actor
+        self.current = 0
+        self.stream_futures = []
         # self.frame_queue = ray.get(frame_queue)
 
     def pass_frame(self, frame):
         # put the ray id of frame into global shared memory
         # frame_id = ray.put(frame)
         # self.frame_queue.put(frame_id)
-        self.controller_actor.start_stream_task.remote(1)
+        self.stream_futures.append(self.controller_actor.start_stream_task.remote(frame))
+        logger.info('Passing frame [{}]'.format(self.current))
+        self.current += 1
+        # if self.current > 100:
+        #     logger.info('Blocked cap wait stream complete.')
+        #     ray.wait(self.stream_futures)
+        #     logger.info('Release cap.')
+        #     self.current = 0
 
     def remote_update(self, src):
         cnt = 0
@@ -217,6 +226,8 @@ class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
             if not grabbed:
                 # self.update_capture(cnt)
                 break
+            if (cnt+1) % 20 == 0:
+                time.sleep(1)
             if cnt % self.sample_rate == 0:
                 self.pass_frame(frame)
             cnt += 1

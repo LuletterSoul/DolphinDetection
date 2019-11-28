@@ -13,3 +13,4 @@
 
 from .detector import *
 from .manager import *
+from .ray_manager import *
