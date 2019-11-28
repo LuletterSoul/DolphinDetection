@@ -13,14 +13,16 @@
 
 from multiprocessing import Manager, Pool, Queue, cpu_count
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
-import interface as I
 import stream
 from config import VideoConfig
-from detection.capture import *
+import interface as I
+from .capture import *
+from .detector import *
 from utils import *
 from typing import List
 from utils import clean_dir, logger
-from detection import *
+
+# from capture import *
 import cv2
 import imutils
 import traceback
@@ -38,6 +40,7 @@ class DetectionMonitor(object):
         # self.cfgs = I.load_video_config(video_config_path)[-1:]
         self.cfgs = I.load_video_config(video_config_path)
         self.cfgs = [c for c in self.cfgs if c.enable]
+        self.quit = False
 
         # Communication Pipe between detector and stream receiver
         self.pipes = [Manager().Queue() for c in self.cfgs]
@@ -75,7 +78,7 @@ class DetectionMonitor(object):
         logger.info('Closed Pool')
 
     def init_detection(self, cfg, i):
-        self.process_pool.apply_async(I.detect,
+        self.process_pool.apply_async(detect,
                                       (self.stream_path / str(cfg.index), self.region_path / str(cfg.index),
                                        self.pipes[i], cfg,))
 
@@ -222,14 +225,22 @@ class EmbeddingControlBasedRayMonitor(EmbeddingControlMonitor):
                  region_path: Path, offline_path: Path = None) -> None:
         super().__init__(video_config_path, stream_path, sample_path, frame_path, region_path, offline_path,
                          build_pool=False)
-        self.caps_queue = [ray.put(Manager().Queue(maxsize=500)) for c in self.cfgs]
-        self.pipes = [ray.put(Manager().Queue()) for c in self.cfgs]
-        self.stream_receivers = [
-            stream.StreamRayReceiver.remote(self.stream_path / str(c.index), offline_path, c, self.pipes[idx]) for
+        # self.caps_queue = [ray.put(Manager().Queue(maxsize=500)) for c in self.cfgs]
+        # self.pipes = [ray.put(Manager().Queue()) for c in self.cfgs]
+        self.caps_queue = None
+        self.pipes = None
+
+        self.controllers = self.init_controllers()
+        self.caps = self.init_caps()
+        self.stream_receivers = self.init_stream_receivers()
+        self.futures = []
+
+    def init_stream_receivers(self):
+        return [
+            stream.StreamRayReceiver.remote(self.stream_path / str(c.index), self.offline_path, c, self.caps[idx],
+                                            None) for
             idx, c in
             enumerate(self.cfgs)]
-        self.futures = []
-        self.caps = self.init_caps()
 
     def init_caps(self):
         caps = []
@@ -238,57 +249,66 @@ class EmbeddingControlBasedRayMonitor(EmbeddingControlMonitor):
                 caps.append(
                     VideoOnlineSampleBasedRayCapture.remote(self.stream_path / str(c.index),
                                                             self.sample_path / str(c.index),
-                                                            self.pipes[idx],
-                                                            self.caps_queue[idx],
-                                                            c, c.sample_rate))
+                                                            None,
+                                                            None,
+                                                            c,
+                                                            self.controllers[idx],
+                                                            c.sample_rate))
             else:
                 caps.append(
                     VideoOfflineRayCapture.remote(self.stream_path / str(c.index), self.sample_path / str(c.index),
                                                   self.offline_path,
-                                                  self.pipes[idx],
-                                                  self.caps_queue[idx], c, self.offline_path / str(c.index),
+                                                  None,
+                                                  # self.pipes[idx],
+                                                  # self.caps_queue[idx],
+                                                  None,
+                                                  c, self.offline_path / str(c.index),
                                                   c.sample_rate,
                                                   delete_post=False))
         return caps
 
     def call(self):
         # Init stream receiver firstly, ensures video index that is arrived before detectors begin detection..
-        receiver_futures = [self.init_stream_receiver(i) for i, cfg in enumerate(self.cfgs)]
-        self.futures.append(receiver_futures)
+        while True:
+            if self.quit:
+                break
+            receiver_futures = [self.init_stream_receiver(i) for i, cfg in enumerate(self.cfgs)]
 
         # Run video capture from stream
-        caps_future = [self.caps[i].read.remote() for i, cfg in enumerate(self.cfgs)]
-        self.futures.append(caps_future)
+        # caps_future = [self.caps[i].read.remote() for i, cfg in enumerate(self.cfgs)]
+        # self.futures.append(caps_future)
 
         # Init detector controller
-        controller_futures = self.init_controllers()
-        self.futures.append(controller_futures)
+        # controller_futures = self.init_controllers()
+        # self.futures.append(controller_futures)
 
     def init_controllers(self):
-        controller_futures = []
-        self.controllers = [
+        controllers = [
             RayBasedDetectorController.remote(cfg, self.stream_path / str(cfg.index), self.region_path, self.frame_path,
-                                              self.caps_queue[idx],
-                                              self.pipes[idx]) for
+                                              None,
+                                              None) for
             idx, cfg in enumerate(self.cfgs)]
 
-        for i, cfg in enumerate(self.cfgs):
-            logger.info('Init detector controller [{}]....'.format(cfg.index))
-            controller_futures.append(self.controllers[i].start.remote(None))
-            logger.info('Done init detector controller [{}]....'.format(cfg.index))
-        return controller_futures
+        # for i, cfg in enumerate(self.cfgs):
+        #     logger.info('Init detector controller [{}]....'.format(cfg.index))
+        #     controller_futures.append(self.controllers[i].start.remote(None))
+        #     logger.info('Done init detector controller [{}]....'.format(cfg.index))
+        return controllers
 
     def init_stream_receiver(self, i):
         # return self.process_pool.apply_async(self.stream_receivers[i].receive_online)
-        return self.stream_receivers[i].receive_online.remote()
+        return self.stream_receivers[i].receive_task.remote()
 
     def wait(self):
         super().wait()
+        logger.info('Ray Wait')
         for future in self.futures:
             if isinstance(future, list):
-                ray.wait(future)
+                f_ids, r_ids = ray.wait(future)
+
             else:
-                ray.get(future)
+                f_id = ray.get(future)
+        logger.info('Ray done')
         # wait all remote future arrivied in Thread Pool Executor
 
 
@@ -473,18 +493,27 @@ class DetectorController(object):
         return constructed_frame
 
 
+class ReconstructResult(object):
+
+    def __init__(self, rcf, rcb, rct) -> None:
+        super().__init__()
+        self.reconstruct_frame = rcf
+        self.reconstruct_binary = rcb
+        self.reconstruct_rct = rct
+
+
 @ray.remote
 class RayBasedDetectorController(DetectorController):
 
-    def __init__(self, cfg: VideoConfig, stream_path: Path, region_path: Path, frame_path: Path, frame_queue: Queue,
-                 index_pool: Queue) -> None:
+    def __init__(self, cfg: VideoConfig, stream_path: Path, region_path: Path, frame_path: Path, frame_queue=None,
+                 index_pool=None) -> None:
         super().__init__(cfg, stream_path, region_path, frame_path, frame_queue, index_pool)
-        self.result_path = None
-        self.send_pipes = [ray.put(Manager().Queue()) for i in range(self.col * self.raw)]
-        self.receive_pipes = [ray.put(Manager().Queue()) for i in range(self.col * self.raw)]
-        self.index_pool = ray.get(index_pool)
-        self.frame_queue = ray.get(frame_queue)
-        self.result_queue = Manager().Queue()
+        # self.result_path = None
+        # self.send_pipes = [ray.put(Manager().Queue()) for i in range(self.col * self.raw)]
+        # self.receive_pipes = [ray.put(Manager().Queue()) for i in range(self.col * self.raw)]
+        # self.index_pool = ray.get(index_pool)
+        # self.frame_queue = ray.get(frame_queue)
+        # self.result_queue = Manager().Queue()
         self.detectors = []
         self.futures = []
 
@@ -504,25 +533,27 @@ class RayBasedDetectorController(DetectorController):
         self.result_path.mkdir(exist_ok=True, parents=True)
         logger.info('Detectors init done....')
 
-    def start(self, pool):
+    def start_stream_task(self, frame):
         # res = pool.apply_async(self.collect_and_reconstruct, ())
-        futures = []
-        cr_future = self.collect_and_reconstruct.remote()
-        futures.append(cr_future)
+        # futures = []
+        logger.info('Controller [{}] Stream Task: Dispatch'.format(self.cfg.index))
+        results = self.dispatch_ray_frame.remote(frame)
+        logger.info('Controller [{}] Stream Task: Reconstruct'.format(self.cfg.index))
+        reconstruct_result = self.construct_ray_frame.remote(results)
+        # futures.append(cr_future)
         # pool.apply_async(self.dispatch, ())
-        dispatch_future = self.dispatch_ray_frame.remote()
-        futures.append(dispatch_future)
+        # futures.append(results)
         # thread_res.append(thread_pool.submit(self.write_work))
-        write_future = self.write_work.remote()
-        futures.append(write_future)
-        logger.info('Running detectors.......')
-        for idx, d in enumerate(self.detectors):
-            logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.col_index, d.raw_index))
-            # detect_proc_res.append(pool.apply_async(d.detect, ()))
-            futures.append(d.detect.remote())
-            # detect_proc_res.append(pool.submit(d.detect, ()))
-            logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.col_index, d.raw_index))
-        return futures
+        logger.info('Controller [{}] Stream Task: Persist'.format(self.cfg.index))
+        write_future = self.persist.remote(reconstruct_result, results)
+        # futures.append(write_future)
+        # for idx, d in enumerate(self.detectors):
+        #     logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.col_index, d.raw_index))
+        #     detect_proc_res.append(pool.apply_async(d.detect, ()))
+        # futures.append(d.detect.remote())
+        # detect_proc_res.append(pool.submit(d.detect, ()))
+        # logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.col_index, d.raw_index))
+        return True
 
     @ray.method(num_return_vals=2)
     def preprocess(self, frame):
@@ -551,12 +582,23 @@ class RayBasedDetectorController(DetectorController):
         constructed_frame = self.construct_rgb(sub_frames)
         constructed_binary = self.construct_gray(sub_binary)
         constructed_thresh = self.construct_gray(sub_thresh)
+        # self.handle_persist(constructed_frame, results)
+        return ReconstructResult(constructed_frame, constructed_binary, constructed_thresh)
+
+    def persist(self, reconstruct_result, results):
+        res_ready_ids, remaining_ids = ray.wait(results, num_returns=len(results))
+        results = ray.get(res_ready_ids)
         for r in results:
             if len(r.regions):
-                idx = ray.put(constructed_frame)
-                self.result_queue.put(idx)
+                self.result_cnt += 1
+                current_time = time.strftime('%m-%d-%H:%M-', time.localtime(time.time()))
+                target = self.result_path / (current_time + str(self.result_cnt) + '.png')
+                reconstruct_frame = ray.get(reconstruct_result).reconstruct_result
+                if reconstruct_frame is not None:
+                    cv2.imwrite(str(target), reconstruct_frame)
+                # self.result_queue.put(idx)
                 # self.result_queue.put(r.original_frame)
-        return constructed_frame, constructed_binary, constructed_thresh
+        return True
 
     def get_result_from_queue(self):
         return ray.get(self.result_queue.get())
@@ -570,43 +612,47 @@ class RayBasedDetectorController(DetectorController):
         logger.info('Collect sub-frames from all detectors....')
         return res
 
+    @ray.method(num_return_vals=1)
     def dispatch_ray_frame(self, frame):
         # start = time.time()
-        while True:
-            if self.quit:
-                break
-            frame = self.frame_queue.get()
-            frame_id, original_frame_id = self.preprocess.remote(frame)
-            for sp in self.send_pipes:
-                # frame_id = ray.put(ray.get(frame))
-                sp.put(frame_id)
-            logger.info('Dispatch frame to all detectors....')
-        # internal = (time.time() - start) / 60
-        # if int(internal) == self.cfg.sample_internal:
-        #     cv2.imwrite(str(self.frame_path / ))
+        # while True:
+        #     if self.quit:
+        #         break
+        # frame = self.frame_queue.get()
+        frame_id, original_frame_id = self.preprocess.remote(frame)
+        detect_futures = [d.detect_task.remote(frame_id) for d in self.detectors]
+        # for sp in self.send_pipes:
+        # frame_id = ray.put(ray.get(frame))
+        # sp.put(frame_id)
+        logger.info('Dispatch frame to all detectors....')
+        return detect_futures
 
-    def collect_and_reconstruct_ray(self):
+    # internal = (time.time() - start) / 60
+    # if int(internal) == self.cfg.sample_internal:
+    #     cv2.imwrite(str(self.frame_path / ))
+
+    def collect_and_reconstruct_ray(self, results):
         logger.info('Detection controller [{}] start collect and construct'.format(self.cfg.index))
         cnt = 0
         start = time.time()
-        while True:
-            if self.quit:
-                break
-            logger.info('Done collected from detectors.....')
-            results = self.collect_ray_frame.remote()
-            frame_id, binary_id, thresh_id = self.construct_ray_frame.remote(results)
-            logger.info('Constructing sub-frames into a original frame....')
-            # frame, binary, thresh = self.construct(results)
-            cnt += 1
-            if cnt % 100 == 0:
-                end = time.time() - start
-                logger.info(
-                    'Detection controller [{}]: Operation Speed Rate [{}]s/100fs, unit process rate: [{}]s/f'.format(
-                        self.cfg.index, round(end, 2), round(end / 100, 2)))
-                start = time.time()
-            if self.cfg.draw_boundary:
-                self.draw_boundary.remote(frame_id)
-            # logger.info('Done constructing of sub-frames into a original frame....')
+        # while True:
+        #     if self.quit:
+        #         break
+        logger.info('Done collected from detectors.....')
+        # results = self.collect_ray_frame.remote()
+        frame_id, binary_id, thresh_id = self.construct_ray_frame.remote(results)
+        logger.info('Constructing sub-frames into a original frame....')
+        # frame, binary, thresh = self.construct(results)
+        cnt += 1
+        if cnt % 100 == 0:
+            end = time.time() - start
+            logger.info(
+                'Detection controller [{}]: Operation Speed Rate [{}]s/100fs, unit process rate: [{}]s/f'.format(
+                    self.cfg.index, round(end, 2), round(end / 100, 2)))
+            start = time.time()
+        if self.cfg.draw_boundary:
+            self.draw_boundary.remote(frame_id)
+        # logger.info('Done constructing of sub-frames into a original frame....')
         return True
 
     def show_window(self, frame_id):

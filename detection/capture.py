@@ -16,6 +16,7 @@ from multiprocessing.queues import Queue
 from pathlib import Path
 
 import cv2
+# from .manager import RayBasedDetectorController
 
 from config import VideoConfig
 from utils import logger
@@ -189,17 +190,41 @@ class VideoOfflineRayCapture(VideoCaptureThreading):
 @ray.remote
 class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
-                 sample_rate=5, width=640, height=480, ray_index_pool=None, delete_post=True):
+                 controller_actor,
+                 sample_rate=5, width=640, height=480, delete_post=True):
         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
-        if ray_index_pool is None:
-            raise Exception('Invalid index pool object id.')
+        # if ray_index_pool is None:
+        #     raise Exception('Invalid index pool object id.')
         # self.ray_index_pool = ray.get(ray_index_pool)
+        self.controller_actor = controller_actor
         # self.frame_queue = ray.get(frame_queue)
 
     def pass_frame(self, frame):
         # put the ray id of frame into global shared memory
-        frame_id = ray.put(frame)
-        self.frame_queue.put(frame_id)
+        # frame_id = ray.put(frame)
+        # self.frame_queue.put(frame_id)
+        self.controller_actor.start_stream_task.remote(1)
 
-    def get_posix(self):
-        return self.video_path / ray.get(self.ray_index_pool.get())
+    def remote_update(self, src):
+        cnt = 0
+        start = time.time()
+        self.set_posix(src)
+        self.cap = cv2.VideoCapture(str(self.posix))
+        while True:
+            # with self.read_lock:
+            grabbed, frame = self.cap.read()
+            # logger.info('Video Capture [{}]: cnt ..'.format(cnt))
+            if not grabbed:
+                # self.update_capture(cnt)
+                break
+            if cnt % self.sample_rate == 0:
+                self.pass_frame(frame)
+            cnt += 1
+            self.runtime = time.time() - start
+        self.handle_history()
+        self.cap.release()
+        # logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
+        return self.posix
+
+    def set_posix(self, src):
+        self.posix = self.video_path / src
