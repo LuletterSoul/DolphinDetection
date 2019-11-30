@@ -72,7 +72,7 @@ MONITOR = MonitorType.PROCESS_BASED
 class VideoConfig:
     def __init__(self, index, name, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
-                 online, sample_internal, save_box, rtsp):
+                 online, sample_internal, save_box, rtsp, rtsp_saved_per_frame):
         self.index = index
         self.name = name
         self.ip = ip
@@ -95,6 +95,7 @@ class VideoConfig:
         self.sample_internal = sample_internal
         self.save_box = save_box
         self.rtsp = rtsp
+        self.rtsp_saved_per_frame = rtsp_saved_per_frame
 
     def to_json(self):
         return json.dumps(self.__dict__)

@@ -95,12 +95,19 @@ class EmbeddingControlMonitor(DetectionMonitor):
         self.caps_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
         self.caps = []
         for idx, c in enumerate(self.cfgs):
-            if c.online:
+            if c.online == "http":
                 self.caps.append(
                     VideoOnlineSampleCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
                                              self.pipes[idx],
                                              self.caps_queue[idx],
                                              c, c.sample_rate))
+                                
+            elif c.online == "rtsp":
+                self.caps.append(
+                    VideoRtspCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
+                                     self.pipes[idx], self.caps_queue[idx], c, c.sample_rate)
+                )
+            
             else:
                 self.caps.append(
                     VideoOfflineCapture(self.stream_path / str(c.index), self.sample_path / str(c.index), offline_path,

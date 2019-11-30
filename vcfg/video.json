@@ -38,10 +38,11 @@
       "enable": false,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": true,
+      "online": "http",
       "sample_internal": 15,
       "save_box": true,
-      "rtsp": ""
+      "rtsp": "",
+      "rtsp_saved_per_frame": 50
     },
     {
       "index": 1,
@@ -78,17 +79,150 @@
       },
       "sample_rate": 3,
       "draw_boundary": true,
-      "enable": true,
+      "enable": false,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": true,
+      "online": "http",
       "sample_internal": 15,
       "save_box": false,
-      "rtsp": ""
+      "rtsp": "",
+      "rtsp_saved_per_frame": 50
     },
     {
-      "index": 1,
-      "name": "video2",
+      "index": 2,
+      "name": "video3",
+      "ip": "222.190.243.176",
+      "port": "8081",
+      "suffix": "stream_13-",
+      "headers": {
+        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)",
+        "Referer": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
+        "Accept-Encoding": "identity"
+      },
+      "m3u8_url": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
+      "url": "http://222.190.243.243:8081/hls/stream_13/stream_13-",
+      "roi": {
+        "x": 0,
+        "y": 300,
+        "width": -1,
+        "height": -1
+      },
+      "resize": {
+        "width": 1000,
+        "height": -1,
+        "scale": -1
+      },
+      "show_window": true,
+      "window_position": {
+        "x": 100,
+        "y": 100
+      },
+      "routine": {
+        "row": 2,
+        "col": 2
+      },
+      "sample_rate": 3,
+      "draw_boundary": true,
+      "enable": false,
+      "filtered_ratio": 0.5,
+      "max_streams_cache": 5000,
+      "online": "rtsp",
+      "sample_internal": 15,
+      "save_box": false,
+      "rtsp": "rtsp://222.190.243.243/gp/1101",
+      "rtsp_saved_per_frame": 50
+    },
+    {
+      "index": 3,
+      "name": "video4",
+      "ip": "222.190.243.176",
+      "port": "8081",
+      "suffix": "stream_13-",
+      "headers": {
+        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)",
+        "Referer": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
+        "Accept-Encoding": "identity"
+      },
+      "m3u8_url": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
+      "url": "http://222.190.243.243:8081/hls/stream_13/stream_13-",
+      "roi": {
+        "x": 0,
+        "y": 300,
+        "width": -1,
+        "height": -1
+      },
+      "resize": {
+        "width": 1000,
+        "height": -1,
+        "scale": -1
+      },
+      "show_window": true,
+      "window_position": {
+        "x": 100,
+        "y": 100
+      },
+      "routine": {
+        "row": 2,
+        "col": 2
+      },
+      "sample_rate": 3,
+      "draw_boundary": true,
+      "enable": false,
+      "filtered_ratio": 0.5,
+      "max_streams_cache": 5000,
+      "online": "rtsp",
+      "sample_internal": 15,
+      "save_box": false,
+      "rtsp": "rtsp://222.190.243.243/gp/1102",
+      "rtsp_saved_per_frame": 50
+    },
+    {
+      "index": 4,
+      "name": "video5_watch",
+      "ip": "222.190.243.176",
+      "port": "8081",
+      "suffix": "stream_13-",
+      "headers": {
+        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)",
+        "Referer": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
+        "Accept-Encoding": "identity"
+      },
+      "m3u8_url": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
+      "url": "http://222.190.243.243:8081/hls/stream_13/stream_13-",
+      "roi": {
+        "x": 0,
+        "y": 300,
+        "width": -1,
+        "height": -1
+      },
+      "resize": {
+        "width": 1000,
+        "height": -1,
+        "scale": -1
+      },
+      "show_window": true,
+      "window_position": {
+        "x": 100,
+        "y": 100
+      },
+      "routine": {
+        "row": 2,
+        "col": 2
+      },
+      "sample_rate": 3,
+      "draw_boundary": true,
+      "enable": false,
+      "filtered_ratio": 0.5,
+      "max_streams_cache": 5000,
+      "online": "rtsp",
+      "sample_internal": 15,
+      "save_box": false,
+      "rtsp": "rtsp://222.190.243.243/bp/jtview",
+      "rtsp_saved_per_frame": 50
+    },
+    {
+      "index": 5,
+      "name": "video6_hungred_million",
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "stream_13-",
@@ -124,53 +258,11 @@
       "enable": true,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": true,
+      "online": "rtsp",
       "sample_internal": 15,
       "save_box": false,
-      "rtsp": "rtsp://222.190.243.243/gp/1101"
-    },
-    {
-      "index": 1,
-      "name": "video2",
-      "ip": "222.190.243.176",
-      "port": "8081",
-      "suffix": "stream_13-",
-      "headers": {
-        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)",
-        "Referer": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
-        "Accept-Encoding": "identity"
-      },
-      "m3u8_url": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
-      "url": "http://222.190.243.243:8081/hls/stream_13/stream_13-",
-      "roi": {
-        "x": 0,
-        "y": 300,
-        "width": -1,
-        "height": -1
-      },
-      "resize": {
-        "width": 1000,
-        "height": -1,
-        "scale": -1
-      },
-      "show_window": true,
-      "window_position": {
-        "x": 100,
-        "y": 100
-      },
-      "routine": {
-        "row": 2,
-        "col": 2
-      },
-      "sample_rate": 3,
-      "draw_boundary": true,
-      "enable": true,
-      "filtered_ratio": 0.5,
-      "max_streams_cache": 5000,
-      "online": true,
-      "sample_internal": 15,
-      "save_box": false,
-      "rtsp": "rtsp://222.190.243.243/gp/1102"
+      "rtsp": "rtsp://222.190.243.243/bp/jtdome",
+      "rtsp_saved_per_frame": 50
     }
   ]
 }
