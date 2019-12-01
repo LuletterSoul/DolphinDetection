@@ -24,8 +24,7 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": false,
-      "show_box": false,
+      "show_window": true,
       "window_position": {
         "x": 100,
         "y": 100
@@ -42,6 +41,7 @@
       "online": "http",
       "sample_internal": 15,
       "save_box": true,
+      "show_box": false,
       "rtsp": "",
       "rtsp_saved_per_frame": 50
     },
@@ -70,7 +70,6 @@
         "scale": -1
       },
       "show_window": false,
-      "show_box": false,
       "window_position": {
         "x": 100,
         "y": 100
@@ -87,6 +86,7 @@
       "online": "http",
       "sample_internal": 15,
       "save_box": false,
+      "show_box": false,
       "rtsp": "",
       "rtsp_saved_per_frame": 50
     },
@@ -131,6 +131,7 @@
       "online": "rtsp",
       "sample_internal": 15,
       "save_box": false,
+      "show_box": true,
       "rtsp": "rtsp://222.190.243.243/gp/1101",
       "rtsp_saved_per_frame": 50
     },
@@ -175,6 +176,7 @@
       "online": "rtsp",
       "sample_internal": 15,
       "save_box": false,
+      "show_box": true,
       "rtsp": "rtsp://222.190.243.243/gp/1102",
       "rtsp_saved_per_frame": 50
     },
@@ -219,6 +221,7 @@
       "online": "rtsp",
       "sample_internal": 15,
       "save_box": false,
+      "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtview",
       "rtsp_saved_per_frame": 50
     },
@@ -256,9 +259,10 @@
       "enable": true,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": "offline",
+      "online": "rtsp",
       "sample_internal": 15,
-      "save_box": false,
+      "save_box": true,
+      "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
       "rtsp_saved_per_frame": 50
     }

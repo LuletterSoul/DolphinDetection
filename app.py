@@ -22,25 +22,20 @@ if __name__ == '__main__':
         ray.init()
         try:
             monitor = detection.EmbeddingControlBasedRayMonitor.remote(VIDEO_CONFIG_DIR / 'video.json',
-                                                                           STREAM_SAVE_DIR, SAMPLE_SAVE_DIR,
-                                                                           FRAME_SAVE_DIR,
-                                                                           CANDIDATE_SAVE_DIR)
+                                                                       STREAM_SAVE_DIR, SAMPLE_SAVE_DIR,
+                                                                       FRAME_SAVE_DIR,
+                                                                       CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
             m_id = monitor.monitor.remote()
             ray.get(m_id)
-            debug = loop.remote()
-            ray.get(debug)
             print(ray.errors(all_jobs=True))
         except Exception as e:
             print(e)
-
-
 
     elif MONITOR == MonitorType.PROCESS_THREAD_BASED:
         monitor = detection.EmbeddingControlBasedThreadAndProcessMonitor(VIDEO_CONFIG_DIR / 'video.json',
                                                                          STREAM_SAVE_DIR, SAMPLE_SAVE_DIR,
                                                                          FRAME_SAVE_DIR,
                                                                          CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
-                                                                         CANDIDATE_SAVE_DIR)
         monitor.monitor()
 
     elif MONITOR == MonitorType.PROCESS_BASED:
@@ -57,7 +52,6 @@ if __name__ == '__main__':
                                                                CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
         monitor.monitor()
 
-    # process = Process(target=monitor.monitor)
-    # process.start()
-    # process.join()
-    monitor.monitor()
+# process = Process(target=monitor.monitor)
+# process.start()
+# process.join()

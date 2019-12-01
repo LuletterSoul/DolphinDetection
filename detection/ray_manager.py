@@ -52,7 +52,7 @@ class EmbeddingControlBasedRayMonitor(EmbeddingControlMonitor):
     def init_caps(self):
         caps = []
         for idx, c in enumerate(self.cfgs):
-            if c.online:
+            if c.online == 'http':
                 caps.append(
                     VideoOnlineSampleBasedRayCapture.remote(self.stream_path / str(c.index),
                                                             self.sample_path / str(c.index),
@@ -218,7 +218,7 @@ class VideoPlayer(object):
     def display(self, res):
         if self.cfg.show_window:
             cv2.imshow('Reconstructed Frame', res.reconstruct_frame)
-            cv2.waitKey(0.1)
+            cv2.waitKey(1)
         return True
 
 

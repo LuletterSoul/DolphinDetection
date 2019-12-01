@@ -141,8 +141,8 @@ class Detector(object):
             self.saliency.setImagesize(frame.shape[1], frame.shape[0])
             self.saliency.init()
             self.shape = frame.shape
-            # mog = cv2.createBackgroundSubtractorMOG2(detectShadows=True)
-            # mask = None
+            mog = cv2.createBackgroundSubtractorMOG2(detectShadows=True)
+            mask = None
             # if vs.isOpened():
             #     logger.error('Video Open Failed: [{}]'.format(ts_path))
             #     continue
@@ -388,7 +388,7 @@ class RayDetector(Detector):
                 #     cv2.imshow("Frame", frame)
                 # cv2.imshow('Mask', th)
                 cv2.imshow("Map", dilated)
-                cv2.imshow("Gaussian Mask", mask)
+                # cv2.imshow("Gaussian Mask", mask)
                 key = cv2.waitKey(1) & 0xFF
                 # if the `q` key was pressed, break from the loop
                 # if key == ord("q"):
@@ -407,9 +407,9 @@ class RayDetector(Detector):
 
             # vs.release()
 
-        except Exception as msg:
-            traceback.print_exc()
-            logger.error(msg)
+        # except Exception as msg:
+        #     traceback.print_exc()
+        #     logger.error(msg)
 
 
 # def setChunks(self, frame):

@@ -20,6 +20,7 @@ from .detector import *
 from utils import *
 from typing import List
 from utils import clean_dir, logger
+from config import enable_options
 
 # from capture import *
 import cv2
@@ -37,7 +38,8 @@ class DetectionMonitor(object):
         super().__init__()
         # self.cfgs = I.load_video_config(video_config_path)[-1:]
         self.cfgs = I.load_video_config(video_config_path)
-        self.cfgs = [c for c in self.cfgs if c.enable]
+        # self.cfgs = [c for c in self.cfgs if c.enable]
+        self.cfgs = [c for c in self.cfgs if enable_options[c.index]]
         self.quit = False
         # Communication Pipe between detector and stream receiver
         self.pipes = [Manager().Queue() for c in self.cfgs]
@@ -116,14 +118,8 @@ class EmbeddingControlMonitor(DetectionMonitor):
                     VideoRtspCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
                                      self.pipes[idx], self.caps_queue[idx], c, c.sample_rate)
                 )
-
             else:
                 self.caps.append(
-                    VideoOfflineRayCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
-                                           self.offline_path,
-                                           self.pipes[idx],
-                                           self.caps_queue[idx], c, self.offline_path / str(c.index), c.sample_rate,
-                                           delete_post=False))
                     VideoOfflineCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
                                         self.offline_path / str(c.index),
                                         self.pipes[idx],

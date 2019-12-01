@@ -121,6 +121,8 @@ class StreamRayReceiver(StreamReceiver):
     def receive_task(self):
         # if len(index) == 0:
         # content = requests.get(m3u8_url).text
+        if self.cfg.m3u8_url == "":
+            return
         content = requests.get(self.cfg.m3u8_url).text
         lines = content.split('\n')
         for line in lines:

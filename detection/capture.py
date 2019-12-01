@@ -84,6 +84,7 @@ class VideoCaptureThreading:
             if cnt % self.sample_rate == 0:
                 self.pass_frame(frame)
             cnt += 1
+            self.post_frame_process(frame)
             self.runtime = time.time() - start
         logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
 
@@ -233,7 +234,7 @@ class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
             if not grabbed:
                 # self.update_capture(cnt)
                 break
-            if (cnt+1) % 20 == 0:
+            if (cnt + 1) % 20 == 0:
                 time.sleep(1)
             if cnt % self.sample_rate == 0:
                 self.pass_frame(frame)
@@ -265,15 +266,20 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
 
     def update(self):
         cnt = 0
+        start = time.time()
         while self.started:
+            # with self.read_lock:
             grabbed, frame = self.cap.read()
             if not grabbed:
                 self.update_capture(cnt)
                 cnt = 0
                 continue
+            if cnt % self.sample_rate == 0:
+                self.pass_frame(frame)
             self.post_frame_process(frame)
             cnt += 1
-        logger.info("Video Capture [{}]: process..".format(self.cfg.index))
+            self.runtime = time.time() - start
+        logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
 
     def post_frame_process(self, frame):
         self.sample_cnt += 1
