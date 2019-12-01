@@ -24,7 +24,8 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": true,
+      "show_window": false,
+      "show_box": false,
       "window_position": {
         "x": 100,
         "y": 100
@@ -68,7 +69,8 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": true,
+      "show_window": false,
+      "show_box": false,
       "window_position": {
         "x": 100,
         "y": 100

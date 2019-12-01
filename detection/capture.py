@@ -21,6 +21,7 @@ from config import VideoConfig
 from utils import logger
 import time
 import shutil
+import ray
 
 
 class VideoCaptureThreading:
@@ -60,12 +61,15 @@ class VideoCaptureThreading:
 
     def load_next_src(self):
         logger.debug('Loading video stream from video index pool....')
-        self.posix = self.video_path / self.index_pool.get()
+        self.posix = self.get_posix()
         self.src = str(self.posix)
         if not os.path.exists(self.src):
             logger.info('Video path not exist: [{}]'.format(self.src))
             return -1
         return self.src
+
+    def get_posix(self):
+        return self.video_path / self.index_pool.get()
 
     def update(self):
         cnt = 0
@@ -78,10 +82,13 @@ class VideoCaptureThreading:
                 cnt = 0
                 continue
             if cnt % self.sample_rate == 0:
-                self.frame_queue.put(frame)
+                self.pass_frame(frame)
             cnt += 1
             self.runtime = time.time() - start
         logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
+
+    def pass_frame(self, frame):
+        self.frame_queue.put(frame)
 
     def update_capture(self, cnt):
         logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
@@ -126,23 +133,27 @@ class VideoOfflineCapture(VideoCaptureThreading):
                  cfg: VideoConfig, sample_rate=5, width=640, height=480, delete_post=True):
         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
         self.offline_path = offline_path
-
-        logger.info(self.offline_path)
         self.streams_list = list(self.offline_path.glob('*'))
         self.pos = 0
 
-    def load_next_src(self):
-        logger.debug('Loading next video stream ....')
+    def get_posix(self):
         if self.pos >= len(self.streams_list):
             logger.info('Load completely for [{}]'.format(str(self.offline_path)))
             return -1
-        self.posix = self.streams_list[self.pos]
-        self.src = str(self.posix)
-        self.pos += 1
-        if not os.path.exists(self.src):
-            logger.debug('Video path not exist: [{}]'.format(self.src))
-            return -1
-        return self.src
+        return self.streams_list[self.pos]
+
+    # def load_next_src(self):
+    #     logger.debug('Loading next video stream ....')
+    #     if self.pos >= len(self.streams_list):
+    #         logger.info('Load completely for [{}]'.format(str(self.offline_path)))
+    #         return -1
+    #     self.posix = self.streams_list[self.pos]
+    #     self.src = str(self.posix)
+    #     self.pos += 1
+    #     if not os.path.exists(self.src):
+    #         logger.debug('Video path not exist: [{}]'.format(self.src))
+    #         return -1
+    #     return self.src
 
     def handle_history(self):
         if self.delete_post:
@@ -165,6 +176,76 @@ class VideoOnlineSampleCapture(VideoCaptureThreading):
             logger.info('Sample video stream into: [{}]'.format(target))
             shutil.copy(self.posix, target)
         super().handle_history()
+
+
+@ray.remote
+class VideoOfflineRayCapture(VideoCaptureThreading):
+    def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
+                 cfg: VideoConfig, sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+        self.offline_path = offline_path
+        self.streams_list = list(self.offline_path.glob('*'))
+        self.pos = 0
+
+    def get_posix(self):
+        if self.pos >= len(self.streams_list):
+            logger.info('Load completely for [{}]'.format(str(self.offline_path)))
+            return -1
+        return self.streams_list[self.pos]
+
+
+@ray.remote(num_cpus=0.5)
+class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
+    def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+                 controller_actor,
+                 sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+        # if ray_index_pool is None:
+        #     raise Exception('Invalid index pool object id.')
+        # self.ray_index_pool = ray.get(ray_index_pool)
+        self.controller_actor = controller_actor
+        self.current = 0
+        self.stream_futures = []
+        # self.frame_queue = ray.get(frame_queue)
+
+    def pass_frame(self, frame):
+        # put the ray id of frame into global shared memory
+        # frame_id = ray.put(frame)
+        # self.frame_queue.put(frame_id)
+        self.stream_futures.append(self.controller_actor.start_stream_task.remote(frame))
+        logger.info('Passing frame [{}]'.format(self.current))
+        self.current += 1
+        # if self.current > 100:
+        #     logger.info('Blocked cap wait stream complete.')
+        #     ray.wait(self.stream_futures)
+        #     logger.info('Release cap.')
+        #     self.current = 0
+
+    def remote_update(self, src):
+        cnt = 0
+        start = time.time()
+        self.set_posix(src)
+        self.cap = cv2.VideoCapture(str(self.posix))
+        while True:
+            # with self.read_lock:
+            grabbed, frame = self.cap.read()
+            # logger.info('Video Capture [{}]: cnt ..'.format(cnt))
+            if not grabbed:
+                # self.update_capture(cnt)
+                break
+            if (cnt+1) % 20 == 0:
+                time.sleep(1)
+            if cnt % self.sample_rate == 0:
+                self.pass_frame(frame)
+            cnt += 1
+            self.runtime = time.time() - start
+        self.handle_history()
+        self.cap.release()
+        # logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
+        return self.posix
+
+    def set_posix(self, src):
+        self.posix = self.video_path / src
 
 
 # Read stream from rtsp

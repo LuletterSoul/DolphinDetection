@@ -6,7 +6,9 @@ from config import *
 from utils.log import logger
 import cv2
 import queue
+import ray
 from multiprocessing import Queue
+from detection.capture import VideoOnlineSampleBasedRayCapture
 
 
 class StreamReceiver(object):
@@ -14,6 +16,7 @@ class StreamReceiver(object):
     def __init__(self, stream_save_path: Path, offline_path: Path, cfg: VideoConfig, mq: Queue) -> None:
         super().__init__()
         self.stream_save_path = stream_save_path
+        self.stream_save_path.mkdir(exist_ok=True, parents=True)
         self.offline_path = offline_path
         self.cfg = cfg
         self.mq = mq
@@ -35,7 +38,6 @@ class StreamReceiver(object):
             raise Exception('Multi-processing queue cannot be None.')
         # if not isinstance(mq, ):
         #     raise Exception('Queue must be capable of multi-processing safety.')
-        self.stream_save_path.mkdir(exist_ok=True, parents=True)
 
         pre_index = -1
         # index = []
@@ -96,8 +98,86 @@ class StreamReceiver(object):
             f.close()
             # caches the stream index which has been completed by HTTP request.
             # note that the Queue is p
-            self.mq.put(format_index)
+            self.pass_index(format_index)
             logger.debug("%03d.ts Download~" % current_index)
+        return True
+
+    def pass_index(self, format_index):
+        self.mq.put(format_index)
+
+
+@ray.remote
+class StreamRayReceiver(StreamReceiver):
+
+    def __init__(self, stream_save_path: Path, offline_path: Path, cfg: VideoConfig,
+                 cap_actor: VideoOnlineSampleBasedRayCapture, mq=None) -> None:
+        super().__init__(stream_save_path, offline_path, cfg, mq)
+        self.cap_actor = cap_actor
+        self.try_cnt = 0
+        self.pre_index = 0
+        self.index_pool = queue.Queue(self.cfg.max_streams_cache)
+        # self.mq = ray.get(mq)
+
+    def receive_task(self):
+        # if len(index) == 0:
+        # content = requests.get(m3u8_url).text
+        content = requests.get(self.cfg.m3u8_url).text
+        lines = content.split('\n')
+        for line in lines:
+            # print(line)
+            if line.endswith(".ts"):
+                # logger.info(line)
+                # i = line.replace("cHZnNjcxLWF2LzE2LzE=/", "").replace(".ts", "")
+                i = line.replace(self.cfg.suffix, "").replace(".ts", "")
+                if int(i) > self.pre_index or int(i) == 0:
+                    self.index_pool.put(int(i))
+                    self.pre_index = int(i)
+                    # index.append(int(i))
+
+        # if len(index) == 0:
+        #     time.sleep(1)
+        #     continue
+
+        # avoid video stream sever lost response if HTTP was frequent
+        if self.index_pool.empty():
+            self.try_cnt += 1
+            if self.try_cnt % 20 == 0:
+                logger.info(
+                    'Video [{}]: Empty index response from online video. May please connect to video server to fix this network error '
+                    'or check the deployment server network connected.'.format(
+                        self.cfg.index))
+            time.sleep(1)
+            return False
+        # n = index[0]
+        # index.remove(index[0])
+        current_index = self.index_pool.get()
+
+        # url = "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE=/" + str(n) + ".ts"
+        # url = vcfg[URL] + str(n) + ".ts"
+        url = self.cfg.url + str(current_index) + ".ts"
+
+        # headers = {"User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36"}
+        # headers = {"User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)"}
+        logger.debug('Send Request: [{}]'.format(url))
+        response = requests.get(url, headers=self.cfg.headers)
+        logger.debug('Reponse status code: [{}]'.format(response.status_code))
+
+        if response.status_code == 404:
+            logger.debug('Stream Not found: [{}]'.format(response.status_code))
+            return False
+
+        # f = open(ts_localpath + "/" + "%03d.ts" % n, "wb")
+        format_index = str("%03d.ts" % current_index)
+        f = open(self.stream_save_path / format_index, "wb")
+        f.write(response.content)
+        f.close()
+        # caches the stream index which has been completed by HTTP request.
+        # note that the Queue is p
+        self.pass_index(format_index)
+        logger.debug("%03d.ts Download~" % current_index)
+
+    def pass_index(self, format_index):
+        self.cap_actor.remote_update.remote(format_index)
 
 
 def read(stream_save_path: Path, cfg: VideoConfig, mq: Queue):
