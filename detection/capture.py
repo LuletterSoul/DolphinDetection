@@ -99,6 +99,9 @@ class VideoCaptureThreading:
     def post_update(self):
         pass
 
+    def post_frame_process(self, frame):
+        pass
+
     def read(self):
         if not self.started:
             self.__start__()
@@ -155,3 +158,44 @@ class VideoOnlineSampleCapture(VideoCaptureThreading):
             logger.info('Sample video stream into: [{}]'.format(target))
             shutil.copy(self.posix, target)
         super().handle_history()
+
+
+# Read stream from rtsp
+class VideoRtspCapture(VideoOnlineSampleCapture):
+    def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig, 
+                 sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+        self.sample_path.mkdir(exist_ok=True, parents=True)
+        self.saved_time = ""
+
+    def load_next_src(self):
+        logger.debug("Loading next video rtsp stream ....")
+        return self.cfg.rtsp
+        
+    def handle_history(self):
+        pass
+
+    def update(self):
+        cnt = 0
+        while self.started:
+            grabbed, frame = self.cap.read()
+            if not grabbed:
+                self.update_capture(cnt)
+                cnt = 0
+                continue
+            self.post_frame_process(frame)
+            cnt += 1
+        logger.info("Video Capture [{}]: process..".format(self.cfg.index))
+
+    def post_frame_process(self, frame):
+        self.sample_cnt += 1
+        if self.sample_cnt % self.cfg.rtsp_saved_per_frame == 0:
+            current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
+            if current_time != self.saved_time:
+                self.sample_cnt = 0
+            self.saved_time = current_time
+            target = self.sample_path / (current_time + str(self.sample_cnt) + '.png')
+            logger.info("Sample rtsp video stream into: [{}]".format(target))
+            cv2.imwrite(str(target), frame)
+            
+            
