@@ -22,7 +22,7 @@ if __name__ == '__main__':
         monitor = detection.EmbeddingControlBasedThreadAndProcessMonitor(VIDEO_CONFIG_DIR / 'video.json',
                                                                          STREAM_SAVE_DIR, SAMPLE_SAVE_DIR,
                                                                          FRAME_SAVE_DIR,
-                                                                         CANDIDATE_SAVE_DIR)
+                                                                         CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
 
     elif MONITOR == MonitorType.PROCESS_BASED:
         monitor = detection.EmbeddingControlBasedProcessMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,

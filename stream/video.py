@@ -23,6 +23,8 @@ class StreamReceiver(object):
         # if not os.path.exists(ts_localpath):
         # os.makedirs(ts_localpath)
         # m3u8_url = "https://222.190.243.176:8081/proxy/video_ts/live/cHZnNjcxLWF2LzE2LzE%3D.m3u8"
+        if self.cfg.m3u8_url == "":
+            return False
         self.index_pool = queue.Queue(self.cfg.max_streams_cache)
         logger.info('Running video [{}] stream receiver process.....'.format(self.cfg.index))
         if self.stream_save_path is None:
@@ -171,6 +173,7 @@ def read(stream_save_path: Path, cfg: VideoConfig, mq: Queue):
 
         # if __name__ == '__main__':
         #     read()
+    return True
 
 
 def process_video1(input_path):

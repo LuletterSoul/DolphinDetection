@@ -101,18 +101,19 @@ class EmbeddingControlMonitor(DetectionMonitor):
                                              self.pipes[idx],
                                              self.caps_queue[idx],
                                              c, c.sample_rate))
-                                
+
             elif c.online == "rtsp":
                 self.caps.append(
                     VideoRtspCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
                                      self.pipes[idx], self.caps_queue[idx], c, c.sample_rate)
                 )
-            
+
             else:
                 self.caps.append(
-                    VideoOfflineCapture(self.stream_path / str(c.index), self.sample_path / str(c.index), offline_path,
+                    VideoOfflineCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
+                                        self.offline_path / str(c.index),
                                         self.pipes[idx],
-                                        self.caps_queue[idx], c, offline_path / str(c.index), c.sample_rate,
+                                        self.caps_queue[idx], c, c.sample_rate,
                                         delete_post=False))
 
                 self.controllers = [
@@ -294,6 +295,7 @@ class DetectorController(object):
         return None
 
     def write_work(self):
+        logger.info('Writing process.......')
         while True:
             if self.quit:
                 break
@@ -303,6 +305,7 @@ class DetectorController(object):
             target = self.result_path / (current_time + str(self.result_cnt) + '.png')
             # filename = str(self.result_path / (str(self.result_cnt) + '.png'))
             cv2.imwrite(str(target), r)
+            logger.info('Save frame exisited result into :[{}]'.format(str(target)))
         return True
 
     def collect_and_reconstruct(self):
@@ -375,6 +378,7 @@ class DetectorController(object):
         constructed_thresh = self.construct_gray(sub_thresh)
         for r in results:
             if len(r.regions):
+                logger.info('Regions')
                 self.result_queue.put(constructed_frame)
                 # self.result_queue.put(r.original_frame)
         return constructed_frame, constructed_binary, constructed_thresh
@@ -400,6 +404,7 @@ class ProcessBasedDetectorController(DetectorController):
         super().start(pool)
         res = pool.apply_async(self.collect_and_reconstruct, ())
         pool.apply_async(self.dispatch, ())
+        pool.apply_async(self.write_work)
         logger.info('Running detectors.......')
         detect_proc_res = []
         for idx, d in enumerate(self.detectors):

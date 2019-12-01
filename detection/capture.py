@@ -35,6 +35,7 @@ class VideoCaptureThreading:
         # self.grabbed, self.frame = self.cap.read()
         self.started = False
         self.read_lock = threading.Lock()
+        self.src = -1
         self.thread = threading.Thread(target=self.update, args=())
         self.sample_rate = sample_rate
         self.frame_queue = frame_queue
@@ -125,6 +126,8 @@ class VideoOfflineCapture(VideoCaptureThreading):
                  cfg: VideoConfig, sample_rate=5, width=640, height=480, delete_post=True):
         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
         self.offline_path = offline_path
+
+        logger.info(self.offline_path)
         self.streams_list = list(self.offline_path.glob('*'))
         self.pos = 0
 
@@ -140,6 +143,10 @@ class VideoOfflineCapture(VideoCaptureThreading):
             logger.debug('Video path not exist: [{}]'.format(self.src))
             return -1
         return self.src
+
+    def handle_history(self):
+        if self.delete_post:
+            self.posix.unlink()
 
 
 # Sample video stream at intervals
@@ -162,7 +169,7 @@ class VideoOnlineSampleCapture(VideoCaptureThreading):
 
 # Read stream from rtsp
 class VideoRtspCapture(VideoOnlineSampleCapture):
-    def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig, 
+    def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
                  sample_rate=5, width=640, height=480, delete_post=True):
         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
         self.sample_path.mkdir(exist_ok=True, parents=True)
@@ -171,7 +178,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
     def load_next_src(self):
         logger.debug("Loading next video rtsp stream ....")
         return self.cfg.rtsp
-        
+
     def handle_history(self):
         pass
 
@@ -197,5 +204,3 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             target = self.sample_path / (current_time + str(self.sample_cnt) + '.png')
             logger.info("Sample rtsp video stream into: [{}]".format(target))
             cv2.imwrite(str(target), frame)
-            
-            

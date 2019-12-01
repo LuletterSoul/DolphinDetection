@@ -225,17 +225,13 @@
       "name": "video6_hungred_million",
       "ip": "222.190.243.176",
       "port": "8081",
-      "suffix": "stream_13-",
-      "headers": {
-        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)",
-        "Referer": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
-        "Accept-Encoding": "identity"
-      },
-      "m3u8_url": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
-      "url": "http://222.190.243.243:8081/hls/stream_13/stream_13-",
+      "suffix": "",
+      "headers": {},
+      "m3u8_url": "",
+      "url": "",
       "roi": {
         "x": 0,
-        "y": 300,
+        "y": 0,
         "width": -1,
         "height": -1
       },
@@ -250,15 +246,15 @@
         "y": 100
       },
       "routine": {
-        "row": 2,
-        "col": 2
+        "row": 1,
+        "col": 1
       },
       "sample_rate": 3,
       "draw_boundary": true,
       "enable": true,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": "rtsp",
+      "online": "offline",
       "sample_internal": 15,
       "save_box": false,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
