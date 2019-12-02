@@ -135,9 +135,10 @@ class VideoOfflineCapture(VideoCaptureThreading):
         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
         self.offline_path = offline_path
         self.streams_list = list(self.offline_path.glob('*'))
-        self.pos = 0
+        self.pos = -1
 
     def get_posix(self):
+        self.pos += 1
         if self.pos >= len(self.streams_list):
             logger.info('Load completely for [{}]'.format(str(self.offline_path)))
             return -1
