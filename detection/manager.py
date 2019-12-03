@@ -28,6 +28,7 @@ import cv2
 import imutils
 import traceback
 import time
+import threading
 
 
 # Monitor will build multiple video stream receivers according the video configuration
@@ -243,6 +244,7 @@ class DetectorController(object):
         self.frame_path = frame_path
         self.region_path = region_path
         self.result_cnt = 0
+        self.stream_cnt = 0
         # self.process_pool = process_pool
         self.col = cfg.routine['col']
         self.row = cfg.routine['row']
@@ -257,10 +259,15 @@ class DetectorController(object):
         # self.frame_cnt =
         self.next_prepare_event = Manager().Event()
         self.next_prepare_event.clear()
-        self.detect_save_internal = 10
-        self.pre_detect_index = -self.detect_save_internal
+        self.pre_detect_index = -self.cfg.future_frames
         self.original_frame_cache = Manager().dict()
-        self.record_history_frame = deque(maxlen=70)
+        self.render_frame_cache = Manager().dict()
+        self.history_frame_deque = Manager().list()
+        self.record_cnt = 70
+        self.render_task_cnt = 0
+        # time scheduler to clear cache
+        self.last_detection = time.time()
+        self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
 
         # def __getstate__(self):
 
@@ -270,6 +277,14 @@ class DetectorController(object):
     #
     # def __setstate__(self, state):
     #     self.__dict__.update(state)
+    def clear_cache(self):
+        last_detect_internal = time.time() - self.last_detection
+        time_thresh = self.cfg.future_frames * 1.5 * 3
+        if last_detect_internal > time_thresh:
+            self.render_frame_cache.clear()
+            self.original_frame_cache.clear()
+            logger.debug(
+                'Clear all frame caches due to None target detected during [{}] seconds'.format(time_thresh))
 
     def init_control_range(self):
         # read a frame, record frame size before running detectors
@@ -285,12 +300,13 @@ class DetectorController(object):
             for j in range(self.row):
                 region_detector_path = self.region_path / str(self.cfg.index) / (str(i) + '-' + str(j))
                 index = self.col * i + j
-                logger.info(index)
                 self.detectors.append(
                     Detector(self.col_step, self.row_step, i, j, self.cfg, self.send_pipes[index],
                              self.receive_pipes[index],
                              region_detector_path))
         self.result_path = self.region_path / str(self.cfg.index) / 'frames'
+        self.detect_stream_path = self.region_path / str(self.cfg.index) / 'streams'
+        self.detect_stream_path.mkdir(exist_ok=True, parents=True)
         self.result_path.mkdir(exist_ok=True, parents=True)
         logger.info('Detectors init done....')
 
@@ -318,14 +334,11 @@ class DetectorController(object):
         self.init_detectors()
         return None
 
-    def write_work(self):
+    def write_frame_work(self):
         logger.info('Writing process.......')
         current_time = time.strftime('%m-%d-%H:%M-', time.localtime(time.time()))
-        video_target = self.result_path / (current_time + str(self.result_cnt) + '.mp4')
         target = self.result_path / (current_time + str(self.result_cnt) + '.png')
         logger.info('Writing stream frame into: [{}]'.format(str(target)))
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        video_write = cv2.VideoWriter(str(video_target), fourcc, 24.0, (1920, 1080), True)
         while True:
             if self.quit:
                 break
@@ -335,44 +348,51 @@ class DetectorController(object):
                 current_time = time.strftime('%m-%d-%H:%M-', time.localtime(time.time()))
                 target = self.result_path / (current_time + str(self.result_cnt) + '.png')
                 cv2.imwrite(str(target), r)
-                video_write.write(r)
-                logger.info('Save frame exisited result into :[{}]'.format(str(target)))
             except Exception as e:
                 logger.info(e)
-                video_target = self.result_path / (current_time + str(self.result_cnt) + '.mp4')
-                video_write.release()
-                video_write = cv2.VideoWriter(str(video_target), fourcc, 24.0, (1920, 1080), True)
-            # filename = str(self.result_path / (str(self.result_cnt) + '.png'))
+
         return True
 
-    def write_detection_frame(self, frame_idx, cache):
-        current_time = time.strftime('%m-%d-%H:%M-', time.localtime(time.time()))
-        target = self.result_path / (current_time + str(self.result_cnt) + '.mp4')
-        logger.info('Writing stream frame into: [{}]'.format(str(target)))
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        video_write = cv2.VideoWriter(str(target), fourcc, 24.0, (1920, 1080), True)
+    def render_detection_frame(self, frame_idx, cache, task_id):
+        current_time = time.strftime('%m-%d-%H:%M:%S-', time.localtime(time.time()))
+        target = self.detect_stream_path / (current_time + str(self.result_cnt) + '.mp4')
+        logger.info('Render task [{}]: Writing detection stream frame into: [{}]'.format(task_id, str(target)))
+        # fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        video_write = cv2.VideoWriter(str(target), self.fourcc, 24.0, (1920, 1080), True)
         next_cnt = 0
         for idx in frame_idx:
             if idx in cache:
-                video_write.write(frame=cache[idx])
+                video_write.write(cache[idx])
                 next_cnt = idx + 1
-        next = 24
-        try_cnt = 0
+                # logger.info(frame_idx)
+        # the future frames count
+        # next_frame_cnt = 48
         success = 0
         # wait the futures frames is accessable
         if not self.next_prepare_event.is_set():
             logger.info('Wait frames accessible....')
-            self.next_prepare_event.wait()
+            # wait the future frames prepared,if ocurring time out, give up waits
+            self.next_prepare_event.wait(10)
             logger.info('Frames accessible....')
+        logger.info('Render task Begin with frame [{}]'.format(next_cnt))
+        start = time.time()
         while True:
+            # failed to wait
+            end = time.time() - start
             if next_cnt in cache:
+                # logger.info('Writing frame [{}] into video stream'.format(next_cnt))
                 video_write.write(cache[next_cnt])
                 next_cnt += 1
                 success += 1
-            if success == next:
+            if end >= 20:
+                logger.info('Task time overflow, complete previous render task.')
+                break
+            if success == self.cfg.future_frames:
                 break
         video_write.release()
-        logger.info('Writing done: [{}]'.format(str(target)))
+        self.stream_cnt += 1
+        logger.info('Render task [{}]: Done write detection stream frame into: [{}]'.format(task_id, str(target)))
+        return True
 
     def get_result_from_queue(self):
         return self.result_queue.get(timeout=5)
@@ -395,6 +415,7 @@ class DetectorController(object):
                     'Detection controller [{}]: Operation Speed Rate [{}]s/100fs, unit process rate: [{}]s/f'.format(
                         self.cfg.index, round(end, 2), round(end / 100, 2)))
                 start = time.time()
+                cnt = 0
             if self.cfg.draw_boundary:
                 frame = self.draw_boundary(frame)
             # logger.info('Done constructing of sub-frames into a original frame....')
@@ -423,8 +444,11 @@ class DetectorController(object):
             frame = self.frame_queue.get()
             self.frame_cnt.set(self.frame_cnt.get() + 1)
             self.original_frame_cache[self.frame_cnt.get()] = frame
+            self.render_frame_cache[self.frame_cnt.get()] = frame
             # logger.info(self.original_frame_cache.keys())
-            self.record_history_frame.append(self.frame_cnt.get())
+            if len(self.history_frame_deque) >= self.record_cnt:
+                self.history_frame_deque.pop(0)
+            self.history_frame_deque.append(self.frame_cnt.get())
             frame, original_frame = self.preprocess(frame)
             for sp in self.send_pipes:
                 # sp.put((frame, original_frame))
@@ -439,7 +463,7 @@ class DetectorController(object):
         res = []
         for rp in self.receive_pipes:
             res.append(rp.get())
-        logger.info('Collect sub-frames from all detectors....')
+        # logger.info('Collect sub-frames from all detectors....')
         return res
 
     def construct(self, results: List[DetectionResult]):
@@ -449,37 +473,46 @@ class DetectorController(object):
         constructed_frame = self.construct_rgb(sub_frames)
         constructed_binary = self.construct_gray(sub_binary)
         constructed_thresh = self.construct_gray(sub_thresh)
+        current_index = results[0].frame_index
+        original_frame = self.original_frame_cache[current_index]
+        detect_flag = False
         for r in results:
             if len(r.rects):
-                logger.info('Not empty rects....')
+                detect_flag = True
+                self.last_detection = time.time()
                 if r.frame_index not in self.original_frame_cache:
                     logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
                     continue
-                original_frame = self.original_frame_cache[r.frame_index]
                 for rect in r.rects:
                     color = np.random.randint(0, 255, size=(3,))
                     color = [int(c) for c in color]
                     cv2.rectangle(original_frame, (rect[0] - 20, rect[1] - 20),
                                   (rect[0] + rect[2] + 20, rect[1] + rect[3] + 20),
                                   color, 2)
-                self.original_frame_cache[r.frame_index] = original_frame
-        self.result_queue.put(self.original_frame_cache[results[0].frame_index])
+        self.render_frame_cache[current_index] = original_frame
+        next_detect_stream_occurred = current_index - self.pre_detect_index >= self.cfg.future_frames
+        if detect_flag and next_detect_stream_occurred:
+            if self.next_prepare_event.is_set():
+                self.next_prepare_event.clear()
+            # begin task asynchronously  in case blocking collector
+            thread = threading.Thread(
+                target=self.render_detection_frame,
+                # pass a copy history frame index
+                args=(list(self.history_frame_deque), self.render_frame_cache, self.render_task_cnt,))
+            self.render_task_cnt += 1
+            thread.start()
+            self.pre_detec1202.mp4t_index = current_index
+        self.result_queue.put(self.original_frame_cache[current_index])
         # self.result_queue.put(constructed_frame)
-        # self.result_queue.put(original_frame)
-        # if r.frame_index - self.pre_detect_index >= 10:
-        #     if self.next_prepare_event.is_set():
-        #         self.next_prepare_event.clear()
-        #     thread = threading.Thread(
-        #         target=self.write_detection_frame,
-        #         args=(self.record_history_frame.copy(), self.original_frame_cache,))
-        #     thread.start()
-        #     self.pre_detect_index = r.frame_index
-        # self.result_queue.put(original_frame)
-        # if self.frame_cnt.get() - self.pre_detect_index >= 30:
-        #     if not self.next_prepare_event.is_set():
-        #         self.next_prepare_event.set()
-
-        # self.result_queue.put(r.original_frame)
+        # self.render_frame_cache[current_index] = self.original_frame_cache[current_index]
+        if self.frame_cnt.get() - self.pre_detect_index >= self.cfg.future_frames:
+            # notify render task that the future frames(2s default required) are done
+            if not self.next_prepare_event.is_set():
+                self.next_prepare_event.set()
+                logger.info(
+                    'Notify detection stream writer.Current frame index [{}],Previous detected frame index [{}]...'.format(
+                        self.frame_cnt.get(), self.pre_detect_index))
+        self.clear_cache()
         return constructed_frame, constructed_binary, constructed_thresh
 
     def construct_rgb(self, sub_frames):
@@ -512,7 +545,7 @@ class ProcessBasedDetectorController(DetectorController):
         super().start(pool)
         res = pool.apply_async(self.collect_and_reconstruct, ())
         pool.apply_async(self.dispatch, ())
-        pool.apply_async(self.write_work)
+        pool.apply_async(self.write_frame_work)
         logger.info('Running detectors.......')
         detect_proc_res = []
         for idx, d in enumerate(self.detectors):
@@ -562,7 +595,7 @@ class ProcessAndThreadBasedDetectorController(DetectorController):
         # dispatch child frames to detector asynchronously
         pr2 = process_pool.apply_async(self.dispatch, ())
         # write detection result asynchronously
-        thread_res.append(thread_pool.submit(self.write_work))
+        thread_res.append(thread_pool.submit(self.write_frame_work))
         pool_res.append(pr2)
         logger.info('Running detectors.......')
         for idx, d in enumerate(self.detectors):

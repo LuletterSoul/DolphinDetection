@@ -105,7 +105,6 @@ class Detector(object):
         b_rects = []
         original_shape = self.current_block.shape
         ratio = original_shape[0] / self.shape[0]
-        logger.info(ratio)
         for r in rects:
             x = int((r[0] + self.start[0]) * ratio)
             y = int((r[1] + self.start[1]) * ratio)
@@ -129,7 +128,7 @@ class Detector(object):
         gt_dist = euclidean_distance(region_mean, self.dolphin_mean_intensity)
         std_dist = euclidean_distance(region_std, self.global_std)
         logger.debug('Mean Distance with background threshold: [{}].'.format(bg_dist))
-        logger.info('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
+        logger.debug('Mean Distance with Ground Truth threshold: [{}].'.format(gt_dist))
         logger.debug('Std Distance with global: [{}].'.format(std_dist))
         # the smaller euclidean distance with class, it's more reliable towards the correct detection
         is_true = gt_dist < 80
@@ -141,10 +140,13 @@ class Detector(object):
         return bg_dist > thresh
 
     def is_in_ratio(self, area, total):
-        logger.info((area / total) * 100)
+        # logger.info((area / total) * 100)
         return (area / total) * 100 <= self.cfg.filtered_ratio
 
     def detect(self):
+        self.detect_saliency()
+
+    def detect_saliency(self):
         try:
             # if not isinstance(mq, Queue):
             #     raise Exception('Queue must be capable of multi-processing safety.')
@@ -272,10 +274,11 @@ class Detector(object):
                 # if self.cfg.show_window:
                 #     cv2.imshow("Frame", frame)
                 # cv2.imshow("Map", dilated)
-                cv2.imshow("Mask", adaptive_thresh)
-                cv2.imshow("Contours", img_con)
-                # cv2.imshow("Binary Mask", t)
-                key = cv2.waitKey(1) & 0xFF
+                if self.cfg.show_window:
+                    cv2.imshow("Mask", adaptive_thresh)
+                    cv2.imshow("Contours", img_con)
+                    # cv2.imshow("Binary Mask", t)
+                    key = cv2.waitKey(1) & 0xFF
                 # if the `q` key was pressed, break from the loop
                 # if key == ord("q"):
                 #     break
@@ -294,9 +297,7 @@ class Detector(object):
 
             # do a bit of cleanup
             cv2.destroyAllWindows()
-
             # vs.release()
-
         except Exception as msg:
             traceback.print_exc()
             logger.error(msg)
