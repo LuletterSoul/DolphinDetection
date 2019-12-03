@@ -67,7 +67,7 @@ class MonitorType(Enum):
 # MONITOR = MonitorType.PROCESS_BASED
 
 
-MONITOR = MonitorType.PROCESS_BASED
+MONITOR = MonitorType.PROCESS_THREAD_BASED
 
 enable_options = {
     0: False,
@@ -82,7 +82,8 @@ enable_options = {
 class VideoConfig:
     def __init__(self, index, name, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
-                 online, sample_internal, save_box, show_box, rtsp, rtsp_saved_per_frame, future_frames):
+                 online, sample_internal, save_box, show_box, rtsp, rtsp_saved_per_frame, future_frames,
+                 detect_alg_type):
         self.index = index
         self.name = name
         self.ip = ip
@@ -108,6 +109,7 @@ class VideoConfig:
         self.rtsp = rtsp
         self.rtsp_saved_per_frame = rtsp_saved_per_frame
         self.future_frames = future_frames
+        self.detect_alg_type = detect_alg_type
 
     def to_json(self):
         return json.dumps(self.__dict__)

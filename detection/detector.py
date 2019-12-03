@@ -60,7 +60,7 @@ class DetectionResult(object):
 
 
 class Detector(object):
-    def __init__(self, col_step, col_step_1, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
+    def __init__(self, col_step, row_step, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
                  region_save_path: Path) -> None:
         super().__init__()
         # self.video_path = video_path
@@ -70,11 +70,11 @@ class Detector(object):
         self.global_std = None
         self.global_mean = None
         self.row_step = col_step
-        self.col_step = col_step_1
+        self.col_step = row_step
         self.col_index = row_index
         self.row_index = col_index
-        self.start = [self.row_index * col_step_1, self.col_index * col_step]
-        self.end = [(self.row_index + 1) * col_step_1, (self.col_index + 1) * col_step]
+        self.start = [self.row_index * row_step, self.col_index * col_step]
+        self.end = [(self.row_index + 1) * row_step, (self.col_index + 1) * col_step]
         self.sq = sq
         self.rq = rq
         self.region_save_path = region_save_path
@@ -96,7 +96,8 @@ class Detector(object):
     #     return self.crop(f), of
     def get_frame(self):
         self.current_block = self.sq.get()
-        return self.crop(self.current_block.frame)
+        # return self.crop(self.current_block.frame)
+        return self.current_block.frame
 
     def crop(self, frame):
         return crop_by_se(frame, self.start, self.end)
@@ -144,7 +145,58 @@ class Detector(object):
         return (area / total) * 100 <= self.cfg.filtered_ratio
 
     def detect(self):
-        self.detect_saliency()
+        if self.cfg.detect_alg_type == 'saliency':
+            self.detect_saliency()
+        if self.cfg.detect_alg_type == 'thresh':
+            self.detect_thresh()
+
+    def detect_thresh(self):
+        try:
+            logger.debug(
+                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.col_index,
+                                                                           self.row_index))
+            logger.debug(
+                'Detector [{},{}]: init saliency detector'.format(self.col_index, self.col_index))
+            while True:
+                start = time.time()
+                frame = self.get_frame()
+                self.shape = frame.shape
+                if frame is None:
+                    logger.info('Detector: [{},{}] empty frame')
+                    continue
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+                adaptive_thresh = adaptive_thresh_size(frame, (5, 5), 30, 40)
+                dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+                                     iterations=1)
+                img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+                rects = []
+                regions = []
+                status = None
+                coordinates = []
+                for c in contours:
+                    rect = cv2.boundingRect(c)
+                    rects.append(rect)
+                cv2.drawContours(img_con, contours, -1, 255, -1)
+                if self.cfg.show_window:
+                    cv2.imshow("Contours", img_con)
+                    cv2.waitKey(1)
+                self.detect_cnt += 1
+                logger.debug(
+                    'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.row_index,
+                                                                         self.detect_cnt))
+                res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, self.row_index,
+                                      self.col_index, self.current_block.index, self.back(rects))
+                self.pass_detection_result(res)
+                end = time.time() - start
+                logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
+
+            # do a bit of cleanup
+            cv2.destroyAllWindows()
+            # vs.release()
+        except Exception as msg:
+            traceback.print_exc()
+            logger.error(msg)
 
     def detect_saliency(self):
         try:
@@ -309,9 +361,9 @@ class Detector(object):
 @ray.remote(num_cpus=1)
 class RayDetector(Detector):
 
-    def __init__(self, col_step, col_step_1, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
+    def __init__(self, col_step, row_step, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
                  region_save_path: Path, shape) -> None:
-        super().__init__(col_step, col_step_1, row_index, col_index, cfg, sq, rq, region_save_path)
+        super().__init__(col_step, row_step, row_index, col_index, cfg, sq, rq, region_save_path)
         self.saliency = None
         self.shape = shape
         # self.rq = ray.get(rq)

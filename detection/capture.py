@@ -81,8 +81,8 @@ class VideoCaptureThreading:
                 self.update_capture(cnt)
                 cnt = 0
                 continue
-            if cnt % self.sample_rate == 0:
-                self.pass_frame(frame)
+            # if cnt % self.sample_rate == 0:
+            self.pass_frame(frame)
             cnt += 1
             self.post_frame_process(frame)
             self.runtime = time.time() - start
