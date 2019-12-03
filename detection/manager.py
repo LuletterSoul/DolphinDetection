@@ -44,7 +44,7 @@ class DetectionMonitor(object):
         self.cfgs = [c for c in self.cfgs if enable_options[c.index]]
         self.quit = False
         # Communication Pipe between detector and stream receiver
-        self.pipes = [Manager().Queue() for c in self.cfgs]
+        self.pipes = [Manager().Queue(c.max_streams_cache) for c in self.cfgs]
         self.stream_path = stream_path
         self.sample_path = sample_path
         self.frame_path = frame_path

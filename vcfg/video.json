@@ -274,7 +274,7 @@
       "save_box": true,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
-      "rtsp_saved_per_frame": 50,
+      "rtsp_saved_per_frame": 240,
       "future_frames": 48,
       "detect_alg_type": "thresh"
     }
