@@ -381,7 +381,7 @@ class DetectorController(object):
         if not self.next_prepare_event.is_set():
             logger.info('Wait frames accessible....')
             # wait the future frames prepared,if ocurring time out, give up waits
-            self.next_prepare_event.wait()
+            self.next_prepare_event.wait(30)
             logger.info('Frames accessible....')
         # logger.info('Render task Begin with frame [{}]'.format(next_cnt))
         start = time.time()
@@ -405,7 +405,7 @@ class DetectorController(object):
                 frame_cache.pop(next_cnt)
                 next_cnt += 1
                 success += 1
-            if end >= 20:
+            if end >= 30:
                 logger.info('Task time overflow, complete previous render task.')
                 break
             if success == self.cfg.future_frames:
@@ -510,9 +510,12 @@ class DetectorController(object):
                 for rect in r.rects:
                     color = np.random.randint(0, 255, size=(3,))
                     color = [int(c) for c in color]
-                    cv2.rectangle(original_frame, (rect[0] - 20, rect[1] - 20),
-                                  (rect[0] + rect[2] + 20, rect[1] + rect[3] + 20),
-                                  color, 2)
+                    p1 = (rect[0] - 80, rect[1] - 80)
+                    p2 = (rect[0] + 100, rect[1] + 100)
+                    # cv2.rectangle(original_frame, (rect[0] - 20, rect[1] - 20),
+                    #               (rect[0] + rect[2] + 20, rect[1] + rect[3] + 20),
+                    #               color, 2)
+                    cv2.rectangle(original_frame, p1, p2, color, 2)
         self.render_frame_cache[current_index] = original_frame
         next_detect_stream_occurred = current_index - self.pre_detect_index >= self.cfg.future_frames
         if detect_flag and next_detect_stream_occurred:
@@ -540,7 +543,7 @@ class DetectorController(object):
                         self.construct_cnt, self.pre_detect_index))
         self.clear_cache()
         # return constructed_frame, constructed_binary, constructed_thresh
-        return None, None, None
+        return original_frame, None, None
 
     def construct_rgb(self, sub_frames):
         sub_frames = np.array(sub_frames)
