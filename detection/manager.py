@@ -357,6 +357,7 @@ class DetectorController(object):
         return True
 
     def render_detection_frame(self, frame_idx, render_cache, frame_cache, task_id):
+        self.stream_cnt += 1
         current_time = time.strftime('%m-%d-%H:%M:%S-', time.localtime(time.time()))
         target = self.detect_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info('Render task [{}]: Writing detection stream frame into: [{}]'.format(task_id, str(target)))
@@ -389,29 +390,31 @@ class DetectorController(object):
         while True:
             # failed to wait
             end = time.time() - start
-            if next_cnt in render_cache:
-                frame = render_cache[next_cnt]
-                video_write.write(frame)
-                # logger.info('Writing frame [{}] into video stream from render_cache'.format(next_cnt))
-                # test_target = str(self.test_path / (str(next_cnt) + '.png'))
-                # cv2.imwrite(test_target, frame)
-                render_cache.pop(next_cnt)
-                next_cnt += 1
-                success += 1
-            # if render frame not found ,using the original frame as substitude
-            elif next_cnt in frame_cache:
-                frame = frame_cache[next_cnt]
-                video_write.write(frame)
-                frame_cache.pop(next_cnt)
-                next_cnt += 1
-                success += 1
+            try:
+                if next_cnt in render_cache:
+                    frame = render_cache[next_cnt]
+                    video_write.write(frame)
+                    # logger.info('Writing frame [{}] into video stream from render_cache'.format(next_cnt))
+                    # test_target = str(self.test_path / (str(next_cnt) + '.png'))
+                    # cv2.imwrite(test_target, frame)
+                    render_cache.pop(next_cnt)
+                    next_cnt += 1
+                    success += 1
+                # if render frame not found ,using the original frame as substitude
+                elif next_cnt in frame_cache:
+                    frame = frame_cache[next_cnt]
+                    video_write.write(frame)
+                    frame_cache.pop(next_cnt)
+                    next_cnt += 1
+                    success += 1
+            except Exception as e:
+                logger.error(e)
             if end >= 30:
                 logger.info('Task time overflow, complete previous render task.')
                 break
             if success == self.cfg.future_frames:
                 break
         video_write.release()
-        self.stream_cnt += 1
         logger.info('Render task [{}]: Done write detection stream frame into: [{}]'.format(task_id, str(target)))
         return True
 

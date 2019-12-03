@@ -226,7 +226,7 @@ class Detector(object):
                     continue
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-                adaptive_thresh = adaptive_thresh_size(frame, (5, 5), 30, 40)
+                adaptive_thresh = adaptive_thresh_size(frame, (5, 5))
                 dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                                      iterations=1)
                 img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
