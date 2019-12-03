@@ -149,6 +149,66 @@ class Detector(object):
             self.detect_saliency()
         if self.cfg.detect_alg_type == 'thresh':
             self.detect_thresh()
+        if self.cfg.detect_alg_type == 'thresh_mask':
+            self.detect_mask()
+
+    def detect_mask(self):
+        try:
+            logger.debug(
+                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.col_index,
+                                                                           self.row_index))
+            logger.debug(
+                'Detector [{},{}]: init saliency detector'.format(self.col_index, self.col_index))
+            frame = self.get_frame()
+            self.shape = frame.shape
+
+            mask = np.zeros((self.shape[0], self.shape[1])).astype(np.uint8)
+            mask[60:420, :] = 255
+            # frame = cv2.bitwise_and(frame, mask)
+            # cv2.imshow('Frame', frame)
+            # cv2.imshow('Mask', mask)
+            # cv2.waitKey(0)
+            while True:
+                start = time.time()
+                frame = self.get_frame()
+                self.shape = frame.shape
+                if frame is None:
+                    logger.info('Detector: [{},{}] empty frame')
+                    continue
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+                adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, mean=80)
+                dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+                                     iterations=1)
+                dilated = cv2.bitwise_and(dilated, mask)
+                img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+                rects = []
+                regions = []
+                status = None
+                coordinates = []
+                for c in contours:
+                    rect = cv2.boundingRect(c)
+                    rects.append(rect)
+                cv2.drawContours(img_con, contours, -1, 255, -1)
+                if self.cfg.show_window:
+                    cv2.imshow("Contours", img_con)
+                    cv2.waitKey(1)
+                self.detect_cnt += 1
+                logger.debug(
+                    'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.row_index,
+                                                                         self.detect_cnt))
+                res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, self.row_index,
+                                      self.col_index, self.current_block.index, self.back(rects))
+                self.pass_detection_result(res)
+                end = time.time() - start
+                logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
+
+            # do a bit of cleanup
+            cv2.destroyAllWindows()
+            # vs.release()
+        except Exception as msg:
+            traceback.print_exc()
+            logger.error(msg)
 
     def detect_thresh(self):
         try:
