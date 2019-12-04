@@ -89,7 +89,7 @@ class VideoCaptureThreading:
         logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
 
     def pass_frame(self, frame):
-        self.frame_queue.put(frame)
+        self.frame_queue.put(frame, block=True)
 
     def update_capture(self, cnt):
         logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))

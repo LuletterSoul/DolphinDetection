@@ -141,8 +141,16 @@ class Detector(object):
         return bg_dist > thresh
 
     def is_in_ratio(self, area, total):
-        # logger.info((area / total) * 100)
-        return (area / total) * 100 <= self.cfg.filtered_ratio
+        # logger.info('Area ration: [{}]'.format((area / total) * 100))
+        return self.ratio(area, total) <= self.cfg.filtered_ratio
+
+    def less_ratio(self, area):
+        total = self.shape[0] * self.shape[1]
+        # logger.info('Area ration: [{}]'.format(self.ratio(area, total)))
+        return self.ratio(area, total) >= 0.01
+
+    def ratio(self, area, total):
+        return (area / total) * 100
 
     def detect(self):
         if self.cfg.detect_alg_type == 'saliency':
@@ -217,16 +225,26 @@ class Detector(object):
                                                                            self.row_index))
             logger.debug(
                 'Detector [{},{}]: init saliency detector'.format(self.col_index, self.col_index))
+            frame = self.get_frame()
+            self.shape = frame.shape
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            _, mask = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY)
+            mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
+                              iterations=1)
+            mask = cv2.bitwise_not(mask)
+            # cv2.imshow('Mask', mask)
+            # cv2.waitKey(0)
             while True:
                 start = time.time()
                 frame = self.get_frame()
-                self.shape = frame.shape
                 if frame is None:
                     logger.info('Detector: [{},{}] empty frame')
                     continue
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
                 _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
                 adaptive_thresh = adaptive_thresh_size(frame, (5, 5))
+                adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
                 dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                                      iterations=1)
                 img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
@@ -236,7 +254,10 @@ class Detector(object):
                 coordinates = []
                 for c in contours:
                     rect = cv2.boundingRect(c)
-                    rects.append(rect)
+                    area = cv2.contourArea(c)
+                    # self.is_in_ratio(area, self.shape[0] * self.shape[1])
+                    if self.less_ratio(area):
+                        rects.append(rect)
                 cv2.drawContours(img_con, contours, -1, 255, -1)
                 if self.cfg.show_window:
                     cv2.imshow("Contours", img_con)
