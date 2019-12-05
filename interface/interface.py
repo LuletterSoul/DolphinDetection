@@ -17,6 +17,7 @@ import detection
 import stream
 from config import *
 from utils.log import logger
+import utils.thresh as thresh
 from typing import List
 from multiprocessing import Queue
 
@@ -44,7 +45,7 @@ def thresh(frame, cfg=None):
     :param frame:
     :return:
     """
-    return detection.adaptive_thresh(frame, cfg)
+    return thresh.adaptive_thresh(frame, cfg)
 
 
 def read_stream(stream_save_path, vcfg, mq: Queue):

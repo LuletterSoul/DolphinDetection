@@ -41,6 +41,7 @@
       "online": "http",
       "sample_internal": 15,
       "save_box": true,
+      "show_box": false,
       "rtsp": "",
       "rtsp_saved_per_frame": 50
     },
@@ -68,7 +69,7 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": true,
+      "show_window": false,
       "window_position": {
         "x": 100,
         "y": 100
@@ -85,6 +86,7 @@
       "online": "http",
       "sample_internal": 15,
       "save_box": false,
+      "show_box": false,
       "rtsp": "",
       "rtsp_saved_per_frame": 50
     },
@@ -129,6 +131,7 @@
       "online": "rtsp",
       "sample_internal": 15,
       "save_box": false,
+      "show_box": true,
       "rtsp": "rtsp://222.190.243.243/gp/1101",
       "rtsp_saved_per_frame": 50
     },
@@ -173,6 +176,7 @@
       "online": "rtsp",
       "sample_internal": 15,
       "save_box": false,
+      "show_box": true,
       "rtsp": "rtsp://222.190.243.243/gp/1102",
       "rtsp_saved_per_frame": 50
     },
@@ -217,6 +221,7 @@
       "online": "rtsp",
       "sample_internal": 15,
       "save_box": false,
+      "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtview",
       "rtsp_saved_per_frame": 50
     },
@@ -225,17 +230,13 @@
       "name": "video6_hungred_million",
       "ip": "222.190.243.176",
       "port": "8081",
-      "suffix": "stream_13-",
-      "headers": {
-        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)",
-        "Referer": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
-        "Accept-Encoding": "identity"
-      },
-      "m3u8_url": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
-      "url": "http://222.190.243.243:8081/hls/stream_13/stream_13-",
+      "suffix": "",
+      "headers": {},
+      "m3u8_url": "",
+      "url": "",
       "roi": {
         "x": 0,
-        "y": 300,
+        "y": 0,
         "width": -1,
         "height": -1
       },
@@ -250,8 +251,8 @@
         "y": 100
       },
       "routine": {
-        "row": 2,
-        "col": 2
+        "row": 1,
+        "col": 1
       },
       "sample_rate": 3,
       "draw_boundary": true,
@@ -260,7 +261,8 @@
       "max_streams_cache": 5000,
       "online": "rtsp",
       "sample_internal": 15,
-      "save_box": false,
+      "save_box": true,
+      "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
       "rtsp_saved_per_frame": 50
     }

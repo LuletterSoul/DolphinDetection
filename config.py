@@ -57,6 +57,7 @@ class MonitorType(Enum):
     PROCESS_BASED = 1,
     THREAD_BASED = 2,
     PROCESS_THREAD_BASED = 3
+    RAY_BASED = 4
 
 
 # select monitor type, process-based means the system will create a process for each component,such as detector,
@@ -68,11 +69,20 @@ class MonitorType(Enum):
 
 MONITOR = MonitorType.PROCESS_BASED
 
+enable_options = {
+    0: False,
+    1: False,
+    2: False,
+    3: False,
+    4: False,
+    5: True
+}
+
 
 class VideoConfig:
     def __init__(self, index, name, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
-                 online, sample_internal, save_box, rtsp, rtsp_saved_per_frame):
+                 online, sample_internal, save_box, show_box, rtsp, rtsp_saved_per_frame):
         self.index = index
         self.name = name
         self.ip = ip
@@ -94,6 +104,7 @@ class VideoConfig:
         self.online = online
         self.sample_internal = sample_internal
         self.save_box = save_box
+        self.show_box = show_box
         self.rtsp = rtsp
         self.rtsp_saved_per_frame = rtsp_saved_per_frame
 
@@ -110,11 +121,12 @@ class LabelConfig:
     """
     Image label class
     """
+
     def __init__(self, start, end, center):
         self.start = start
         self.end = end
         self.center = center
-    
+
     def to_json(self):
         return json.dumps(self.__dict__)
 
