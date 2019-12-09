@@ -18,10 +18,22 @@ def adaptive_thresh(frame, cfg=None):
     # frame = crop_by_roi(frame, cfg.roi)
     gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
     # blur = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 1)
-    th_atm = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 21, 20)
+    th_atm = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 21, 30)
     # ret_otsu, th_otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     edges = cv2.Canny(th_atm, canny_lth, canny_hth)
     dilation = cv2.dilate(edges, kernel_size)
+    return dilation
+
+
+def adaptive_thresh_size(frame, kernel_size=(3, 3), block_size=21, mean=40):
+    # img = img[370:1080, 0:1980]
+    # frame = crop_by_roi(frame, cfg.roi)
+    gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+    # blur = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 1)
+    th_atm = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, block_size, mean)
+    # ret_otsu, th_otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    edges = cv2.Canny(th_atm, canny_lth, canny_hth)
+    dilation = cv2.dilate(edges, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_size))
     return dilation
 
 # def main():

@@ -11,6 +11,6 @@
 @desc:
 """
 
-from .detection import *
-from .thresh import *
+from .detector import *
 from .manager import *
+# from .ray_manager import *

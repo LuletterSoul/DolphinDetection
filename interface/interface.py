@@ -17,6 +17,7 @@ import detection
 import stream
 from config import *
 from utils.log import logger
+import utils.thresh as thresh
 from typing import List
 from multiprocessing import Queue
 
@@ -44,7 +45,7 @@ def thresh(frame, cfg=None):
     :param frame:
     :return:
     """
-    return detection.adaptive_thresh(frame, cfg)
+    return thresh.adaptive_thresh(frame, cfg)
 
 
 def read_stream(stream_save_path, vcfg, mq: Queue):
@@ -80,3 +81,14 @@ def load_video_config(cfg_path: Path) -> List[VideoConfig]:
         cfg_objs = json.load(f)['videos']
         cfgs = [VideoConfig.from_json(c) for c in cfg_objs]
         return cfgs
+
+
+def load_label_config(cfg_path: Path):
+    """
+    load ground truth image label configuration into a dict object from json file
+    """
+    with open(cfg_path) as f:
+        cfg_objs = json.load(f)
+        cfgs_keys = [k for k in cfg_objs.keys()]
+        cfgs_vals = [LabelConfig.from_json(c) for c in cfg_objs.values()]
+        return cfgs_keys, cfgs_vals
