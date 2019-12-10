@@ -269,7 +269,7 @@
       "enable": true,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": "rtsp",
+      "online": "offline",
       "sample_internal": 15,
       "save_box": true,
       "show_box": true,

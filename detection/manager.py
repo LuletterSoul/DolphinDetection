@@ -284,17 +284,19 @@ class DetectorController(object):
     #     self.__dict__.update(state)
     def clear_original_cache(self):
         len_cache = len(self.original_frame_cache)
-        if len_cache > 10:
-            cnt = 0
+        half_len = len_cache // 2
+        if len_cache > 100:
             # original_head = self.original_frame_cache.keys()[0]
             try:
-                for k, v in self.original_frame_cache.items():
+                cnt = 0
+                keys = self.original_frame_cache.keys()
+                for k in keys:
                     if k in self.original_frame_cache:
                         self.original_frame_cache.pop(k)
                         cnt += 1
-                        if cnt == len_cache // 2:
+                        if cnt == half_len:
                             break
-                logger.info(self.original_frame_cache.keys())
+                # logger.info(self.original_frame_cache.keys())
             except Exception as e:
                 traceback.print_exc()
                 logger.error(e)
@@ -306,7 +308,7 @@ class DetectorController(object):
     def clear_render_cache(self, construct_index):
         last_detect_internal = time.time() - self.last_detection
         time_thresh = self.cfg.future_frames * 1.5 * 3
-        if last_detect_internal > time_thresh or len(self.original_frame_cache) > 10:
+        if last_detect_internal > time_thresh:
             cns_half = construct_index // 2
             render_head = self.render_frame_cache.keys()[0]
             try:
@@ -550,7 +552,7 @@ class DetectorController(object):
             self.history_frame_deque.append(current_index)
             for r in results:
                 if len(r.rects):
-                    self.result_queue.put(self.original_frame_cache[current_index])
+                    self.result_queue.put(original_frame)
                     detect_flag = True
                     self.last_detection = time.time()
                     if r.frame_index not in self.original_frame_cache:
@@ -578,7 +580,7 @@ class DetectorController(object):
                           self.render_task_cnt,))
                 self.render_task_cnt += 1
                 thread.start()
-                self.construct_cnt = current_index
+                # self.construct_cnt = current_index
                 self.pre_detect_index = current_index
             # self.result_queue.put(constructed_frame)
             # self.render_frame_cache[current_index] = self.original_frame_cache[current_index]
