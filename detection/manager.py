@@ -29,6 +29,7 @@ import imutils
 import traceback
 import time
 import threading
+import traceback
 
 
 # Monitor will build multiple video stream receivers according the video configuration
@@ -269,6 +270,8 @@ class DetectorController(object):
 
         # time scheduler to clear cache
         self.last_detection = time.time()
+        self.runtime = time.time()
+        # self.clear_point = 0
         self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
 
         # def __getstate__(self):
@@ -279,21 +282,46 @@ class DetectorController(object):
     #
     # def __setstate__(self, state):
     #     self.__dict__.update(state)
-    def clear_cache(self, current_index):
-        last_detect_internal = time.time() - self.last_detection
-        time_thresh = self.cfg.future_frames * 1.5 * 3
-        if last_detect_internal > time_thresh:
-            half = current_index // 2
-            for i in range(half, current_index):
-                if i in self.render_frame_cache:
-                    self.render_frame_cache.pop(i)
-                if i in self.original_frame_cache:
-                    self.original_frame_cache.pop(i)
+    def clear_original_cache(self):
+        len_cache = len(self.original_frame_cache)
+        if len_cache > 10:
+            cnt = 0
+            # original_head = self.original_frame_cache.keys()[0]
+            try:
+                for k, v in self.original_frame_cache.items():
+                    if k in self.original_frame_cache:
+                        self.original_frame_cache.pop(k)
+                        cnt += 1
+                        if cnt == len_cache // 2:
+                            break
+                logger.info(self.original_frame_cache.keys())
+            except Exception as e:
+                traceback.print_exc()
+                logger.error(e)
             # self.render_frame_cache.clear()
             # self.original_frame_cache.clear()
             logger.info(
-                'Clear half frame caches from frame index:[{}] due to None target detected during [{}] seconds'.format(
-                    half, time_thresh))
+                'Clear half original frame caches.')
+
+    def clear_render_cache(self, construct_index):
+        last_detect_internal = time.time() - self.last_detection
+        time_thresh = self.cfg.future_frames * 1.5 * 3
+        if last_detect_internal > time_thresh or len(self.original_frame_cache) > 10:
+            cns_half = construct_index // 2
+            render_head = self.render_frame_cache.keys()[0]
+            try:
+                for i in range(render_head, cns_half):
+                    if i in self.render_frame_cache:
+                        self.render_frame_cache.pop(i)
+                logger.info(self.render_frame_cache)
+            except Exception as e:
+                traceback.print_exc()
+                logger.error(e)
+            # self.render_frame_cache.clear()
+            # self.original_frame_cache.clear()
+            logger.info(
+                'Clear half frame caches from frame index:[{}] to [{}] due to None target detected during [{}] seconds'.format(
+                    render_head, cns_half, time_thresh))
 
     def init_control_range(self):
         # read a frame, record frame size before running detectors
@@ -373,15 +401,19 @@ class DetectorController(object):
         next_cnt = 0
         # logger.info('Idx:[{}]'.format(frame_idx))
         # logger.info('Pre :[{}]'.format(render_cache.keys()))
-        for idx in frame_idx:
-            if idx in render_cache:
-                video_write.write(render_cache[idx])
-                render_cache.pop(idx)
-                next_cnt = idx + 1
-            elif idx in frame_cache:
-                video_write.write(frame_cache[idx])
-                frame_cache.pop(idx)
-                next_cnt = idx + 1
+        try:
+            for idx in frame_idx:
+                if idx in render_cache:
+                    video_write.write(render_cache[idx])
+                    render_cache.pop(idx)
+                    next_cnt = idx + 1
+                elif idx in frame_cache:
+                    video_write.write(frame_cache[idx])
+                    frame_cache.pop(idx)
+                    next_cnt = idx + 1
+        except Exception as e:
+            traceback.print_exc()
+            logger.error(e)
         # the future frames count
         # next_frame_cnt = 48
         success = 0
@@ -483,6 +515,8 @@ class DetectorController(object):
                 for idx, sp in enumerate(self.send_pipes):
                     sp.put(DispatchBlock(crop_by_se(frame, self.detectors[idx].start, self.detectors[idx].end),
                                          self.frame_cnt.get(), original_frame.shape))
+
+            self.clear_original_cache()
             logger.info('Dispatch frame to all detectors....')
             # internal = (time.time() - start) / 60
             # if int(internal) == self.cfg.sample_internal:
@@ -555,7 +589,7 @@ class DetectorController(object):
                     logger.info(
                         'Notify detection stream writer.Current frame index [{}],Previous detected frame index [{}]...'.format(
                             self.construct_cnt, self.pre_detect_index))
-            self.clear_cache(current_index)
+            self.clear_render_cache(current_index)
             # return constructed_frame, constructed_binary, constructed_thresh
             return original_frame, None, None
         except Exception as e:
