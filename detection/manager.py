@@ -531,7 +531,7 @@ class DetectorController(object):
                         #               (rect[0] + rect[2] + 20, rect[1] + rect[3] + 20),
                         #               color, 2)
                         cv2.rectangle(original_frame, p1, p2, color, 2)
-            self.render_frame_cache[current_index] = original_frame
+                    self.render_frame_cache[current_index] = original_frame
             next_detect_stream_occurred = current_index - self.pre_detect_index >= self.cfg.future_frames
             if detect_flag and next_detect_stream_occurred:
                 if self.next_prepare_event.is_set():
