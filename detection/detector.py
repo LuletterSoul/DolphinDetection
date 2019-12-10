@@ -152,11 +152,11 @@ class Detector(object):
         return (area / total) * 100
 
     def detect(self):
-        if self.cfg.detect_alg_type == 'saliency':
+        if self.cfg.alg['type'] == 'saliency':
             self.detect_saliency()
-        if self.cfg.detect_alg_type == 'thresh':
+        if self.cfg.alg['type'] == 'thresh':
             self.detect_thresh()
-        if self.cfg.detect_alg_type == 'thresh_mask':
+        if self.cfg.alg['type'] == 'thresh_mask':
             self.detect_mask()
 
     def detect_mask(self):
@@ -184,7 +184,8 @@ class Detector(object):
                     continue
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-                adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, mean=80)
+                adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51,
+                                                       mean=self.cfg.alg['mean'])
                 dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                                      iterations=1)
                 dilated = cv2.bitwise_and(dilated, mask)
@@ -227,10 +228,10 @@ class Detector(object):
             frame = self.get_frame()
             self.shape = frame.shape
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            _, mask = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY)
-            mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
-                              iterations=1)
-            mask = cv2.bitwise_not(mask)
+            # _, mask = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY)
+            # mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
+            #                   iterations=1)
+            # mask = cv2.bitwise_not(mask)
             # cv2.imshow('Mask', mask)
             # cv2.waitKey(0)
             while True:
@@ -242,8 +243,8 @@ class Detector(object):
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
                 _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-                adaptive_thresh = adaptive_thresh_size(frame, (5, 5))
-                adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
+                adaptive_thresh = adaptive_thresh_size(frame, (5, 5), block_size=21, C=self.cfg.alg['mean'])
+                # adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
                 dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                                      iterations=1)
                 img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
@@ -436,6 +437,8 @@ class Detector(object):
 
     def pass_detection_result(self, res: DetectionResult):
         self.rq.put(res)
+
+
 #
 #
 # @ray.remote(num_cpus=1)

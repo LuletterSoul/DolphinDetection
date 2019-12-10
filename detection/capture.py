@@ -277,8 +277,8 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
                 self.update_capture(cnt)
                 cnt = 0
                 continue
-            if cnt % self.sample_rate == 0:
-                self.pass_frame(frame)
+            # if cnt % self.sample_rate == 0:
+            self.pass_frame(frame)
             self.post_frame_process(frame)
             cnt += 1
             self.runtime = time.time() - start

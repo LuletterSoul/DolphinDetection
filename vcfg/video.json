@@ -45,7 +45,10 @@
       "rtsp": "",
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
-      "detect_alg_type": "thresh"
+      "alg": {
+        "type": "thresh",
+        "mean": 80
+      }
     },
     {
       "index": 1,
@@ -92,7 +95,10 @@
       "rtsp": "",
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
-      "detect_alg_type": "thresh"
+      "alg": {
+        "type": "thresh",
+        "mean": 80
+      }
     },
     {
       "index": 2,
@@ -139,7 +145,10 @@
       "rtsp": "rtsp://222.190.243.243/gp/1101",
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
-      "detect_alg_type": "thresh"
+      "alg": {
+        "type": "thresh",
+        "mean": 80
+      }
     },
     {
       "index": 3,
@@ -186,7 +195,10 @@
       "rtsp": "rtsp://222.190.243.243/gp/1102",
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
-      "detect_alg_type": "thresh"
+      "alg": {
+        "type": "thresh",
+        "mean": 80
+      }
     },
     {
       "index": 4,
@@ -233,7 +245,10 @@
       "rtsp": "rtsp://222.190.243.243/bp/jtview",
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
-      "detect_alg_type": "thresh"
+      "alg": {
+        "type": "thresh",
+        "mean": 80
+      }
     },
     {
       "index": 5,
@@ -275,8 +290,11 @@
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
       "rtsp_saved_per_frame": 240,
-      "future_frames": 48,
-      "detect_alg_type": "thresh"
+      "future_frames": 96,
+      "alg": {
+        "type": "thresh",
+        "mean": 40
+      }
     }
   ]
 }
