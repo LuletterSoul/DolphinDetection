@@ -516,7 +516,7 @@ class DetectorController(object):
                                          self.frame_cnt.get(), original_frame.shape))
 
             self.clear_original_cache()
-            logger.debug('Dispatch frame to all detectors....')
+            logger.info('Dispatch frame to all detectors....')
             # internal = (time.time() - start) / 60
             # if int(internal) == self.cfg.sample_internal:
             #     cv2.imwrite(str(self.frame_path / ))
@@ -526,7 +526,7 @@ class DetectorController(object):
         res = []
         for rp in self.receive_pipes:
             res.append(rp.get())
-        logger.debug('Collect sub-frames from all detectors....')
+        logger.info('Collect sub-frames from all detectors....')
         return res
 
     def construct(self, results: List[DetectionResult]):
