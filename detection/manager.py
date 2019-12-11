@@ -442,8 +442,8 @@ class DetectorController(object):
                     success += 1
                 else:
                     logger.info('Lost frame index: [{}]'.format(next_cnt))
-                    logger.info('Original frame index: {}'.format(frame_cache.keys()))
-                    logger.info('Renderframe index: {}'.format(render_cache.keys()))
+                    # logger.info('Original frame index: {}'.format(frame_cache.keys()))
+                    # logger.info('Renderframe index: {}'.format(render_cache.keys()))
                 if end >= 30:
                     logger.info('Task time overflow, complete previous render task.')
                     break

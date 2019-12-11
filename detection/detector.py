@@ -146,7 +146,7 @@ class Detector(object):
     def less_ratio(self, area):
         total = self.shape[0] * self.shape[1]
         # logger.info('Area ration: [{}]'.format(self.ratio(area, total)))
-        return self.ratio(area, total) >= 0.01
+        return self.ratio(area, total) >= self.cfg.alg['area_ratio']
 
     def ratio(self, area, total):
         return (area / total) * 100
@@ -256,7 +256,7 @@ class Detector(object):
                     rect = cv2.boundingRect(c)
                     area = cv2.contourArea(c)
                     # self.is_in_ratio(area, self.shape[0] * self.shape[1])
-                    if self.less_ratio(area):
+                    if self.less_ratio(area) and rect[2] / rect[3] < 10:
                         rects.append(rect)
                 cv2.drawContours(img_con, contours, -1, 255, -1)
                 if self.cfg.show_window:
