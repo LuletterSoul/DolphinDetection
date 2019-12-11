@@ -146,7 +146,7 @@ class Detector(object):
     def less_ratio(self, area):
         total = self.shape[0] * self.shape[1]
         # logger.info('Area ration: [{}]'.format(self.ratio(area, total)))
-        return self.ratio(area, total) >= 0.01
+        return self.ratio(area, total) >= 0.03
 
     def ratio(self, area, total):
         return (area / total) * 100
@@ -183,8 +183,8 @@ class Detector(object):
                     logger.info('Detector: [{},{}] empty frame')
                     continue
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-                adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, mean=80)
+                # _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+                adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, mean=40)
                 dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                                      iterations=1)
                 dilated = cv2.bitwise_and(dilated, mask)
@@ -227,10 +227,10 @@ class Detector(object):
             frame = self.get_frame()
             self.shape = frame.shape
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            _, mask = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY)
-            mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
-                              iterations=1)
-            mask = cv2.bitwise_not(mask)
+            # _, mask = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY)
+            # mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
+            #                   iterations=1)
+            # mask = cv2.bitwise_not(mask)
             # cv2.imshow('Mask', mask)
             # cv2.waitKey(0)
             while True:
@@ -243,7 +243,7 @@ class Detector(object):
 
                 _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
                 adaptive_thresh = adaptive_thresh_size(frame, (5, 5))
-                adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
+                # adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
                 dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                                      iterations=1)
                 img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)

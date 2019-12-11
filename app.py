@@ -17,6 +17,7 @@ from config import *
 if __name__ == '__main__':
     # if MONITOR == MonitorType.RAY_BASED:
     #     # ray.init(object_store_memory=8 * 1024 * 1024)
+
     #     ray.init()
     #     try:
     #         monitor = detection.EmbeddingControlBasedRayMonitor.remote(VIDEO_CONFIG_DIR / 'video.json',

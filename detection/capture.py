@@ -21,7 +21,7 @@ from config import VideoConfig
 from utils import logger
 import time
 import shutil
-import ray
+# import ray
 
 
 class VideoCaptureThreading:
@@ -180,7 +180,7 @@ class VideoOnlineSampleCapture(VideoCaptureThreading):
         super().handle_history()
 
 
-@ray.remote
+# @ray.remote
 class VideoOfflineRayCapture(VideoCaptureThreading):
     def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
                  cfg: VideoConfig, sample_rate=5, width=640, height=480, delete_post=True):
@@ -196,7 +196,7 @@ class VideoOfflineRayCapture(VideoCaptureThreading):
         return self.streams_list[self.pos]
 
 
-@ray.remote(num_cpus=0.5)
+# @ray.remote(num_cpus=0.5)
 class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
                  controller_actor,
@@ -275,8 +275,8 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
                 self.update_capture(cnt)
                 cnt = 0
                 continue
-            if cnt % self.sample_rate == 0:
-                self.pass_frame(frame)
+            # if cnt % self.sample_rate == 0:
+            self.pass_frame(frame)
             self.post_frame_process(frame)
             cnt += 1
             self.runtime = time.time() - start

@@ -4,7 +4,7 @@
 @author: Shanda Lau 刘祥德
 @license: (C) Copyright 2019-now, Node Supply Chain Manager Corporation Limited.
 @contact: shandalaulv@gmail.com
-@software: 
+@software:
 @file: manager.py
 @time: 2019/11/16 13:22
 @version 1.0
@@ -262,7 +262,7 @@ class DetectorController(object):
         self.pre_detect_index = -self.cfg.future_frames
         self.original_frame_cache = Manager().dict()
         self.render_frame_cache = Manager().dict()
-        self.history_frame_deque = Manager().list()
+        self.render_rect_cache = Manager().dict()
         self.record_cnt = 48
         self.render_task_cnt = 0
         self.construct_cnt = 0
@@ -287,6 +287,7 @@ class DetectorController(object):
             for i in range(half, current_index):
                 if i in self.render_frame_cache:
                     self.render_frame_cache.pop(i)
+                    self.render_rect_cache.pop(i)
                 if i in self.original_frame_cache:
                     self.original_frame_cache.pop(i)
             # self.render_frame_cache.clear()
@@ -347,7 +348,7 @@ class DetectorController(object):
 
     def write_frame_work(self):
         logger.info('Writing process.......')
-        current_time = time.strftime('%m-%d-%H:%M-', time.localtime(time.time()))
+        current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
         target = self.result_path / (current_time + str(self.result_cnt) + '.png')
         logger.info('Writing stream frame into: [{}]'.format(str(target)))
         while True:
@@ -356,32 +357,65 @@ class DetectorController(object):
             try:
                 r = self.get_result_from_queue()
                 self.result_cnt += 1
-                current_time = time.strftime('%m-%d-%H:%M-', time.localtime(time.time()))
+                current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
                 target = self.result_path / (current_time + str(self.result_cnt) + '.png')
                 cv2.imwrite(str(target), r)
             except Exception as e:
                 logger.error(e)
         return True
 
-    def render_detection_frame(self, frame_idx, render_cache, frame_cache, task_id):
+    def render_detection_frame(self, current_idx, render_cache, rect_cache, frame_cache, task_id):
         self.stream_cnt += 1
-        current_time = time.strftime('%m-%d-%H:%M:%S-', time.localtime(time.time()))
+        current_time = time.strftime('%m-%d-%H-%M-%S-', time.localtime(time.time()))
         target = self.detect_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info('Render task [{}]: Writing detection stream frame into: [{}]'.format(task_id, str(target)))
         # fourcc = cv2.VideoWriter_fourcc(*'avc1')
         video_write = cv2.VideoWriter(str(target), self.fourcc, 24.0, (1920, 1080), True)
-        next_cnt = 0
-        # logger.info('Idx:[{}]'.format(frame_idx))
+        # logger.info('Idx:[{}]'.format(frame_cache.keys()))
         # logger.info('Pre :[{}]'.format(render_cache.keys()))
-        for idx in frame_idx:
-            if idx in render_cache:
-                video_write.write(render_cache[idx])
-                render_cache.pop(idx)
-                next_cnt = idx + 1
-            elif idx in frame_cache:
-                video_write.write(frame_cache[idx])
-                frame_cache.pop(idx)
-                next_cnt = idx + 1
+
+        next_cnt = current_idx - self.cfg.future_frames
+        if next_cnt < 0:
+            next_cnt = 1
+        while next_cnt < current_idx:
+            if next_cnt in render_cache:
+                forward_cnt = next_cnt + self.cfg.sample_rate
+                if forward_cnt > current_idx:
+                    forward_cnt = current_idx
+                while forward_cnt > next_cnt:
+                    if forward_cnt in render_cache:
+                        break
+                    forward_cnt -= 1
+                if forward_cnt - next_cnt <= 1:
+                    video_write.write(render_cache[next_cnt])
+                    next_cnt += 1
+                elif forward_cnt - next_cnt > 1:
+                    step = forward_cnt - next_cnt
+                    first_rects = rect_cache[next_cnt]
+                    last_rects = rect_cache[forward_cnt]
+                    for i in range(step):
+                        draw_flag = True
+                        for j in range(len(first_rects)):
+                            first_rect = first_rects[j]
+                            last_rect = last_rects[j]
+                            delta_x = (last_rect[0] - first_rect[0]) / step
+                            delta_y = (last_rect[1] - first_rect[1]) / step
+                            if abs(delta_x) > 100 / step or abs(delta_y) > 100 / step:
+                                draw_flag = False
+                                break
+                            color = np.random.randint(0, 255, size=(3,))
+                            color = [int(c) for c in color]
+                            p1 = (first_rect[0] + int(delta_x * i) - 80, first_rect[1] + int(delta_y * i) - 80)
+                            p2 = (first_rect[0] + int(delta_x * i) + 100, first_rect[1] + int(delta_y * i) + 100)
+                            frame = frame_cache[next_cnt]
+                            cv2.rectangle(frame, p1, p2, color, 2)
+                        if not draw_flag:
+                            frame = frame_cache[next_cnt]
+                        video_write.write(frame)
+                        next_cnt += 1
+            elif next_cnt in frame_cache:
+                video_write.write(frame_cache[next_cnt])
+                next_cnt += 1
         # the future frames count
         # next_frame_cnt = 48
         success = 0
@@ -399,19 +433,44 @@ class DetectorController(object):
             end = time.time() - start
             try:
                 if next_cnt in render_cache:
-                    frame = render_cache[next_cnt]
-                    video_write.write(frame)
-                    # logger.info('Writing frame [{}] into video stream from render_cache'.format(next_cnt))
-                    # test_target = str(self.test_path / (str(next_cnt) + '.png'))
-                    # cv2.imwrite(test_target, frame)
-                    render_cache.pop(next_cnt)
-                    next_cnt += 1
-                    success += 1
-                # if render frame not found ,using the original frame as substitude
+                    forward_cnt = next_cnt + self.cfg.sample_rate
+                    while forward_cnt > next_cnt:
+                        if forward_cnt in render_cache:
+                            break
+                        forward_cnt -= 1
+                    if forward_cnt - next_cnt <= 1:
+                        frame = render_cache[next_cnt]
+                        video_write.write(frame)
+                        next_cnt += 1
+                        success += 1
+                    else:
+                        step = forward_cnt - next_cnt
+                        first_rects = rect_cache[next_cnt]
+                        last_rects = rect_cache[forward_cnt]
+                        for i in range(step):
+                            draw_flag = True
+                            for j in range(min(len(first_rects), len(last_rects))):
+                                first_rect = first_rects[j]
+                                last_rect = last_rects[j]
+                                delta_x = (last_rect[0] - first_rect[0]) / step
+                                delta_y = (last_rect[1] - first_rect[1]) / step
+                                if abs(delta_x) > 100 / step or abs(delta_y) > 100 / step:
+                                    draw_flag = False
+                                    break
+                                color = np.random.randint(0, 255, size=(3,))
+                                color = [int(c) for c in color]
+                                p1 = (first_rect[0] + int(delta_x * i) - 80, first_rect[1] + int(delta_y * i) - 80)
+                                p2 = (first_rect[0] + int(delta_x * i) + 100, first_rect[1] + int(delta_y * i) + 100)
+                                frame = frame_cache[next_cnt]
+                                cv2.rectangle(frame, p1, p2, color, 2)
+                            if not draw_flag:
+                                frame = frame_cache[next_cnt]
+                            video_write.write(frame)
+                            next_cnt += 1
+                            success += 1
                 elif next_cnt in frame_cache:
                     frame = frame_cache[next_cnt]
                     video_write.write(frame)
-                    frame_cache.pop(next_cnt)
                     next_cnt += 1
                     success += 1
                 if end >= 30:
@@ -511,9 +570,6 @@ class DetectorController(object):
                 return
             original_frame = self.original_frame_cache[current_index]
             detect_flag = False
-            if len(self.history_frame_deque) >= self.record_cnt:
-                self.history_frame_deque.pop(0)
-            self.history_frame_deque.append(current_index)
             for r in results:
                 if len(r.rects):
                     self.result_queue.put(self.original_frame_cache[current_index])
@@ -531,7 +587,8 @@ class DetectorController(object):
                         #               (rect[0] + rect[2] + 20, rect[1] + rect[3] + 20),
                         #               color, 2)
                         cv2.rectangle(original_frame, p1, p2, color, 2)
-            self.render_frame_cache[current_index] = original_frame
+                    self.render_frame_cache[current_index] = original_frame
+                    self.render_rect_cache[current_index] = r.rects
             next_detect_stream_occurred = current_index - self.pre_detect_index >= self.cfg.future_frames
             if detect_flag and next_detect_stream_occurred:
                 if self.next_prepare_event.is_set():
@@ -540,8 +597,8 @@ class DetectorController(object):
                 thread = threading.Thread(
                     target=self.render_detection_frame,
                     # pass a copy history frame index
-                    args=(list(self.history_frame_deque), self.render_frame_cache, self.original_frame_cache,
-                          self.render_task_cnt,))
+                    args=(current_index, self.render_frame_cache, self.render_rect_cache,
+                          self.original_frame_cache, self.render_task_cnt,))
                 self.render_task_cnt += 1
                 thread.start()
                 self.construct_cnt = current_index
