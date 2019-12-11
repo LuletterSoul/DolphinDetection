@@ -6,7 +6,7 @@ from config import *
 from utils.log import logger
 import cv2
 import queue
-import ray
+# import ray
 from multiprocessing import Queue
 from detection.capture import VideoOnlineSampleBasedRayCapture
 
@@ -106,7 +106,7 @@ class StreamReceiver(object):
         self.mq.put(format_index)
 
 
-@ray.remote
+# @ray.remote
 class StreamRayReceiver(StreamReceiver):
 
     def __init__(self, stream_save_path: Path, offline_path: Path, cfg: VideoConfig,
