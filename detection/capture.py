@@ -81,15 +81,16 @@ class VideoCaptureThreading:
                 self.update_capture(cnt)
                 cnt = 0
                 continue
-            if cnt % self.sample_rate == 0:
-                self.pass_frame(frame)
+            # if cnt % self.sample_rate == 0:
+            self.pass_frame(frame)
             cnt += 1
             self.post_frame_process(frame)
             self.runtime = time.time() - start
         logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
 
     def pass_frame(self, frame):
-        self.frame_queue.put(frame)
+        self.frame_queue.put(frame, block=True)
+        logger.info('Passed frame...')
 
     def update_capture(self, cnt):
         logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
@@ -135,9 +136,10 @@ class VideoOfflineCapture(VideoCaptureThreading):
         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
         self.offline_path = offline_path
         self.streams_list = list(self.offline_path.glob('*'))
-        self.pos = 0
+        self.pos = -1
 
     def get_posix(self):
+        self.pos += 1
         if self.pos >= len(self.streams_list):
             logger.info('Load completely for [{}]'.format(str(self.offline_path)))
             return -1
@@ -256,6 +258,8 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
         self.sample_path.mkdir(exist_ok=True, parents=True)
         self.saved_time = ""
+        self.sample_cnt = 0
+        self.frame_cnt = 0
 
     def load_next_src(self):
         logger.debug("Loading next video rtsp stream ....")
@@ -274,8 +278,8 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
                 self.update_capture(cnt)
                 cnt = 0
                 continue
-            if cnt % self.sample_rate == 0:
-                self.pass_frame(frame)
+            # if cnt % self.sample_rate == 0:
+            self.pass_frame(frame)
             self.post_frame_process(frame)
             cnt += 1
             self.runtime = time.time() - start
@@ -285,9 +289,11 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
         self.sample_cnt += 1
         if self.sample_cnt % self.cfg.rtsp_saved_per_frame == 0:
             current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
-            if current_time != self.saved_time:
-                self.sample_cnt = 0
-            self.saved_time = current_time
-            target = self.sample_path / (current_time + str(self.sample_cnt) + '.png')
+            self.sample_cnt = 0
+            # if current_time != self.saved_time:
+            #     self.sample_cnt = 0
+            # self.saved_time = current_time
+            self.frame_cnt += 1
+            target = self.sample_path / (current_time + str(self.frame_cnt) + '.png')
             logger.info("Sample rtsp video stream into: [{}]".format(target))
             cv2.imwrite(str(target), frame)

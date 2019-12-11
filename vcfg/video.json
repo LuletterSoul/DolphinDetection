@@ -43,7 +43,12 @@
       "save_box": true,
       "show_box": false,
       "rtsp": "",
-      "rtsp_saved_per_frame": 50
+      "rtsp_saved_per_frame": 50,
+      "future_frames": 48,
+      "alg": {
+        "type": "thresh",
+        "mean": 80
+      }
     },
     {
       "index": 1,
@@ -88,7 +93,12 @@
       "save_box": false,
       "show_box": false,
       "rtsp": "",
-      "rtsp_saved_per_frame": 50
+      "rtsp_saved_per_frame": 50,
+      "future_frames": 48,
+      "alg": {
+        "type": "thresh",
+        "mean": 80
+      }
     },
     {
       "index": 2,
@@ -133,7 +143,12 @@
       "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/gp/1101",
-      "rtsp_saved_per_frame": 50
+      "rtsp_saved_per_frame": 50,
+      "future_frames": 48,
+      "alg": {
+        "type": "thresh",
+        "mean": 80
+      }
     },
     {
       "index": 3,
@@ -178,7 +193,12 @@
       "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/gp/1102",
-      "rtsp_saved_per_frame": 50
+      "rtsp_saved_per_frame": 50,
+      "future_frames": 48,
+      "alg": {
+        "type": "thresh",
+        "mean": 80
+      }
     },
     {
       "index": 4,
@@ -223,7 +243,12 @@
       "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtview",
-      "rtsp_saved_per_frame": 50
+      "rtsp_saved_per_frame": 50,
+      "future_frames": 48,
+      "alg": {
+        "type": "thresh",
+        "mean": 80
+      }
     },
     {
       "index": 5,
@@ -245,7 +270,7 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": true,
+      "show_window": false,
       "window_position": {
         "x": 100,
         "y": 100
@@ -254,17 +279,23 @@
         "row": 1,
         "col": 1
       },
-      "sample_rate": 3,
-      "draw_boundary": true,
+      "sample_rate": 1,
+      "draw_boundary": false,
       "enable": true,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": "rtsp",
+      "online": "offline",
       "sample_internal": 15,
       "save_box": true,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
-      "rtsp_saved_per_frame": 50
+      "rtsp_saved_per_frame": 240,
+      "future_frames": 96,
+      "alg": {
+        "type": "thresh",
+        "mean": 40,
+        "area_ratio": 0.03
+      }
     }
   ]
 }
