@@ -619,11 +619,9 @@ class DetectorController(object):
                 logger.info('Current index: [{}] not in original frame cache.May cache was cleared by timer')
                 return
             original_frame = self.original_frame_cache[current_index]
-            # detect_flag = False
             for r in results:
                 if len(r.rects):
                     self.result_queue.put(original_frame)
-                    # detect_flag = True
                     self.last_detection = time.time()
                     if r.frame_index not in self.original_frame_cache:
                         logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
@@ -641,37 +639,7 @@ class DetectorController(object):
                     self.render_rect_cache[current_index] = r.rects
                     self.detect_index[current_index] = True
                     self.stream_render.reset(current_index)
-
             self.stream_render.notify(current_index)
-            # if self.detect_index[self.pre_detect_index]
-            #     next_detect_stream_occurred = current_index - self.pre_detect_index >= self.cfg.future_frames
-            # # logger.info('current index:[{}]'.format(current_index))
-            # if detect_flag and next_detect_stream_occurred:
-            #     # logger.info('enter pre detect index:[{}]'.format(self.pre_detect_index))
-            #     if self.next_prepare_event.is_set():
-            #         self.next_prepare_event.clear()
-            #     # begin task asynchronously  in case blocking collector
-            #     thread = threading.Thread(
-            #         target=self.render_detection_frame,
-            #         # pass a copy history frame index
-            #         args=(current_index, self.render_frame_cache, self.render_rect_cache,
-            #               self.original_frame_cache, self.render_task_cnt,))
-            #     self.render_task_cnt += 1
-            #     thread.start()
-            #     # self.construct_cnt = current_index
-            #     self.pre_detect_index = current_index
-            #     self.history_write = True
-            # # self.result_queue.put(constructed_frame)
-            # # self.render_frame_cache[current_index] = self.original_frame_cache[current_index]
-            # # if current_index - self.pre_detect_index >= self.cfg.future_frames and self.history_write:
-            # if current_index - self.pre_detect_index >= self.cfg.future_frames and self.history_write:
-            #     # notify render task that the future frames(2s default required) are done
-            #     if not self.next_prepare_event.is_set():
-            #         self.next_prepare_event.set()
-            #         logger.info(
-            #             'Notify detection stream writer.Current frame index [{}],Previous detected frame index [{}]...'.format(
-            #                 current_index, self.pre_detect_index))
-            #     self.history_write = False
             self.clear_render_cache()
             # return constructed_frame, constructed_binary, constructed_thresh
             return original_frame, None, None
@@ -702,6 +670,7 @@ class DetectionStreamRender(object):
         self.detect_stream_path = controller.region_path / str(controller.cfg.index) / 'streams'
         self.stream_cnt = 0
         self.is_trigger_write = False
+        self.write_done = False
         self.controller = controller
         self.future_frames = future_frames
         self.sample_rate = controller.cfg.sample_rate
@@ -717,13 +686,14 @@ class DetectionStreamRender(object):
         if detect_index - self.detect_index > self.future_frames:
             self.detect_index = detect_index
             self.is_trigger_write = False
+            self.write_done = False
             self.next_prepare_event.set()
             logger.info('Reset stream render')
 
     def notify(self, current_index):
-        next_detect_stream_occurred = current_index - self.detect_index >= self.future_frames \
-                                      and not self.is_trigger_write
-        if next_detect_stream_occurred:
+        # next_detect_stream_occurred = current_index - self.detect_index >= self.future_frames \
+        #                               and not self.is_trigger_write
+        if not self.is_trigger_write:
             if self.next_prepare_event.is_set():
                 self.next_prepare_event.clear()
                 # begin task asynchronously  in case blocking collector
@@ -735,7 +705,7 @@ class DetectionStreamRender(object):
                 self.render_task_cnt += 1
                 thread.start()
                 self.is_trigger_write = True
-        if current_index - self.detect_index >= self.future_frames:
+        if current_index - self.detect_index >= self.future_frames and self.write_done:
             # notify render task that the future frames(2s default required) are done
             if not self.next_prepare_event.is_set():
                 self.next_prepare_event.set()
@@ -744,14 +714,14 @@ class DetectionStreamRender(object):
                         current_index, self.detect_index))
 
     def render_task(self, current_idx, render_cache, rect_cache, frame_cache, task_id):
-        self.controller.stream_cnt += 1
+        self.stream_cnt += 1
         current_time = time.strftime('%m-%d-%H-%M-%S-', time.localtime(time.time()))
         target = self.detect_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info('Render task [{}]: Writing detection stream frame into: [{}]'.format(task_id, str(target)))
         # fourcc = cv2.VideoWriter_fourcc(*'avc1')
         video_write = cv2.VideoWriter(str(target), self.fourcc, 24.0, (1920, 1080), True)
         next_cnt = current_idx - self.future_frames
-        if next_cnt < 0:
+        if next_cnt < 1:
             next_cnt = 1
         while next_cnt < current_idx:
             if next_cnt in render_cache:
@@ -852,7 +822,7 @@ class DetectionStreamRender(object):
                     next_cnt += 1
                     success += 1
                 else:
-                    logger.info('Current keys: [{}]'.format(self.original_frame_cache.keys()))
+                    # logger.info('Current keys: [{}]'.format(self.original_frame_cache.keys()))
                     logger.info('Lost frame index: [{}]'.format(next_cnt))
                     # logger.info('Original frame index: {}'.format(frame_cache.keys()))
                     # logger.info('Renderframe index: {}'.format(render_cache.keys()))
@@ -866,6 +836,7 @@ class DetectionStreamRender(object):
                 logger.error(e)
         video_write.release()
         logger.info('Render task [{}]: Done write detection stream frame into: [{}]'.format(task_id, str(target)))
+        self.write_done = True
         return True
 
 
