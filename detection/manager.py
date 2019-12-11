@@ -266,6 +266,7 @@ class DetectorController(object):
         self.render_frame_cache = Manager().dict()
         self.history_frame_deque = Manager().list()
         self.render_rect_cache = Manager().dict()
+        self.detect_index = Manager().dict()
         self.record_cnt = 48
         self.render_task_cnt = 0
         self.construct_cnt = 0
@@ -275,7 +276,8 @@ class DetectorController(object):
         self.last_detection = time.time()
         self.runtime = time.time()
         # self.clear_point = 0
-        self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        self.stream_render = DetectionStreamRender(0, self.cfg.future_frames, self)
 
         # def __getstate__(self):
 
@@ -458,8 +460,10 @@ class DetectorController(object):
         # wait the futures frames is accessable
         if not self.next_prepare_event.is_set():
             logger.info('Wait frames accessible....')
+            start = time.time()
             # wait the future frames prepared,if ocurring time out, give up waits
             self.next_prepare_event.wait(30)
+            logger.info("Wait [{}] seconds".format(time.time() - start))
             logger.info('Frames accessible....')
         # logger.info('Render task Begin with frame [{}]'.format(next_cnt))
         start = time.time()
@@ -510,6 +514,7 @@ class DetectorController(object):
                     next_cnt += 1
                     success += 1
                 else:
+                    logger.info('Current keys: [{}]'.format(self.original_frame_cache.keys()))
                     logger.info('Lost frame index: [{}]'.format(next_cnt))
                     # logger.info('Original frame index: {}'.format(frame_cache.keys()))
                     # logger.info('Renderframe index: {}'.format(render_cache.keys()))
@@ -579,15 +584,14 @@ class DetectorController(object):
             self.original_frame_cache[self.frame_cnt.get()] = frame
             # self.render_frame_cache[self.frame_cnt.get()] = frame
             # logger.info(self.original_frame_cache.keys())
-
             frame, original_frame = self.preprocess(frame)
             if self.frame_cnt.get() % self.cfg.sample_rate == 0:
+                logger.info('Dispatch frame to all detectors....')
                 for idx, sp in enumerate(self.send_pipes):
                     sp.put(DispatchBlock(crop_by_se(frame, self.detectors[idx].start, self.detectors[idx].end),
                                          self.frame_cnt.get(), original_frame.shape))
 
             self.clear_original_cache()
-            logger.info('Dispatch frame to all detectors....')
             # internal = (time.time() - start) / 60
             # if int(internal) == self.cfg.sample_internal:
             #     cv2.imwrite(str(self.frame_path / ))
@@ -615,11 +619,11 @@ class DetectorController(object):
                 logger.info('Current index: [{}] not in original frame cache.May cache was cleared by timer')
                 return
             original_frame = self.original_frame_cache[current_index]
-            detect_flag = False
+            # detect_flag = False
             for r in results:
                 if len(r.rects):
                     self.result_queue.put(original_frame)
-                    detect_flag = True
+                    # detect_flag = True
                     self.last_detection = time.time()
                     if r.frame_index not in self.original_frame_cache:
                         logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
@@ -635,33 +639,39 @@ class DetectorController(object):
                         cv2.rectangle(original_frame, p1, p2, color, 2)
                     self.render_frame_cache[current_index] = original_frame
                     self.render_rect_cache[current_index] = r.rects
-            next_detect_stream_occurred = current_index - self.pre_detect_index >= self.cfg.future_frames
-            # logger.info('current index:[{}]'.format(current_index))
-            if detect_flag and next_detect_stream_occurred:
-                # logger.info('enter pre detect index:[{}]'.format(self.pre_detect_index))
-                if self.next_prepare_event.is_set():
-                    self.next_prepare_event.clear()
-                # begin task asynchronously  in case blocking collector
-                thread = threading.Thread(
-                    target=self.render_detection_frame,
-                    # pass a copy history frame index
-                    args=(current_index, self.render_frame_cache, self.render_rect_cache,
-                          self.original_frame_cache, self.render_task_cnt,))
-                self.render_task_cnt += 1
-                thread.start()
-                # self.construct_cnt = current_index
-                self.pre_detect_index = current_index
-                self.history_write = True
-            # self.result_queue.put(constructed_frame)
-            # self.render_frame_cache[current_index] = self.original_frame_cache[current_index]
-            if current_index - self.pre_detect_index >= self.cfg.future_frames and self.history_write:
-                # notify render task that the future frames(2s default required) are done
-                if not self.next_prepare_event.is_set():
-                    self.next_prepare_event.set()
-                    logger.info(
-                        'Notify detection stream writer.Current frame index [{}],Previous detected frame index [{}]...'.format(
-                            current_index, self.pre_detect_index))
-                self.history_write = False
+                    self.detect_index[current_index] = True
+                    self.stream_render.reset(current_index)
+
+            self.stream_render.notify(current_index)
+            # if self.detect_index[self.pre_detect_index]
+            #     next_detect_stream_occurred = current_index - self.pre_detect_index >= self.cfg.future_frames
+            # # logger.info('current index:[{}]'.format(current_index))
+            # if detect_flag and next_detect_stream_occurred:
+            #     # logger.info('enter pre detect index:[{}]'.format(self.pre_detect_index))
+            #     if self.next_prepare_event.is_set():
+            #         self.next_prepare_event.clear()
+            #     # begin task asynchronously  in case blocking collector
+            #     thread = threading.Thread(
+            #         target=self.render_detection_frame,
+            #         # pass a copy history frame index
+            #         args=(current_index, self.render_frame_cache, self.render_rect_cache,
+            #               self.original_frame_cache, self.render_task_cnt,))
+            #     self.render_task_cnt += 1
+            #     thread.start()
+            #     # self.construct_cnt = current_index
+            #     self.pre_detect_index = current_index
+            #     self.history_write = True
+            # # self.result_queue.put(constructed_frame)
+            # # self.render_frame_cache[current_index] = self.original_frame_cache[current_index]
+            # # if current_index - self.pre_detect_index >= self.cfg.future_frames and self.history_write:
+            # if current_index - self.pre_detect_index >= self.cfg.future_frames and self.history_write:
+            #     # notify render task that the future frames(2s default required) are done
+            #     if not self.next_prepare_event.is_set():
+            #         self.next_prepare_event.set()
+            #         logger.info(
+            #             'Notify detection stream writer.Current frame index [{}],Previous detected frame index [{}]...'.format(
+            #                 current_index, self.pre_detect_index))
+            #     self.history_write = False
             self.clear_render_cache()
             # return constructed_frame, constructed_binary, constructed_thresh
             return original_frame, None, None
@@ -681,6 +691,182 @@ class DetectorController(object):
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3))
         constructed_frame = np.reshape(sub_frames, (self.col * self.col_step, self.row * self.row_step))
         return constructed_frame
+
+
+class DetectionStreamRender(object):
+
+    def __init__(self, detect_index, future_frames, controller: DetectorController) -> None:
+        super().__init__()
+        self.detect_index = detect_index
+        self.detect_stream_path = controller.region_path / str(controller.cfg.index) / 'streams'
+        self.detect_stream_path = controller.region_path / str(controller.cfg.index) / 'streams'
+        self.stream_cnt = 0
+        self.is_trigger_write = False
+        self.controller = controller
+        self.future_frames = future_frames
+        self.sample_rate = controller.cfg.sample_rate
+        self.render_frame_cache = controller.render_frame_cache
+        self.render_rect_cache = controller.render_rect_cache
+        self.render_task_cnt = 0
+        self.original_frame_cache = controller.original_frame_cache
+        self.next_prepare_event = Manager().Event()
+        self.next_prepare_event.set()
+        self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
+
+    def reset(self, detect_index):
+        if detect_index - self.detect_index > self.future_frames:
+            self.detect_index = detect_index
+            self.is_trigger_write = False
+            self.next_prepare_event.set()
+            logger.info('Reset stream render')
+
+    def notify(self, current_index):
+        next_detect_stream_occurred = current_index - self.detect_index >= self.future_frames \
+                                      and not self.is_trigger_write
+        if next_detect_stream_occurred:
+            if self.next_prepare_event.is_set():
+                self.next_prepare_event.clear()
+                # begin task asynchronously  in case blocking collector
+                thread = threading.Thread(
+                    target=self.render_task,
+                    # pass a copy history frame index
+                    args=(current_index, self.render_frame_cache, self.render_rect_cache,
+                          self.original_frame_cache, self.render_task_cnt,))
+                self.render_task_cnt += 1
+                thread.start()
+                self.is_trigger_write = True
+        if current_index - self.detect_index >= self.future_frames:
+            # notify render task that the future frames(2s default required) are done
+            if not self.next_prepare_event.is_set():
+                self.next_prepare_event.set()
+                logger.info(
+                    'Notify detection stream writer.Current frame index [{}],Previous detected frame index [{}]...'.format(
+                        current_index, self.detect_index))
+
+    def render_task(self, current_idx, render_cache, rect_cache, frame_cache, task_id):
+        self.controller.stream_cnt += 1
+        current_time = time.strftime('%m-%d-%H-%M-%S-', time.localtime(time.time()))
+        target = self.detect_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
+        logger.info('Render task [{}]: Writing detection stream frame into: [{}]'.format(task_id, str(target)))
+        # fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        video_write = cv2.VideoWriter(str(target), self.fourcc, 24.0, (1920, 1080), True)
+        next_cnt = current_idx - self.future_frames
+        if next_cnt < 0:
+            next_cnt = 1
+        while next_cnt < current_idx:
+            if next_cnt in render_cache:
+                forward_cnt = next_cnt + self.sample_rate
+                if forward_cnt > current_idx:
+                    forward_cnt = current_idx
+                while forward_cnt > next_cnt:
+                    if forward_cnt in render_cache:
+                        break
+                    forward_cnt -= 1
+                if forward_cnt - next_cnt <= 1:
+                    video_write.write(render_cache[next_cnt])
+                    next_cnt += 1
+                elif forward_cnt - next_cnt > 1:
+                    step = forward_cnt - next_cnt
+                    first_rects = rect_cache[next_cnt]
+                    last_rects = rect_cache[forward_cnt]
+                    for i in range(step):
+                        draw_flag = True
+                        for j in range(len(first_rects)):
+                            first_rect = first_rects[j]
+                            last_rect = last_rects[j]
+                            delta_x = (last_rect[0] - first_rect[0]) / step
+                            delta_y = (last_rect[1] - first_rect[1]) / step
+                            if abs(delta_x) > 100 / step or abs(delta_y) > 100 / step:
+                                draw_flag = False
+                                break
+                            color = np.random.randint(0, 255, size=(3,))
+                            color = [int(c) for c in color]
+                            p1 = (first_rect[0] + int(delta_x * i) - 80, first_rect[1] + int(delta_y * i) - 80)
+                            p2 = (first_rect[0] + int(delta_x * i) + 100, first_rect[1] + int(delta_y * i) + 100)
+                            frame = frame_cache[next_cnt]
+                            cv2.rectangle(frame, p1, p2, color, 2)
+                        if not draw_flag:
+                            frame = frame_cache[next_cnt]
+                        video_write.write(frame)
+                        next_cnt += 1
+            elif next_cnt in frame_cache:
+                video_write.write(frame_cache[next_cnt])
+                next_cnt += 1
+        # the future frames count
+        # next_frame_cnt = 48
+        success = 0
+        # wait the futures frames is accessable
+        if not self.next_prepare_event.is_set():
+            logger.info('Wait frames accessible....')
+            start = time.time()
+            # wait the future frames prepared,if ocurring time out, give up waits
+            self.next_prepare_event.wait(30)
+            logger.info("Wait [{}] seconds".format(time.time() - start))
+            logger.info('Frames accessible....')
+        # logger.info('Render task Begin with frame [{}]'.format(next_cnt))
+        start = time.time()
+        # logger.info('After :[{}]'.format(render_cache.keys()))
+        while True:
+            # failed to wait
+            end = time.time() - start
+            try:
+                if next_cnt in render_cache:
+                    forward_cnt = next_cnt + self.sample_rate
+                    while forward_cnt > next_cnt:
+                        if forward_cnt in render_cache:
+                            break
+                        forward_cnt -= 1
+                    if forward_cnt - next_cnt <= 1:
+                        frame = render_cache[next_cnt]
+                        video_write.write(frame)
+                        next_cnt += 1
+                        success += 1
+                    else:
+                        step = forward_cnt - next_cnt
+                        first_rects = rect_cache[next_cnt]
+                        last_rects = rect_cache[forward_cnt]
+                        for i in range(step):
+                            draw_flag = True
+                            for j in range(min(len(first_rects), len(last_rects))):
+                                first_rect = first_rects[j]
+                                last_rect = last_rects[j]
+                                delta_x = (last_rect[0] - first_rect[0]) / step
+                                delta_y = (last_rect[1] - first_rect[1]) / step
+                                if abs(delta_x) > 100 / step or abs(delta_y) > 100 / step:
+                                    draw_flag = False
+                                    break
+                                color = np.random.randint(0, 255, size=(3,))
+                                color = [int(c) for c in color]
+                                p1 = (first_rect[0] + int(delta_x * i) - 80, first_rect[1] + int(delta_y * i) - 80)
+                                p2 = (first_rect[0] + int(delta_x * i) + 100, first_rect[1] + int(delta_y * i) + 100)
+                                frame = frame_cache[next_cnt]
+                                cv2.rectangle(frame, p1, p2, color, 2)
+                            if not draw_flag:
+                                frame = frame_cache[next_cnt]
+                            video_write.write(frame)
+                            next_cnt += 1
+                            success += 1
+                elif next_cnt in frame_cache:
+                    frame = frame_cache[next_cnt]
+                    video_write.write(frame)
+                    next_cnt += 1
+                    success += 1
+                else:
+                    logger.info('Current keys: [{}]'.format(self.original_frame_cache.keys()))
+                    logger.info('Lost frame index: [{}]'.format(next_cnt))
+                    # logger.info('Original frame index: {}'.format(frame_cache.keys()))
+                    # logger.info('Renderframe index: {}'.format(render_cache.keys()))
+                if end >= 30:
+                    logger.info('Task time overflow, complete previous render task.')
+                    break
+                if success == self.future_frames:
+                    logger.info('Render task [{}]: Full write attache [{}] frames'.format(task_id, success))
+                    break
+            except Exception as e:
+                logger.error(e)
+        video_write.release()
+        logger.info('Render task [{}]: Done write detection stream frame into: [{}]'.format(task_id, str(target)))
+        return True
 
 
 class ReconstructResult(object):
