@@ -739,6 +739,8 @@ class DetectionStreamRender(object):
                     step = forward_cnt - next_cnt
                     first_rects = rect_cache[next_cnt]
                     last_rects = rect_cache[forward_cnt]
+                    if len(first_rects) != len(last_rects):
+                        continue
                     for i in range(step):
                         draw_flag = True
                         for j in range(len(first_rects)):
