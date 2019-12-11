@@ -270,7 +270,7 @@ class Detector(object):
                                       self.col_index, self.current_block.index, self.back(rects))
                 self.pass_detection_result(res)
                 end = time.time() - start
-                logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
+                logger.info('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
 
             # do a bit of cleanup
             cv2.destroyAllWindows()

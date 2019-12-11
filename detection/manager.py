@@ -466,10 +466,12 @@ class DetectorController(object):
         while True:
             if self.quit:
                 break
-            logger.debug('Collecting sub-frames into a original frame....')
+            # logger.debug('Collecting sub-frames into a original frame....')
+            # start = time.time()
             results = self.collect()
+            # logger.info('Collect consume [{}]'.format(time.time() - start ))
             frame, binary, thresh = self.construct(results)
-            logger.debug('Done Construct sub-frames into a original frame....')
+            # logger.debug('Done Construct sub-frames into a original frame....')
             cnt += 1
             if cnt % 100 == 0:
                 end = time.time() - start
@@ -536,6 +538,7 @@ class DetectorController(object):
         # constructed_frame = self.construct_rgb(sub_frames)
         # constructed_binary = self.construct_gray(sub_binary)
         # constructed_thresh = self.construct_gray(sub_thresh)
+        logger.info('Construct frames into a original frame....')
         try:
             self.construct_cnt += 1
             current_index = results[0].frame_index
