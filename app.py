@@ -17,6 +17,7 @@ from config import *
 if __name__ == '__main__':
     # if MONITOR == MonitorType.RAY_BASED:
     #     # ray.init(object_store_memory=8 * 1024 * 1024)
+
     #     ray.init()
     #     try:
     #         monitor = detection.EmbeddingControlBasedRayMonitor.remote(VIDEO_CONFIG_DIR / 'video.json',
@@ -42,6 +43,12 @@ if __name__ == '__main__':
                                                                 FRAME_SAVE_DIR,
                                                                 CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
 
+        monitor.monitor()
+    elif MONITOR == MonitorType.TASK_BASED:
+        monitor = detection.EmbeddingControlBasedTaskMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
+                                                             SAMPLE_SAVE_DIR,
+                                                             FRAME_SAVE_DIR,
+                                                             CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
         monitor.monitor()
     else:
         monitor = detection.EmbeddingControlBasedThreadMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
