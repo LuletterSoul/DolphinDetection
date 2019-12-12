@@ -285,7 +285,7 @@
         "row": 1,
         "col": 1
       },
-      "sample_rate": 1,
+      "sample_rate": 5,
       "draw_boundary": false,
       "enable": true,
       "filtered_ratio": 0.5,
@@ -296,7 +296,7 @@
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
       "rtsp_saved_per_frame": 240,
-      "future_frames": 48,
+      "future_frames": 72,
       "alg": {
         "type": "thresh",
         "mean": 40,

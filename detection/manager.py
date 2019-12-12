@@ -803,7 +803,7 @@ class DetectionStreamRender(object):
                 else:
                     logger.info('Lost frame index: [{}]'.format(next_cnt))
                 end = time.time()
-                if end-start > 30:
+                if end - start > 30:
                     logger.info('Task time overflow, complete previous render task.')
                     break
             except Exception as e:
@@ -909,6 +909,7 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
                 frame = self.draw_boundary(frame)
                 # logger.info('Done constructing of sub-frames into a original frame....')
             if self.cfg.show_window:
+                frame = imutils.resize(frame, width=800)
                 cv2.imshow('Reconstructed Frame', frame)
                 cv2.waitKey(1)
         else:
