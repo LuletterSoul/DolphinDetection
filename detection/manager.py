@@ -713,87 +713,24 @@ class DetectionStreamRender(object):
                     'Notify detection stream writer.Current frame index [{}],Previous detected frame index [{}]...'.format(
                         current_index, self.detect_index))
 
-    def render_task(self, current_idx, render_cache, rect_cache, frame_cache, task_id):
-        self.stream_cnt += 1
-        current_time = time.strftime('%m-%d-%H-%M-%S-', time.localtime(time.time()))
-        target = self.detect_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
-        logger.info('Render task [{}]: Writing detection stream frame into: [{}]'.format(task_id, str(target)))
-        # fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        video_write = cv2.VideoWriter(str(target), self.fourcc, 24.0, (1920, 1080), True)
-        next_cnt = current_idx - self.future_frames
+    def write_video_work(self, video_write, next_cnt, end_cnt, render_cache, rect_cache, frame_cache, task_id):
         if next_cnt < 1:
             next_cnt = 1
-        while next_cnt < current_idx:
-            if next_cnt in render_cache:
-                forward_cnt = next_cnt + self.sample_rate
-                if forward_cnt > current_idx:
-                    forward_cnt = current_idx
-                while forward_cnt > next_cnt:
-                    if forward_cnt in render_cache:
-                        break
-                    forward_cnt -= 1
-                if forward_cnt - next_cnt <= 1:
-                    video_write.write(render_cache[next_cnt])
-                    next_cnt += 1
-                elif forward_cnt - next_cnt > 1:
-                    step = forward_cnt - next_cnt
-                    first_rects = rect_cache[next_cnt]
-                    last_rects = rect_cache[forward_cnt]
-                    if len(first_rects) != len(last_rects):
-                        continue
-                    for i in range(step):
-                        draw_flag = True
-                        for j in range(len(first_rects)):
-                            first_rect = first_rects[j]
-                            last_rect = last_rects[j]
-                            delta_x = (last_rect[0] - first_rect[0]) / step
-                            delta_y = (last_rect[1] - first_rect[1]) / step
-                            if abs(delta_x) > 100 / step or abs(delta_y) > 100 / step:
-                                draw_flag = False
-                                break
-                            color = np.random.randint(0, 255, size=(3,))
-                            color = [int(c) for c in color]
-                            p1 = (first_rect[0] + int(delta_x * i) - 80, first_rect[1] + int(delta_y * i) - 80)
-                            p2 = (first_rect[0] + int(delta_x * i) + 100, first_rect[1] + int(delta_y * i) + 100)
-                            frame = frame_cache[next_cnt]
-                            cv2.rectangle(frame, p1, p2, color, 2)
-                        if not draw_flag:
-                            frame = frame_cache[next_cnt]
-                        video_write.write(frame)
-                        next_cnt += 1
-            elif next_cnt in frame_cache:
-                video_write.write(frame_cache[next_cnt])
-                next_cnt += 1
-        # the future frames count
-        # next_frame_cnt = 48
-        success = 0
-        # wait the futures frames is accessable
-        if not self.next_prepare_event.is_set():
-            logger.info('Wait frames accessible....')
-            start = time.time()
-            # wait the future frames prepared,if ocurring time out, give up waits
-            self.next_prepare_event.wait(30)
-            logger.info("Wait [{}] seconds".format(time.time() - start))
-            logger.info('Frames accessible....')
-        # logger.info('Render task Begin with frame [{}]'.format(next_cnt))
         start = time.time()
-        # logger.info('After :[{}]'.format(render_cache.keys()))
-        while True:
-            # failed to wait
-            end = time.time() - start
+        while next_cnt < end_cnt:
             try:
                 if next_cnt in render_cache:
                     forward_cnt = next_cnt + self.sample_rate
+                    if forward_cnt > end_cnt:
+                        forward_cnt = end_cnt
                     while forward_cnt > next_cnt:
                         if forward_cnt in render_cache:
                             break
                         forward_cnt -= 1
                     if forward_cnt - next_cnt <= 1:
-                        frame = render_cache[next_cnt]
-                        video_write.write(frame)
+                        video_write.write(render_cache[next_cnt])
                         next_cnt += 1
-                        success += 1
-                    else:
+                    elif forward_cnt - next_cnt > 1:
                         step = forward_cnt - next_cnt
                         first_rects = rect_cache[next_cnt]
                         last_rects = rect_cache[forward_cnt]
@@ -817,25 +754,44 @@ class DetectionStreamRender(object):
                                 frame = frame_cache[next_cnt]
                             video_write.write(frame)
                             next_cnt += 1
-                            success += 1
                 elif next_cnt in frame_cache:
-                    frame = frame_cache[next_cnt]
-                    video_write.write(frame)
+                    video_write.write(frame_cache[next_cnt])
                     next_cnt += 1
-                    success += 1
                 else:
-                    # logger.info('Current keys: [{}]'.format(self.original_frame_cache.keys()))
                     logger.info('Lost frame index: [{}]'.format(next_cnt))
-                    # logger.info('Original frame index: {}'.format(frame_cache.keys()))
-                    # logger.info('Renderframe index: {}'.format(render_cache.keys()))
-                if end >= 30:
+                end = time.time()
+                if end-start > 30:
                     logger.info('Task time overflow, complete previous render task.')
-                    break
-                if success == self.future_frames:
-                    logger.info('Render task [{}]: Full write attache [{}] frames'.format(task_id, success))
                     break
             except Exception as e:
                 logger.error(e)
+        return next_cnt
+
+    def render_task(self, current_idx, render_cache, rect_cache, frame_cache, task_id):
+        self.stream_cnt += 1
+        current_time = time.strftime('%m-%d-%H-%M-%S-', time.localtime(time.time()))
+        target = self.detect_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
+        logger.info('Render task [{}]: Writing detection stream frame into: [{}]'.format(task_id, str(target)))
+        # fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        video_write = cv2.VideoWriter(str(target), self.fourcc, 24.0, (1920, 1080), True)
+        next_cnt = current_idx - self.future_frames
+        next_cnt = self.write_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
+                                         frame_cache, task_id)
+        # the future frames count
+        # next_frame_cnt = 48
+        # wait the futures frames is accessable
+        if not self.next_prepare_event.is_set():
+            logger.info('Wait frames accessible....')
+            start = time.time()
+            # wait the future frames prepared,if ocurring time out, give up waits
+            self.next_prepare_event.wait(30)
+            logger.info("Wait [{}] seconds".format(time.time() - start))
+            logger.info('Frames accessible....')
+        # logger.info('Render task Begin with frame [{}]'.format(next_cnt))
+        # logger.info('After :[{}]'.format(render_cache.keys()))
+
+        end_cnt = next_cnt + self.future_frames
+        next_cnt = self.write_video_work(video_write, next_cnt, end_cnt, render_cache, rect_cache, frame_cache, task_id)
         video_write.release()
         logger.info('Render task [{}]: Done write detection stream frame into: [{}]'.format(task_id, str(target)))
         self.write_done = True
