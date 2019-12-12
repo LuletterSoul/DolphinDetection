@@ -146,17 +146,17 @@ class Detector(object):
     def less_ratio(self, area):
         total = self.shape[0] * self.shape[1]
         # logger.info('Area ration: [{}]'.format(self.ratio(area, total)))
-        return self.ratio(area, total) >= 0.03
+        return self.ratio(area, total) >= self.cfg.alg['area_ratio']
 
     def ratio(self, area, total):
         return (area / total) * 100
 
     def detect(self):
-        if self.cfg.detect_alg_type == 'saliency':
+        if self.cfg.alg['type'] == 'saliency':
             self.detect_saliency()
-        if self.cfg.detect_alg_type == 'thresh':
+        if self.cfg.alg['type'] == 'thresh':
             self.detect_thresh()
-        if self.cfg.detect_alg_type == 'thresh_mask':
+        if self.cfg.alg['type'] == 'thresh_mask':
             self.detect_mask()
 
     def detect_mask(self):
@@ -183,8 +183,9 @@ class Detector(object):
                     logger.info('Detector: [{},{}] empty frame')
                     continue
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                # _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-                adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, mean=40)
+                _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+                adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51,
+                                                       mean=self.cfg.alg['mean'])
                 dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                                      iterations=1)
                 dilated = cv2.bitwise_and(dilated, mask)
@@ -242,7 +243,7 @@ class Detector(object):
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
                 _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-                adaptive_thresh = adaptive_thresh_size(frame, (5, 5))
+                adaptive_thresh = adaptive_thresh_size(frame, (5, 5), block_size=21, C=self.cfg.alg['mean'])
                 # adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
                 dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                                      iterations=1)
@@ -255,7 +256,7 @@ class Detector(object):
                     rect = cv2.boundingRect(c)
                     area = cv2.contourArea(c)
                     # self.is_in_ratio(area, self.shape[0] * self.shape[1])
-                    if self.less_ratio(area):
+                    if self.less_ratio(area) and rect[2] / rect[3] < 10:
                         rects.append(rect)
                 cv2.drawContours(img_con, contours, -1, 255, -1)
                 if self.cfg.show_window:
@@ -269,7 +270,7 @@ class Detector(object):
                                       self.col_index, self.current_block.index, self.back(rects))
                 self.pass_detection_result(res)
                 end = time.time() - start
-                logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
+                logger.info('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
 
             # do a bit of cleanup
             cv2.destroyAllWindows()
@@ -436,6 +437,8 @@ class Detector(object):
 
     def pass_detection_result(self, res: DetectionResult):
         self.rq.put(res)
+
+
 #
 #
 # @ray.remote(num_cpus=1)
