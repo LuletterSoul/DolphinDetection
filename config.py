@@ -58,6 +58,7 @@ class MonitorType(Enum):
     THREAD_BASED = 2,
     PROCESS_THREAD_BASED = 3
     RAY_BASED = 4
+    TASK_BASED = 5
 
 
 # select monitor type, process-based means the system will create a process for each component,such as detector,
@@ -67,7 +68,8 @@ class MonitorType(Enum):
 # MONITOR = MonitorType.PROCESS_BASED
 
 
-MONITOR = MonitorType.PROCESS_BASED
+MONITOR = MonitorType.TASK_BASED
+
 
 enable_options = {
     0: False,
@@ -80,12 +82,13 @@ enable_options = {
 
 
 class VideoConfig:
-    def __init__(self, index, name, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
+    def __init__(self, index, name, shape, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
                  online, sample_internal, save_box, show_box, rtsp, rtsp_saved_per_frame, future_frames,
                  alg):
         self.index = index
         self.name = name
+        self.shape = shape
         self.ip = ip
         self.port = port
         self.suffix = suffix

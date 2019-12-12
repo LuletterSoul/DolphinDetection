@@ -44,6 +44,12 @@ if __name__ == '__main__':
                                                                 CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
 
         monitor.monitor()
+    elif MONITOR == MonitorType.TASK_BASED:
+        monitor = detection.EmbeddingControlBasedTaskMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
+                                                             SAMPLE_SAVE_DIR,
+                                                             FRAME_SAVE_DIR,
+                                                             CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
+        monitor.monitor()
     else:
         monitor = detection.EmbeddingControlBasedThreadMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
                                                                SAMPLE_SAVE_DIR,
