@@ -101,9 +101,8 @@ class Detector(object):
     def crop(self, frame):
         return crop_by_se(frame, self.start, self.end)
 
-    def back(self, rects):
+    def back(self, rects, original_shape):
         b_rects = []
-        original_shape = self.current_block.shape
         ratio = original_shape[0] / self.shape[0]
         for r in rects:
             x = int((r[0] + self.start[0]) * ratio)
@@ -139,12 +138,12 @@ class Detector(object):
         logger.debug('Distance with background threshold: [{}].'.format(bg_dist))
         return bg_dist > thresh
 
-    def is_in_ratio(self, area, total):
+    def is_in_ratio(self, area, total, cfg: VideoConfig):
         # logger.info('Area ration: [{}]'.format((area / total) * 100))
-        return self.ratio(area, total) <= self.cfg.filtered_ratio
+        return self.ratio(area, total) <= cfg.filtered_ratio
 
-    def less_ratio(self, area):
-        total = self.shape[0] * self.shape[1]
+    def less_ratio(self, area, shape):
+        total = shape[0] * shape[1]
         # logger.info('Area ration: [{}]'.format(self.ratio(area, total)))
         return self.ratio(area, total) >= self.cfg.alg['area_ratio']
 
@@ -176,47 +175,87 @@ class Detector(object):
             # cv2.imshow('Mask', mask)
             # cv2.waitKey(0)
             while True:
-                start = time.time()
                 frame = self.get_frame()
-                self.shape = frame.shape
-                if frame is None:
-                    logger.info('Detector: [{},{}] empty frame')
-                    continue
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-                adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51,
-                                                       mean=self.cfg.alg['mean'])
-                dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
-                                     iterations=1)
-                dilated = cv2.bitwise_and(dilated, mask)
-                img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-                rects = []
-                regions = []
-                status = None
-                coordinates = []
-                for c in contours:
-                    rect = cv2.boundingRect(c)
-                    rects.append(rect)
-                cv2.drawContours(img_con, contours, -1, 255, -1)
-                if self.cfg.show_window:
-                    cv2.imshow("Contours", img_con)
-                    cv2.waitKey(1)
-                self.detect_cnt += 1
-                logger.debug(
-                    'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.row_index,
-                                                                         self.detect_cnt))
-                res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, self.row_index,
-                                      self.col_index, self.current_block.index, self.back(rects))
+                res = self.detect_mask_task(frame, mask, self.current_block.shape)
                 self.pass_detection_result(res)
-                end = time.time() - start
-                logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
-
-            # do a bit of cleanup
-            cv2.destroyAllWindows()
-            # vs.release()
         except Exception as msg:
             traceback.print_exc()
             logger.error(msg)
+
+    def detect_mask_task(self, frame, mask, block):
+        start = time.time()
+        self.shape = frame.shape
+        if frame is None:
+            logger.info('Detector: [{},{}] empty frame')
+            return None
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+        adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51,
+                                               mean=self.cfg.alg['mean'])
+        dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+                             iterations=1)
+        dilated = cv2.bitwise_and(dilated, mask)
+        img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        rects = []
+        regions = []
+        status = None
+        coordinates = []
+        for c in contours:
+            rect = cv2.boundingRect(c)
+            rects.append(rect)
+        cv2.drawContours(img_con, contours, -1, 255, -1)
+        if self.cfg.show_window:
+            cv2.imshow("Contours", img_con)
+            cv2.waitKey(1)
+        self.detect_cnt += 1
+        logger.debug(
+            'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.row_index,
+                                                                 self.detect_cnt))
+        res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, self.row_index,
+                              self.col_index, self.current_block.index, self.back(rects, block.shape))
+        end = time.time() - start
+        logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
+        return res
+
+        # do a bit of cleanup
+
+    def detect_thresh_task(self, frame, block):
+        start = time.time()
+        if frame is None:
+            logger.info('Detector: [{},{}] empty frame')
+            return
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+        adaptive_thresh = adaptive_thresh_size(frame, (5, 5), block_size=21, C=self.cfg.alg['mean'])
+        # adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
+        dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+                             iterations=1)
+        img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        rects = []
+        regions = []
+        status = None
+        coordinates = []
+        for c in contours:
+            rect = cv2.boundingRect(c)
+            area = cv2.contourArea(c)
+            # self.is_in_ratio(area, self.shape[0] * self.shape[1])
+            if self.less_ratio(area, self.shape) and rect[2] / rect[3] < 10:
+                rects.append(rect)
+        cv2.drawContours(img_con, contours, -1, 255, -1)
+        # if self.cfg.show_window:
+        #     cv2.imshow("Contours", img_con)
+        #     cv2.waitKey(1)
+        self.detect_cnt += 1
+        logger.info(
+            '~~~~ Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.row_index,
+                                                                      self.detect_cnt))
+        res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, self.row_index,
+                              self.col_index, block.index, self.back(rects, block.shape))
+        # self.pass_detection_result(res)
+        end = time.time() - start
+        logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
+        # cv2.destroyAllWindows()
+        return res
 
     def detect_thresh(self):
         try:
@@ -235,46 +274,9 @@ class Detector(object):
             # cv2.imshow('Mask', mask)
             # cv2.waitKey(0)
             while True:
-                start = time.time()
                 frame = self.get_frame()
-                if frame is None:
-                    logger.info('Detector: [{},{}] empty frame')
-                    continue
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-                _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-                adaptive_thresh = adaptive_thresh_size(frame, (5, 5), block_size=21, C=self.cfg.alg['mean'])
-                # adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
-                dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
-                                     iterations=1)
-                img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-                rects = []
-                regions = []
-                status = None
-                coordinates = []
-                for c in contours:
-                    rect = cv2.boundingRect(c)
-                    area = cv2.contourArea(c)
-                    # self.is_in_ratio(area, self.shape[0] * self.shape[1])
-                    if self.less_ratio(area) and rect[2] / rect[3] < 10:
-                        rects.append(rect)
-                cv2.drawContours(img_con, contours, -1, 255, -1)
-                if self.cfg.show_window:
-                    cv2.imshow("Contours", img_con)
-                    cv2.waitKey(1)
-                self.detect_cnt += 1
-                logger.debug(
-                    'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.row_index,
-                                                                         self.detect_cnt))
-                res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, self.row_index,
-                                      self.col_index, self.current_block.index, self.back(rects))
+                res = self.detect_thresh_task(frame, self.current_block)
                 self.pass_detection_result(res)
-                end = time.time() - start
-                logger.info('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
-
-            # do a bit of cleanup
-            cv2.destroyAllWindows()
-            # vs.release()
         except Exception as msg:
             traceback.print_exc()
             logger.error(msg)
@@ -309,7 +311,7 @@ class Detector(object):
                 frame = self.get_frame()
                 if frame is None:
                     logger.info('Detector: [{},{}] empty frame')
-                    continue
+                    return
                 # logger.info('Detector: [{},{}] Fetch frame done..'.format(self.row_index, self.col_index))
                 original_frame = frame.copy()
                 # mask = mog.apply(frame)
@@ -383,7 +385,7 @@ class Detector(object):
                         logger.debug(
                             'Area: [{}], ration: [{}]'.format(s[4],
                                                               round(s[4] / (frame.shape[0] * frame.shape[1]) * 100, 3)))
-                        is_in_ratio = self.is_in_ratio(s[4], self.shape[0] * self.shape[1])
+                        is_in_ratio = self.is_in_ratio(s[4], self.shape[0] * self.shape[1], self.cfg)
                         is_dolphin, bg_dist, gt_dist = self.do_decision(region_mean, region_std)
                         # if is_dolphin and is_in_ratio:
                         if is_dolphin and is_in_ratio:
@@ -435,8 +437,54 @@ class Detector(object):
             traceback.print_exc()
             logger.error(msg)
 
+    def detect_saliency_task(self, frame):
+        pass
+
     def pass_detection_result(self, res: DetectionResult):
         self.rq.put(res)
+
+
+class DetectorParams(object):
+
+    def __init__(self, col_step, row_step, row_index, col_index, cfg: VideoConfig,
+                 region_save_path: Path) -> None:
+        super().__init__()
+        # self.video_path = video_path
+        # self.region_save_path = region_save_path
+        self.cfg = cfg
+        self.row_step = col_step
+        self.col_step = row_step
+        self.col_index = row_index
+        self.row_index = col_index
+        self.start = [self.row_index * row_step, self.col_index * col_step]
+        self.end = [(self.row_index + 1) * row_step, (self.col_index + 1) * col_step]
+        self.region_save_path = region_save_path
+        self.region_save_path.mkdir(exist_ok=True, parents=True)
+        logger.debug(
+            'Detector [{},{}]: region save to: [{}]'.format(self.col_index, self.col_index, str(self.region_save_path)))
+
+
+class TaskBasedDetector(Detector):
+
+    def __init__(self, col_step, row_step, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
+                 region_save_path: Path) -> None:
+        super().__init__(col_step, row_step, row_index, col_index, cfg, sq, rq, region_save_path)
+
+    @classmethod
+    def detect_based_task(self, block, args):
+        frame = block.frame
+        self.shape = frame.shape
+        if self.cfg.alg['type'] == 'saliency':
+            res = self.detect_saliency()
+        if self.cfg.alg['type'] == 'thresh':
+            res = self.detect_thresh_task(frame, block)
+        if self.cfg.alg['type'] == 'thresh_mask':
+            frame = self.get_frame()
+            self.shape = frame.shape
+            mask = np.zeros((self.shape[0], self.shape[1])).astype(np.uint8)
+            mask[60:420, :] = 255
+            res = self.detect_mask_task(frame, mask, block)
+        return res
 
 
 #

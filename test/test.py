@@ -18,12 +18,14 @@ import interface as I
 from config import *
 from detection.manager import DetectionMonitor
 from utils import *
+from multiprocessing import Pool, Queue
 
 
 def test_video_config():
     cfg = I.load_video_config(VIDEO_CONFIG_DIR / 'video.json')
     cfg = VideoConfig.from_json(cfg[0])
     print(cfg.resize)
+
 
 def test_load_label_json():
     cfg_key, cfg_val = I.load_label_config(LABEL_SAVE_PATH / 'samples.json')
@@ -82,12 +84,31 @@ def test_read_frame():
     return samples
 
 
+class A(object):
+
+    def __init__(self) -> None:
+        self.cnt = 0
+
+    def run(self):
+        self.cnt += 1
+        logger.info('~~~~Current cnt : [{}]'.format(self.cnt))
+        return self.cnt
+
+
+def test_pool():
+    a = A()
+    with Pool() as p:
+        while True:
+            p.apply_async(a.run, ())
+
+
 if __name__ == '__main__':
     # test_load_video_json()
-    test_load_label_json()
+    # test_load_label_json()
     # test_video_config()
     # test_read_steam()
     # test_read_frame()
     # test_detect()
     # test_detect_monitor()
     # test_adaptive_thresh()
+    test_pool()
