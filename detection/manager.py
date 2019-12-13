@@ -906,6 +906,7 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         if construct_result is not None:
             frame = construct_result.frame
             if self.cfg.draw_boundary:
+                frame, _ = self.preprocess(frame)
                 frame = self.draw_boundary(frame)
                 # logger.info('Done constructing of sub-frames into a original frame....')
             if self.cfg.show_window:
