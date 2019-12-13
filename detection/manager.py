@@ -336,9 +336,9 @@ class DetectorController(object):
         cnt = 0
         keys = cache.keys()
         for k in keys:
-            if k in self.original_frame_cache:
+            if k in cache:
                 try:
-                    self.original_frame_cache.pop(k)
+                    cache.pop(k)
                     cnt += 1
                     if cnt == half_len:
                         break
