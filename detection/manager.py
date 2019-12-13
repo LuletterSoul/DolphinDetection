@@ -15,22 +15,23 @@ from multiprocessing import Manager, Pool, cpu_count
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 import stream
 import interface as I
+from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams
 from .capture import *
 from .detector import *
-from .detect_funcs import DetectorParams, detect_based_task
+from .detect_funcs import detect_based_task, collect_and_reconstruct
+from detection import DetectorParams
 from utils import *
 from typing import List
 from utils import clean_dir, logger
 from config import enable_options
-from collections import deque
 
 # from capture import *
 import cv2
 import imutils
-import traceback
 import time
 import threading
 import traceback
+import ray
 
 
 # Monitor will build multiple video stream receivers according the video configuration
@@ -219,6 +220,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         # Run video capture from stream
         for i in range(len(self.cfgs)):
             self.caps[i].read()
+            # r =self.process_pool.apply_async(self.caps[i].read, ())
+            # r.get()
 
     def callback(self, index, frame):
         self.controllers[index].call_task(frame, self.process_pool)
@@ -281,24 +284,6 @@ class EmbeddingControlBasedThreadAndProcessMonitor(EmbeddingControlMonitor):
         wait(self.thread_res, return_when=ALL_COMPLETED)
 
 
-class DispatchBlock(object):
-
-    def __init__(self, frame, index, original_shape) -> None:
-        super().__init__()
-        self.frame = frame
-        self.index = index
-        self.shape = original_shape
-
-
-class ConstructResult(object):
-
-    def __init__(self, frame, binary, thresh) -> None:
-        super().__init__()
-        self.frame = frame
-        self.binary = binary
-        self.thresh = thresh
-
-
 class DetectorController(object):
     def __init__(self, cfg: VideoConfig, stream_path: Path, region_path: Path, frame_path: Path,
                  frame_queue: Queue,
@@ -313,6 +298,9 @@ class DetectorController(object):
         # self.process_pool = process_pool
         self.col = cfg.routine['col']
         self.row = cfg.routine['row']
+        self.col_step = 0
+        self.row_step = 0
+        self.block_info = BlockInfo(self.row, self.col, self.row_step, self.col_step)
 
         self.send_pipes = [Manager().Queue() for i in range(self.col * self.row)]
         self.receive_pipes = [Manager().Queue() for i in range(self.col * self.row)]
@@ -357,40 +345,25 @@ class DetectorController(object):
         if len_cache > 1000:
             # original_head = self.original_frame_cache.keys()[0]
             thread = threading.Thread(
-                target=self.clear_cache,
+                target=clear_cache,
                 args=(self.original_frame_cache,))
             # self.clear_cache(self.original_frame_cache)
             thread.start()
             logger.info(
                 'Clear half original frame caches.')
 
-    def clear_cache(self, cache, num=2):
-        half_len = len(cache) // num
-        cnt = 0
-        keys = cache.keys()
-        for k in keys:
-            if k in self.original_frame_cache:
-                try:
-                    self.original_frame_cache.pop(k)
-                    cnt += 1
-                    if cnt == half_len:
-                        break
-                except Exception as e:
-                    traceback.print_exc()
-                    logger.error(e)
-
     def clear_render_cache(self):
         last_detect_internal = time.time() - self.last_detection
         time_thresh = self.cfg.future_frames * 1.5 * 3
         if last_detect_internal > time_thresh and len(self.render_frame_cache) > 500:
             thread = threading.Thread(
-                target=self.clear_cache,
+                target=clear_cache,
                 args=(self.render_frame_cache,))
             thread.start()
             logger.info('Clear half render frame caches')
         if len(self.render_rect_cache) > 500:
             thread = threading.Thread(
-                target=self.clear_cache,
+                target=clear_cache,
                 args=(self.render_rect_cache,))
             thread.start()
 
@@ -400,6 +373,7 @@ class DetectorController(object):
         frame, original_frame = self.preprocess(frame)
         self.col_step = int(frame.shape[0] / self.col)
         self.row_step = int(frame.shape[1] / self.row)
+        self.block_info = BlockInfo(self.row, self.col, self.row_step, self.col_step)
 
     def init_detectors(self):
         logger.info('Init total [{}] detectors....'.format(self.col * self.row))
@@ -487,24 +461,24 @@ class DetectorController(object):
                 start = time.time()
                 cnt = 0
             if self.cfg.draw_boundary:
-                frame = self.draw_boundary(construct_result.frame)
+                frame = draw_boundary(construct_result.frame, self.block_info)
             # logger.info('Done constructing of sub-frames into a original frame....')
             if self.cfg.show_window:
                 cv2.imshow('Reconstructed Frame', construct_result.frame)
                 cv2.waitKey(1)
         return True
 
-    def draw_boundary(self, frame):
-        shape = frame.shape
-        for i in range(self.col - 1):
-            start = (0, self.col_step * (i + 1))
-            end = (shape[1] - 1, self.col_step * (i + 1))
-            cv2.line(frame, start, end, (0, 0, 255), thickness=1)
-        for j in range(self.row - 1):
-            start = (self.row_step * (j + 1), 0)
-            end = (self.row_step * (j + 1), shape[0] - 1)
-            cv2.line(frame, start, end, (0, 0, 255), thickness=1)
-        return frame
+    # def draw_boundary(self, frame):
+    #     shape = frame.shape
+    #     for i in range(self.col - 1):
+    #         start = (0, self.col_step * (i + 1))
+    #         end = (shape[1] - 1, self.col_step * (i + 1))
+    #         cv2.line(frame, start, end, (0, 0, 255), thickness=1)
+    #     for j in range(self.row - 1):
+    #         start = (self.row_step * (j + 1), 0)
+    #         end = (self.row_step * (j + 1), shape[0] - 1)
+    #         cv2.line(frame, start, end, (0, 0, 255), thickness=1)
+    #     return frame
 
     def dispatch(self):
         # start = time.time()
@@ -733,15 +707,6 @@ class DetectionStreamRender(object):
         return True
 
 
-class ReconstructResult(object):
-
-    def __init__(self, rcf, rcb, rct) -> None:
-        super().__init__()
-        self.reconstruct_frame = rcf
-        self.reconstruct_binary = rcb
-        self.reconstruct_rct = rct
-
-
 class ProcessBasedDetectorController(DetectorController):
 
     def start(self, pool: Pool):
@@ -766,6 +731,12 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
     def __init__(self, cfg: VideoConfig, stream_path: Path, region_path: Path, frame_path: Path, frame_queue: Queue,
                  index_pool: Queue) -> None:
         super().__init__(cfg, stream_path, region_path, frame_path, frame_queue, index_pool)
+        # self.construct_params = ray.put(
+        #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
+        #                     self.render_rect_cache, self.stream_render, 500, self.cfg))
+        self.construct_params =ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
+                                               self.render_rect_cache, self.stream_render, 500, self.cfg)
+
 
     def init_detectors(self):
         logger.info('Init total [{}] detectors....'.format(self.col * self.row))
@@ -795,6 +766,7 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         frame, original_frame = self.preprocess(empty)
         self.col_step = int(frame.shape[0] / self.col)
         self.row_step = int(frame.shape[1] / self.row)
+        self.block_info = BlockInfo(self.row, self.col, self.row_step, self.col_step)
 
     def collect(self, args):
         return [f.get() for f in args]
@@ -805,7 +777,7 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         if construct_result is not None:
             frame = construct_result.frame
             if self.cfg.draw_boundary:
-                frame = self.draw_boundary(frame)
+                frame = draw_boundary(frame, self.block_info)
                 # logger.info('Done constructing of sub-frames into a original frame....')
             if self.cfg.show_window:
                 frame = imutils.resize(frame, width=800)
@@ -839,9 +811,13 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
                 block = DispatchBlock(crop_by_se(frame, d.start, d.end),
                                       self.frame_cnt.get(), original_frame.shape)
                 # async_futures.append(pool.apply_async(d.detect_based_task, (block,)))
-                async_futures.append(pool.apply_async(detect_based_task, (block, d,)))
-            self.collect_and_reconstruct(async_futures)
-            # r =pool.apply_async(self.collect_and_reconstruct, (async_futures,))
+                # async_futures.append(pool.apply_async(detect_based_task, (block, d,)))
+                async_futures.append(detect_based_task.remote(block, d))
+            # self.collect_and_reconstruct(async_futures)
+            r = pool.apply_async(collect_and_reconstruct,
+                                 (async_futures, self.construct_params, self.block_info, self.cfg,))
+            r.get()
+            # collect_and_reconstruct.remote(async_futures, self.construct_params, self.block_info, self.cfg)
         self.dispatch_cnt += 1
         if self.dispatch_cnt % 100 == 0:
             end = time.time() - start
