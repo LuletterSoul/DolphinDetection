@@ -36,6 +36,7 @@ import traceback
 
 import os.path as osp
 
+
 # Monitor will build multiple video stream receivers according the video configuration
 class DetectionMonitor(object):
 
@@ -429,9 +430,10 @@ class DetectorController(object):
                 r = result_queue[0]
                 self.result_cnt += 1
                 current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
-                self.inform(current_time + str(result_queue[1]), result_queue[2])
-                target = self.result_path / (current_time + str(self.result_cnt) + '.png')
+                img_name = current_time + str(self.result_cnt) + '.png'
+                target = self.result_path / img_name
                 cv2.imwrite(str(target), r)
+                self.inform(img_name, result_queue[2])
             except Exception as e:
                 logger.error(e)
         return True
