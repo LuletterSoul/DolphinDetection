@@ -21,7 +21,7 @@ from .detect_funcs import DetectorParams, detect_based_task
 from utils import *
 from typing import List
 from utils import clean_dir, logger
-from config import enable_options
+from config import enable_options, INFORM_SAVE_PATH
 from collections import deque
 
 # from capture import *
@@ -32,6 +32,7 @@ import time
 import threading
 import traceback
 
+import os.path as osp
 
 # Monitor will build multiple video stream receivers according the video configuration
 class DetectionMonitor(object):
@@ -311,6 +312,8 @@ class DetectorController(object):
         # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
         self.stream_render = DetectionStreamRender(0, self.cfg.future_frames, self)
 
+        self.save_cache = {}
+
         # def __getstate__(self):
 
     #     self_dict = self.__dict__.copy()
@@ -420,9 +423,12 @@ class DetectorController(object):
             if self.quit:
                 break
             try:
-                r = self.get_result_from_queue()
+                # r = self.get_result_from_queue()
+                result_queue = self.get_result_from_queue()
+                r = result_queue[0]
                 self.result_cnt += 1
                 current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
+                self.inform(current_time + str(result_queue[1]), result_queue[2])
                 target = self.result_path / (current_time + str(self.result_cnt) + '.png')
                 cv2.imwrite(str(target), r)
             except Exception as e:
@@ -664,7 +670,7 @@ class DetectorController(object):
             original_frame = self.original_frame_cache[current_index]
             for r in results:
                 if len(r.rects):
-                    self.result_queue.put(original_frame)
+                    self.result_queue.put((original_frame, r.frame_index, r.rects))
                     self.last_detection = time.time()
                     if r.frame_index not in self.original_frame_cache:
                         logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
@@ -702,6 +708,29 @@ class DetectorController(object):
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3))
         constructed_frame = np.reshape(sub_frames, (self.col * self.col_step, self.row * self.row_step))
         return constructed_frame
+
+    def inform(self, frame_name, boundary_rect):
+        inform_path = str(INFORM_SAVE_PATH / 'inform.json')
+        self.save_cache[frame_name] = boundary_rect
+
+        if not osp.exists(inform_path):
+            fw = open(inform_path, 'w') 
+            fw.write(json.dumps(self.save_cache, indent=4))
+            fw.close()
+
+        if len(self.save_cache) == 2:
+            fr = open(inform_path, 'r')
+            save_file = json.load(fr)
+            fr.close()
+
+            for key in self.save_cache:
+                save_file[key] = self.save_cache[key]
+            
+            fw = open(inform_path, 'w')
+            fw.write(json.dumps(save_file, indent=4))
+            fw.close()
+
+            self.save_cache = {}
 
 
 class DetectionStreamRender(object):

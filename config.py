@@ -50,6 +50,8 @@ LABEL_TARGET_PATH.mkdir(exist_ok=True, parents=True)
 LABEL_SAVE_PATH = PROJECT_DIR / 'data/labels'
 BINARY_SAVE_PATH = PROJECT_DIR / 'data/labels/binarys'
 
+INFORM_SAVE_PATH = PROJECT_DIR / 'vcfg'
+
 from enum import Enum
 
 
