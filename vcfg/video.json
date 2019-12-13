@@ -3,7 +3,11 @@
     {
       "index": 0,
       "name": "video1",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "cHZnNjcxLWF2LzE2LzE=/",
@@ -54,7 +58,11 @@
     {
       "index": 1,
       "name": "video2",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "stream_13-",
@@ -105,7 +113,11 @@
     {
       "index": 2,
       "name": "video3",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "stream_13-",
@@ -156,7 +168,11 @@
     {
       "index": 3,
       "name": "video4",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "stream_13-",
@@ -207,17 +223,18 @@
     {
       "index": 4,
       "name": "video5_watch",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "stream_13-",
       "headers": {
-        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)",
-        "Referer": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
-        "Accept-Encoding": "identity"
       },
-      "m3u8_url": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
-      "url": "http://222.190.243.243:8081/hls/stream_13/stream_13-",
+      "m3u8_url": "",
+      "url": "",
       "roi": {
         "x": 0,
         "y": 300,
@@ -229,16 +246,16 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": true,
+      "show_window": false,
       "window_position": {
         "x": 100,
         "y": 100
       },
       "routine": {
-        "row": 2,
-        "col": 2
+        "row": 1,
+        "col": 1
       },
-      "sample_rate": 3,
+      "sample_rate": 5,
       "draw_boundary": true,
       "enable": false,
       "filtered_ratio": 0.5,
@@ -252,13 +269,18 @@
       "future_frames": 48,
       "alg": {
         "type": "thresh",
-        "mean": 80
+        "mean": 100,
+        "area_ratio": 0.03
       }
     },
     {
       "index": 5,
       "name": "video6_hungred_million",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "",

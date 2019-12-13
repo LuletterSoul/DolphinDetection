@@ -10,19 +10,16 @@
 @version 1.0
 @desc:
 """
-import time
-from multiprocessing import Queue
-import traceback
+from typing import List
+from utils import *
+from .detector import DetectionResult
+from detection.params import ConstructResult, ConstructParams, BlockInfo, DetectorParams
+import imutils
+# import ray
+
 
 # from interface import thresh as Thresh
 # import interface
-
-import imutils
-
-from config import VideoConfig
-from utils import *
-import time
-from .detector import DetectionResult
 
 
 def back(self, rects, original_shape):
@@ -64,26 +61,7 @@ def back(rects, start, shape, original_shape):
     return b_rects
 
 
-class DetectorParams(object):
-
-    def __init__(self, col_step, row_step, row_index, col_index, cfg: VideoConfig,
-                 region_save_path: Path) -> None:
-        super().__init__()
-        # self.video_path = video_path
-        # self.region_save_path = region_save_path
-        self.cfg = cfg
-        self.row_step = col_step
-        self.col_step = row_step
-        self.col_index = row_index
-        self.row_index = col_index
-        self.start = [self.row_index * row_step, self.col_index * col_step]
-        self.end = [(self.row_index + 1) * row_step, (self.col_index + 1) * col_step]
-        self.region_save_path = region_save_path
-        self.region_save_path.mkdir(exist_ok=True, parents=True)
-        logger.debug(
-            'Detector [{},{}]: region save to: [{}]'.format(self.col_index, self.col_index, str(self.region_save_path)))
-
-
+# @ray.remote
 def detect_based_task(block, params: DetectorParams):
     frame = block.frame
     # if args.cfg.alg['type'] == 'saliency':
@@ -135,3 +113,86 @@ def detect_thresh_task(frame, block, params: DetectorParams):
     logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.col_index, params.row_index, end))
     # cv2.destroyAllWindows()
     return res
+
+
+def collect(args):
+    return [f.get() for f in args]
+
+
+def draw_boundary(frame, info: BlockInfo):
+    shape = frame.shape
+    for i in range(info.col - 1):
+        start = (0, info.col_step * (i + 1))
+        end = (shape[1] - 1, info.col_step * (i + 1))
+        cv2.line(frame, start, end, (0, 0, 255), thickness=1)
+    for j in range(info.row - 1):
+        start = (info.row_step * (j + 1), 0)
+        end = (info.row_step * (j + 1), shape[0] - 1)
+        cv2.line(frame, start, end, (0, 0, 255), thickness=1)
+    return frame
+
+
+# @ray.remote
+def collect_and_reconstruct(args, params: ConstructParams, block_info: BlockInfo, cfg: VideoConfig):
+    results = ray.get(args)
+    construct_result: ConstructResult = construct(results, params)
+    if construct_result is not None:
+        frame = construct_result.frame
+        if cfg.draw_boundary:
+            frame = draw_boundary(frame, block_info)
+            # logger.info('Done constructing of sub-frames into a original frame....')
+        if cfg.show_window:
+            frame = imutils.resize(frame, width=800)
+            cv2.imshow('Reconstructed Frame', frame)
+            cv2.waitKey(1)
+    else:
+        logger.error('Empty reconstruct result.')
+    return True
+
+
+# @ray.remote
+def construct(results: List[DetectionResult], params: ConstructParams):
+    # sub_frames = [r.frame for r in results]
+    # sub_binary = [r.binary for r in results]
+    # sub_thresh = [r.thresh for r in results]
+    # constructed_frame = self.construct_rgb(sub_frames)
+    # constructed_binary = self.construct_gray(sub_binary)
+    # constructed_thresh = self.construct_gray(sub_thresh)
+    logger.info('Controller [{}]: Construct frames into a original frame....'.format(params.cfg.index))
+    try:
+        # self.construct_cnt += 1
+        current_index = results[0].frame_index
+        while current_index not in params.original_frame_cache:
+            logger.info('Current index: [{}] not in original frame cache.May cache was cleared by timer'.format(
+                current_index))
+            time.sleep(0.5)
+            # logger.info(self.original_frame_cache.keys())
+        original_frame = params.original_frame_cache[current_index]
+        last_detection_time = None
+        for r in results:
+            if len(r.rects):
+                params.result_queue.put(original_frame)
+                last_detection = time.time()
+                if r.frame_index not in params.original_frame_cache:
+                    logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
+                    continue
+                for rect in r.rects:
+                    color = np.random.randint(0, 255, size=(3,))
+                    color = [int(c) for c in color]
+                    p1 = (rect[0] - 80, rect[1] - 80)
+                    p2 = (rect[0] + 100, rect[1] + 100)
+                    # cv2.rectangle(original_frame, (rect[0] - 20, rect[1] - 20),
+                    #               (rect[0] + rect[2] + 20, rect[1] + rect[3] + 20),
+                    #               color, 2)
+                    cv2.rectangle(original_frame, p1, p2, color, 2)
+                params.render_frame_cache[current_index] = original_frame
+                params.render_rect_cache[current_index] = r.rects
+                params.stream_render.reset(current_index)
+        params.stream_render.notify(current_index)
+        clear_cache_by_len(params.render_frame_cache, params.len_thresh)
+        clear_cache_by_len(params.render_rect_cache, params.len_thresh)
+        # return constructed_frame, constructed_binary, constructed_thresh
+        return ConstructResult(original_frame, None, None, last_detection_time)
+    except Exception as e:
+        traceback.print_exc()
+        logger.error(e)

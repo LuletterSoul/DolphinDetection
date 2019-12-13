@@ -21,16 +21,20 @@ from config import VideoConfig
 from utils import logger
 import time
 import shutil
+
+
 # import ray
 
 
 class VideoCaptureThreading:
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+                 idx,
                  sample_rate=5, width=640, height=480, delete_post=True):
         self.cfg = cfg
         self.video_path = video_path
         self.sample_path = sample_path
         self.index_pool = index_pool
+        self.idx = idx
         # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         # self.grabbed, self.frame = self.cap.read()
@@ -132,8 +136,9 @@ class VideoCaptureThreading:
 
 class VideoOfflineCapture(VideoCaptureThreading):
     def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
-                 cfg: VideoConfig, sample_rate=5, width=640, height=480, delete_post=True):
-        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+                 cfg: VideoConfig, idx, sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
+                         delete_post)
         self.offline_path = offline_path
         self.streams_list = list(self.offline_path.glob('*'))
         self.pos = -1
@@ -166,8 +171,10 @@ class VideoOfflineCapture(VideoCaptureThreading):
 # Sample video stream at intervals
 class VideoOnlineSampleCapture(VideoCaptureThreading):
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+                 idx,
                  sample_rate=5, width=640, height=480, delete_post=True):
-        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
+                         delete_post)
         self.sample_cnt = 0
         self.sample_path.mkdir(exist_ok=True, parents=True)
 
@@ -184,8 +191,9 @@ class VideoOnlineSampleCapture(VideoCaptureThreading):
 # @ray.remote
 class VideoOfflineRayCapture(VideoCaptureThreading):
     def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
-                 cfg: VideoConfig, sample_rate=5, width=640, height=480, delete_post=True):
-        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+                 cfg: VideoConfig, idx, sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
+                         delete_post)
         self.offline_path = offline_path
         self.streams_list = list(self.offline_path.glob('*'))
         self.pos = 0
@@ -200,9 +208,11 @@ class VideoOfflineRayCapture(VideoCaptureThreading):
 # @ray.remote(num_cpus=0.5)
 class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+                 idx,
                  controller_actor,
                  sample_rate=5, width=640, height=480, delete_post=True):
-        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
+                         delete_post)
         # if ray_index_pool is None:
         #     raise Exception('Invalid index pool object id.')
         # self.ray_index_pool = ray.get(ray_index_pool)
@@ -254,8 +264,10 @@ class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
 # Read stream from rtsp
 class VideoRtspCapture(VideoOnlineSampleCapture):
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+                 idx,
                  sample_rate=5, width=640, height=480, delete_post=True):
-        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, sample_rate, width, height, delete_post)
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
+                         delete_post)
         self.sample_path.mkdir(exist_ok=True, parents=True)
         self.saved_time = ""
         self.sample_cnt = 0
@@ -297,3 +309,16 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             target = self.sample_path / (current_time + str(self.frame_cnt) + '.png')
             logger.info("Sample rtsp video stream into: [{}]".format(target))
             cv2.imwrite(str(target), frame)
+
+
+class VideoRtspCallbackCapture(VideoRtspCapture):
+    def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+                 idx,
+                 monitor,
+                 sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
+                         delete_post)
+        self.monitor = monitor
+
+    def pass_frame(self, frame):
+        self.monitor.callback(self.idx, frame)
