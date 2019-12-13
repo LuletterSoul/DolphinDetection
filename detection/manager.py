@@ -177,6 +177,7 @@ class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
         for i, cfg in enumerate(self.cfgs):
             logger.info('Init detector controller [{}]....'.format(cfg.index))
             res, detect_proc = self.controllers[i].start(self.process_pool)
+            res.get()
             logger.info('Done init detector controller [{}]....'.format(cfg.index))
 
 
@@ -711,7 +712,7 @@ class ProcessBasedDetectorController(DetectorController):
 
     def start(self, pool: Pool):
         super().start(pool)
-        res = pool.apply_async(self.collect_and_reconstruct, (None,))
+        res = pool.apply_async(self.collect_and_reconstruct, (None, None))
         pool.apply_async(self.dispatch, ())
         pool.apply_async(self.write_frame_work)
         logger.info('Running detectors.......')
@@ -734,9 +735,8 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
         #                     self.render_rect_cache, self.stream_render, 500, self.cfg))
-        self.construct_params =ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
-                                               self.render_rect_cache, self.stream_render, 500, self.cfg)
-
+        self.construct_params = ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
+                                                self.render_rect_cache, self.stream_render, 500, self.cfg)
 
     def init_detectors(self):
         logger.info('Init total [{}] detectors....'.format(self.col * self.row))
@@ -811,12 +811,12 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
                 block = DispatchBlock(crop_by_se(frame, d.start, d.end),
                                       self.frame_cnt.get(), original_frame.shape)
                 # async_futures.append(pool.apply_async(d.detect_based_task, (block,)))
-                # async_futures.append(pool.apply_async(detect_based_task, (block, d,)))
-                async_futures.append(detect_based_task.remote(block, d))
-            # self.collect_and_reconstruct(async_futures)
-            r = pool.apply_async(collect_and_reconstruct,
-                                 (async_futures, self.construct_params, self.block_info, self.cfg,))
-            r.get()
+                async_futures.append(pool.apply_async(detect_based_task, (block, d,)))
+                # async_futures.append(detect_based_task.remote(block, d))
+            self.collect_and_reconstruct(async_futures)
+            # r = pool.apply_async(collect_and_reconstruct,
+            #                      (async_futures, self.construct_params, self.block_info, self.cfg,))
+            # r.get()
             # collect_and_reconstruct.remote(async_futures, self.construct_params, self.block_info, self.cfg)
         self.dispatch_cnt += 1
         if self.dispatch_cnt % 100 == 0:

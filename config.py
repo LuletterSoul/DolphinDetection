@@ -68,7 +68,7 @@ class MonitorType(Enum):
 # MONITOR = MonitorType.PROCESS_BASED
 
 
-MONITOR = MonitorType.TASK_BASED
+MONITOR = MonitorType.PROCESS_BASED
 
 
 enable_options = {

@@ -15,7 +15,7 @@ from utils import *
 from .detector import DetectionResult
 from detection.params import ConstructResult, ConstructParams, BlockInfo, DetectorParams
 import imutils
-import ray
+# import ray
 
 
 # from interface import thresh as Thresh
@@ -61,7 +61,7 @@ def back(rects, start, shape, original_shape):
     return b_rects
 
 
-@ray.remote
+# @ray.remote
 def detect_based_task(block, params: DetectorParams):
     frame = block.frame
     # if args.cfg.alg['type'] == 'saliency':
@@ -150,7 +150,7 @@ def collect_and_reconstruct(args, params: ConstructParams, block_info: BlockInfo
     return True
 
 
-@ray.remote
+# @ray.remote
 def construct(results: List[DetectionResult], params: ConstructParams):
     # sub_frames = [r.frame for r in results]
     # sub_binary = [r.binary for r in results]

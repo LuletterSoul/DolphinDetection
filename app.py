@@ -15,7 +15,7 @@ import detection
 from config import *
 import ray
 
-ray.init()
+# ray.init()
 
 if __name__ == '__main__':
     # if MONITOR == MonitorType.RAY_BASED:
