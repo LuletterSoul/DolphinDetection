@@ -823,20 +823,7 @@ def detect(video_path: Path, region_save_path: Path, mq: Queue, cfg: VideoConfig
         vs.release()
 
 
-def preprocess(frame, cfg):
-    if cfg.resize['scale'] != -1:
-        frame = cv2.resize(frame, (0, 0), fx=cfg.resize['scale'], fy=cfg.resize['scale'])
-    elif cfg.resize['width'] != -1:
-        frame = imutils.resize(frame, cfg.resize['width'])
-    elif cfg.resize['height '] != -1:
-        frame = imutils.resize(frame, cfg.resize['height'])
-    frame = crop_by_roi(frame, cfg.roi)
-    # frame = imutils.resize(frame, width=1000)
-    # frame = frame[340:, :, :]
-    # frame = frame[170:, :, :]
-    original_frame = frame.copy()
-    frame = cv2.GaussianBlur(frame, ksize=(3, 3), sigmaX=0)
-    return frame, original_frame
+
 
 
 def cal_mean_intensity(frame, idx, label_map, area, mean=None, mask_frame=None):

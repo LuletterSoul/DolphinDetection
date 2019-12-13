@@ -168,6 +168,18 @@ class VideoOfflineCapture(VideoCaptureThreading):
             self.posix.unlink()
 
 
+class VideoOfflineCallbackCapture(VideoOfflineCapture):
+
+    def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
+                 cfg: VideoConfig, idx, monitor, sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, offline_path, index_pool, frame_queue, cfg, idx, sample_rate, width,
+                         height, delete_post)
+        self.monitor = monitor
+
+    def pass_frame(self, frame):
+        self.monitor.callback(self.idx, frame)
+
+
 # Sample video stream at intervals
 class VideoOnlineSampleCapture(VideoCaptureThreading):
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,

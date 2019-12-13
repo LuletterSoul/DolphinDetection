@@ -206,6 +206,14 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                      self.pipes[idx], self.caps_queue[idx], c, idx, self, c.sample_rate)
         )
 
+    def init_offline_caps(self, c, idx):
+        self.caps.append(
+            VideoOfflineCallbackCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
+                                        self.offline_path / str(c.index),
+                                        self.pipes[idx],
+                                        self.caps_queue[idx], c, idx, self, c.sample_rate,
+                                        delete_post=False))
+
     def call(self):
 
         self.init_caps()
@@ -370,7 +378,7 @@ class DetectorController(object):
     def init_control_range(self):
         # read a frame, record frame size before running detectors
         frame = self.frame_queue.get()
-        frame, original_frame = self.preprocess(frame)
+        frame, original_frame = preprocess(frame, self.cfg)
         self.col_step = int(frame.shape[0] / self.col)
         self.row_step = int(frame.shape[1] / self.row)
         self.block_info = BlockInfo(self.row, self.col, self.row_step, self.col_step)
@@ -393,22 +401,6 @@ class DetectorController(object):
         self.result_path.mkdir(exist_ok=True, parents=True)
         self.test_path.mkdir(exist_ok=True, parents=True)
         logger.info('Detectors init done....')
-
-    def preprocess(self, frame):
-        original_frame = frame.copy()
-        if self.cfg.resize['scale'] != -1:
-            frame = cv2.resize(frame, (0, 0), fx=self.cfg.resize['scale'], fy=self.cfg.resize['scale'])
-        elif self.cfg.resize['width'] != -1:
-            frame = imutils.resize(frame, width=self.cfg.resize['width'])
-        elif self.cfg.resize['height'] != -1:
-            frame = imutils.resize(frame, height=self.cfg.resize['height'])
-        frame = crop_by_roi(frame, self.cfg.roi)
-        # frame = imutils.resize(frame, width=1000)
-        # frame = frame[340:, :, :]
-        # frame = frame[170:, :, :]
-        frame = cv2.GaussianBlur(frame, ksize=(3, 3), sigmaX=0)
-        # frame = cv2.Filter(frame, ksize=(3, 3), sigmaX=0)
-        return frame, original_frame
 
     # def start(self):
     #     self.process_pool.apply_async(self.control, (self,))
@@ -460,25 +452,15 @@ class DetectorController(object):
                         self.cfg.index, round(end, 2), round(end / 100, 2)))
                 start = time.time()
                 cnt = 0
+            frame = construct_result.frame
             if self.cfg.draw_boundary:
-                frame = draw_boundary(construct_result.frame, self.block_info)
+                frame, _ = preprocess(construct_result.frame, self.cfg)
+                frame = draw_boundary(frame, self.block_info)
             # logger.info('Done constructing of sub-frames into a original frame....')
             if self.cfg.show_window:
-                cv2.imshow('Reconstructed Frame', construct_result.frame)
+                cv2.imshow('Reconstructed Frame', frame)
                 cv2.waitKey(1)
         return True
-
-    # def draw_boundary(self, frame):
-    #     shape = frame.shape
-    #     for i in range(self.col - 1):
-    #         start = (0, self.col_step * (i + 1))
-    #         end = (shape[1] - 1, self.col_step * (i + 1))
-    #         cv2.line(frame, start, end, (0, 0, 255), thickness=1)
-    #     for j in range(self.row - 1):
-    #         start = (self.row_step * (j + 1), 0)
-    #         end = (self.row_step * (j + 1), shape[0] - 1)
-    #         cv2.line(frame, start, end, (0, 0, 255), thickness=1)
-    #     return frame
 
     def dispatch(self):
         # start = time.time()
@@ -490,7 +472,7 @@ class DetectorController(object):
             self.original_frame_cache[self.frame_cnt.get()] = frame
             # self.render_frame_cache[self.frame_cnt.get()] = frame
             # logger.info(self.original_frame_cache.keys())
-            frame, original_frame = self.preprocess(frame)
+            frame, original_frame = preprocess(frame, self.cfg)
             if self.frame_cnt.get() % self.cfg.sample_rate == 0:
                 logger.info('Dispatch frame to all detectors....')
                 for idx, sp in enumerate(self.send_pipes):
@@ -736,6 +718,7 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         #                     self.render_rect_cache, self.stream_render, 500, self.cfg))
         self.construct_params = ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
                                                 self.render_rect_cache, self.stream_render, 500, self.cfg)
+        self.display_pipe = Manager().Queue(1000)
 
     def init_detectors(self):
         logger.info('Init total [{}] detectors....'.format(self.col * self.row))
@@ -762,7 +745,7 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
     def init_control_range(self):
         # read a frame, record frame size before running detectors
         empty = np.zeros(self.cfg.shape).astype(np.uint8)
-        frame, original_frame = self.preprocess(empty)
+        frame, _ = preprocess(empty, self.cfg)
         self.col_step = int(frame.shape[0] / self.col)
         self.row_step = int(frame.shape[1] / self.row)
         self.block_info = BlockInfo(self.row, self.col, self.row_step, self.col_step)
@@ -776,15 +759,16 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         if construct_result is not None:
             frame = construct_result.frame
             if self.cfg.draw_boundary:
+                frame, _ = preprocess(frame, self.cfg)
                 frame = draw_boundary(frame, self.block_info)
                 # logger.info('Done constructing of sub-frames into a original frame....')
             if self.cfg.show_window:
                 frame = imutils.resize(frame, width=800)
-                cv2.imshow('Reconstructed Frame', frame)
-                cv2.waitKey(1)
+                self.display_pipe.put(frame)
+                # cv2.imshow('Reconstructed Frame', frame)
+                # cv2.waitKey(1)
         else:
             logger.error('Empty reconstruct result.')
-
         return True
 
     def dispatch_based_queue(self, pool):
@@ -802,7 +786,7 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         self.original_frame_cache[self.frame_cnt.get()] = frame
         # self.render_frame_cache[self.frame_cnt.get()] = frame
         # logger.info(self.original_frame_cache.keys())
-        frame, original_frame = self.preprocess(frame)
+        frame, original_frame = preprocess(frame, self.cfg)
         if self.frame_cnt.get() % self.cfg.sample_rate == 0:
             logger.info('Controller [{}]: Dispatch frame to all detectors....'.format(self.cfg.index))
             async_futures = []
@@ -826,6 +810,19 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
             self.dispatch_cnt = 0
         self.clear_original_cache()
 
+    def display(self):
+        logger.info('Display process.......')
+        while True:
+            if self.quit:
+                break
+            try:
+                frame = self.display_pipe.get()
+                cv2.imshow('Controller {}'.format(self.cfg.index), frame)
+                cv2.waitKey(1)
+            except Exception as e:
+                logger.error(e)
+        return True
+
     def call_task(self, frame, pool):
         self.dispatch_frame(frame, pool)
 
@@ -834,6 +831,7 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         self.init_detectors()
         # self.dispatch_based_queue(pool)
         res = pool.apply_async(self.write_frame_work)
+        pool.apply_async(self.display, ())
         return res
 
 

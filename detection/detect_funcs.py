@@ -15,6 +15,9 @@ from utils import *
 from .detector import DetectionResult
 from detection.params import ConstructResult, ConstructParams, BlockInfo, DetectorParams
 import imutils
+import time
+
+
 # import ray
 
 
@@ -134,7 +137,7 @@ def draw_boundary(frame, info: BlockInfo):
 
 # @ray.remote
 def collect_and_reconstruct(args, params: ConstructParams, block_info: BlockInfo, cfg: VideoConfig):
-    results = ray.get(args)
+    results = collect(args)
     construct_result: ConstructResult = construct(results, params)
     if construct_result is not None:
         frame = construct_result.frame
