@@ -641,6 +641,7 @@ class DetectionStreamRender(object):
         if next_cnt < 1:
             next_cnt = 1
         start = time.time()
+        try_times = 0
         while next_cnt < end_cnt:
             try:
                 if next_cnt in render_cache:
@@ -658,6 +659,9 @@ class DetectionStreamRender(object):
                         step = forward_cnt - next_cnt
                         first_rects = rect_cache[next_cnt]
                         last_rects = rect_cache[forward_cnt]
+                        if len(last_rects) != len(first_rects):
+                            next_cnt += 1
+                            continue
                         for i in range(step):
                             draw_flag = True
                             for j in range(min(len(first_rects), len(last_rects))):
@@ -682,12 +686,22 @@ class DetectionStreamRender(object):
                     video_write.write(frame_cache[next_cnt])
                     next_cnt += 1
                 else:
+                    try_times += 1
+                    time.sleep(0.5)
+                    if try_times > 100:
+                        try_times = 0
+                        logger.info('Try time overflow.round to the next cnt: [{}]'.format(try_times))
+                        next_cnt += 1
                     logger.info('Lost frame index: [{}]'.format(next_cnt))
+
                 end = time.time()
                 if end - start > 30:
                     logger.info('Task time overflow, complete previous render task.')
                     break
             except Exception as e:
+                if end - start > 30:
+                    logger.info('Task time overflow, complete previous render task.')
+                    break
                 logger.error(e)
         return next_cnt
 
