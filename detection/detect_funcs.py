@@ -17,24 +17,12 @@ from detection.params import ConstructResult, ConstructParams, BlockInfo, Detect
 import imutils
 import time
 
-
 # import ray
 
 
 # from interface import thresh as Thresh
 # import interface
 
-
-def back(self, rects, original_shape):
-    b_rects = []
-    ratio = original_shape[0] / self.shape[0]
-    for r in rects:
-        x = int((r[0] + self.start[0]) * ratio)
-        y = int((r[1] + self.start[1]) * ratio)
-        w = int(r[2] * ratio)
-        h = int(r[3] * ratio)
-        b_rects.append((x, y, w, h))
-    return b_rects
 
 
 def ratio(area, total):
@@ -52,31 +40,22 @@ def less_ratio(area, shape, cfg: VideoConfig):
     return ratio(area, total) >= cfg.alg['area_ratio']
 
 
-def back(rects, start, shape, original_shape):
-    b_rects = []
-    ratio = original_shape[0] / shape[0]
-    for r in rects:
-        x = int((r[0] + start[0]) * ratio)
-        y = int((r[1] + start[1]) * ratio)
-        w = int(r[2] * ratio)
-        h = int(r[3] * ratio)
-        b_rects.append((x, y, w, h))
-    return b_rects
-
-
 # @ray.remote
 def detect_based_task(block, params: DetectorParams):
     frame = block.frame
     # if args.cfg.alg['type'] == 'saliency':
     #     res = detect_saliency()
     if params.cfg.alg['type'] == 'thresh':
+        shape = frame.shape
+        # logger.info(shape)
+        # logger.info(params.start)
+        # logger.info(params.end)
         res = detect_thresh_task(frame, block, params)
-    # if args.cfg.alg['type'] == 'thresh_mask':
-    #     frame = self.get_frame()
-    #     self.shape = frame.shape
-    #     mask = np.zeros((self.shape[0], self.shape[1])).astype(np.uint8)
-    #     mask[60:420, :] = 255
-    #     res = self.detect_mask_task(frame, mask, block)
+    if params.cfg.alg['type'] == 'thresh_mask':
+        shape = frame.shape
+        mask = np.zeros((shape[0], shape[1])).astype(np.uint8)
+        mask[60:420, :] = 255
+        res = detect_mask_task(frame, mask, block, params)
     return res
 
 
@@ -110,11 +89,42 @@ def detect_thresh_task(frame, block, params: DetectorParams):
     # logger.info(
     #     '~~~~ Detector: [{},{}] detect done [{}] frames..'.format(params.col_index, params.row_index,
     #                                                               params))
-    res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, params.row_index,
-                          params.col_index, block.index, back(rects, params.start, frame.shape, block.shape))
+    res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, params.x_index,
+                          params.y_index, block.index, back(rects, params.start, frame.shape, block.shape, params.cfg))
     end = time.time() - start
-    logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.col_index, params.row_index, end))
+    logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
     # cv2.destroyAllWindows()
+    return res
+
+
+def detect_mask_task(frame, mask, block, params: DetectorParams):
+    start = time.time()
+    if frame is None:
+        logger.info('Detector: [{},{}] empty frame')
+        return None
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+    adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, C=params.cfg.alg['mean'])
+    dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+                         iterations=1)
+    dilated = cv2.bitwise_and(dilated, mask)
+    img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    rects = []
+    regions = []
+    status = None
+    coordinates = []
+    for c in contours:
+        rect = cv2.boundingRect(c)
+        rects.append(rect)
+    cv2.drawContours(img_con, contours, -1, 255, -1)
+    # if self.cfg.show_window:
+    #     cv2.imshow("Contours", img_con)
+    #     cv2.waitKey(1)
+    # self.detect_cnt += 1
+    res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, params.x_index,
+                          params.y_index, block.index, back(rects, params.start, frame.shape, block.shape, params.cfg))
+    end = time.time() - start
+    logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
     return res
 
 
@@ -124,13 +134,13 @@ def collect(args):
 
 def draw_boundary(frame, info: BlockInfo):
     shape = frame.shape
-    for i in range(info.col - 1):
-        start = (0, info.col_step * (i + 1))
-        end = (shape[1] - 1, info.col_step * (i + 1))
+    for i in range(info.x_num - 1):
+        start = (0, info.x_step * (i + 1))
+        end = (shape[1] - 1, info.x_step * (i + 1))
         cv2.line(frame, start, end, (0, 0, 255), thickness=1)
-    for j in range(info.row - 1):
-        start = (info.row_step * (j + 1), 0)
-        end = (info.row_step * (j + 1), shape[0] - 1)
+    for j in range(info.y_num - 1):
+        start = (info.y_step * (j + 1), 0)
+        end = (info.y_step * (j + 1), shape[0] - 1)
         cv2.line(frame, start, end, (0, 0, 255), thickness=1)
     return frame
 

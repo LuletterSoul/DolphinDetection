@@ -15,11 +15,10 @@ from multiprocessing import Manager, Pool, cpu_count
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 import stream
 import interface as I
-from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams
+from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
 from .capture import *
 from .detector import *
 from .detect_funcs import detect_based_task, collect_and_reconstruct
-from detection import DetectorParams
 from utils import *
 from typing import List
 from utils import clean_dir, logger
@@ -308,14 +307,14 @@ class DetectorController(object):
         self.result_cnt = 0
         self.stream_cnt = 0
         # self.process_pool = process_pool
-        self.col = cfg.routine['col']
-        self.row = cfg.routine['row']
-        self.col_step = 0
-        self.row_step = 0
-        self.block_info = BlockInfo(self.row, self.col, self.row_step, self.col_step)
+        self.x_num = cfg.routine['col']
+        self.y_num = cfg.routine['row']
+        self.x_step = 0
+        self.y_step = 0
+        self.block_info = BlockInfo(self.y_num, self.x_num, self.y_step, self.x_step)
 
-        self.send_pipes = [Manager().Queue() for i in range(self.col * self.row)]
-        self.receive_pipes = [Manager().Queue() for i in range(self.col * self.row)]
+        self.send_pipes = [Manager().Queue() for i in range(self.x_num * self.y_num)]
+        self.receive_pipes = [Manager().Queue() for i in range(self.x_num * self.y_num)]
         self.index_pool = index_pool
         self.frame_queue = frame_queue
         self.result_queue = Manager().Queue(self.cfg.max_streams_cache)
@@ -385,19 +384,19 @@ class DetectorController(object):
         # read a frame, record frame size before running detectors
         frame = self.frame_queue.get()
         frame, original_frame = preprocess(frame, self.cfg)
-        self.col_step = int(frame.shape[0] / self.col)
-        self.row_step = int(frame.shape[1] / self.row)
-        self.block_info = BlockInfo(self.row, self.col, self.row_step, self.col_step)
+        self.x_step = int(frame.shape[1] / self.x_num)
+        self.y_step = int(frame.shape[0] / self.y_num)
+        self.block_info = BlockInfo(self.y_num, self.x_num, self.y_step, self.x_step)
 
     def init_detectors(self):
-        logger.info('Init total [{}] detectors....'.format(self.col * self.row))
+        logger.info('Init total [{}] detectors....'.format(self.x_num * self.y_num))
         self.detectors = []
-        for i in range(self.col):
-            for j in range(self.row):
+        for i in range(self.x_num):
+            for j in range(self.y_num):
                 region_detector_path = self.region_path / str(self.cfg.index) / (str(i) + '-' + str(j))
-                index = self.col * i + j
+                index = self.x_num * i + j
                 self.detectors.append(
-                    Detector(self.col_step, self.row_step, i, j, self.cfg, self.send_pipes[index],
+                    Detector(self.x_step, self.y_step, i, j, self.cfg, self.send_pipes[index],
                              self.receive_pipes[index],
                              region_detector_path))
         self.result_path = self.region_path / str(self.cfg.index) / 'frames'
@@ -548,16 +547,16 @@ class DetectorController(object):
 
     def construct_rgb(self, sub_frames):
         sub_frames = np.array(sub_frames)
-        sub_frames = np.reshape(sub_frames, (self.col, self.row, self.col_step, self.row_step, 3))
+        sub_frames = np.reshape(sub_frames, (self.x_num, self.y_num, self.x_step, self.y_step, 3))
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3, 4))
-        constructed_frame = np.reshape(sub_frames, (self.col * self.col_step, self.row * self.row_step, 3))
+        constructed_frame = np.reshape(sub_frames, (self.x_num * self.x_step, self.y_num * self.y_step, 3))
         return constructed_frame
 
     def construct_gray(self, sub_frames):
         sub_frames = np.array(sub_frames)
-        sub_frames = np.reshape(sub_frames, (self.col, self.row, self.col_step, self.row_step))
+        sub_frames = np.reshape(sub_frames, (self.x_num, self.y_num, self.x_step, self.y_step))
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3))
-        constructed_frame = np.reshape(sub_frames, (self.col * self.col_step, self.row * self.row_step))
+        constructed_frame = np.reshape(sub_frames, (self.x_num * self.x_step, self.y_num * self.y_step))
         return constructed_frame
 
     def inform(self, frame_name, boundary_rect):
@@ -746,10 +745,10 @@ class ProcessBasedDetectorController(DetectorController):
         logger.info('Running detectors.......')
         detect_proc_res = []
         for idx, d in enumerate(self.detectors):
-            logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.col_index, d.row_index))
+            logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.x_index, d.y_index))
             detect_proc_res.append(pool.apply_async(d.detect, ()))
             # detect_proc_res.append(pool.submit(d.detect, ()))
-            logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.col_index, d.row_index))
+            logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.x_index, d.y_index))
         return res, detect_proc_res
         # self.monitor.wait_pool()
         # self.loop_work()
@@ -768,11 +767,11 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         self.display_pipe = Manager().Queue(1000)
 
     def init_detectors(self):
-        logger.info('Init total [{}] detectors....'.format(self.col * self.row))
+        logger.info('Init total [{}] detectors....'.format(self.x_num * self.y_num))
         self.detectors = []
         self.detect_params = []
-        for i in range(self.col):
-            for j in range(self.row):
+        for i in range(self.x_num):
+            for j in range(self.y_num):
                 region_detector_path = self.region_path / str(self.cfg.index) / (str(i) + '-' + str(j))
                 # index = self.col * i + j
                 # self.detectors.append(
@@ -780,12 +779,11 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
                 #                       self.receive_pipes[index],
                 #                       region_detector_path))
                 self.detect_params.append(
-                    DetectorParams(self.col_step, self.row_step, i, j, self.cfg, region_detector_path))
-        self.result_path = self.region_path / str(self.cfg.index) / 'frames'
+                    DetectorParams(self.x_step, self.y_step, i, j, self.cfg, region_detector_path))
+        self.result_path = self.region_path / str(self.cfg.index) / 'frames', DetectorParams
         self.detect_stream_path = self.region_path / str(self.cfg.index) / 'streams'
         self.test_path = self.region_path / str(self.cfg.index) / 'tests'
         self.detect_stream_path.mkdir(exist_ok=True, parents=True)
-        self.result_path.mkdir(exist_ok=True, parents=True)
         self.test_path.mkdir(exist_ok=True, parents=True)
         logger.info('Detectors init done....')
 
@@ -793,9 +791,9 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         # read a frame, record frame size before running detectors
         empty = np.zeros(self.cfg.shape).astype(np.uint8)
         frame, _ = preprocess(empty, self.cfg)
-        self.col_step = int(frame.shape[0] / self.col)
-        self.row_step = int(frame.shape[1] / self.row)
-        self.block_info = BlockInfo(self.row, self.col, self.row_step, self.col_step)
+        self.x_step = int(frame.shape[1] / self.x_num)
+        self.y_step = int(frame.shape[0] / self.y_num)
+        self.block_info = BlockInfo(self.y_num, self.x_num, self.y_step, self.x_step)
 
     def collect(self, args):
         return [f.get() for f in args]
@@ -893,10 +891,10 @@ class ThreadBasedDetectorController(DetectorController):
             logger.info('Running detectors.......')
             for idx, d in enumerate(self.detectors):
                 logger.info(
-                    'Submit detector [{},{},{}] task..'.format(self.cfg.index, d.col_index, d.row_index))
+                    'Submit detector [{},{},{}] task..'.format(self.cfg.index, d.x_index, d.y_index))
                 thread_res.append(pool.submit(d.detect))
                 # detect_proc_res.append(pool.submit(d.detect, ()))
-                logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.col_index, d.row_index))
+                logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.x_index, d.y_index))
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
@@ -923,10 +921,10 @@ class ProcessAndThreadBasedDetectorController(DetectorController):
         pool_res.append(pr2)
         logger.info('Running detectors.......')
         for idx, d in enumerate(self.detectors):
-            logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.col_index, d.row_index))
+            logger.info('Submit detector [{},{},{}] task..'.format(self.cfg.index, d.x_index, d.y_index))
             thread_res.append(thread_pool.submit(d.detect))
             # detect_proc_res.append(pool.submit(d.detect, ()))
-            logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.col_index, d.row_index))
+            logger.info('Done detector [{},{},{}]'.format(self.cfg.index, d.x_index, d.y_index))
         return pool_res, thread_res
         # self.monitor.wait_pool()
         # self.loop_work()

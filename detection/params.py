@@ -74,12 +74,12 @@ class ConstructParams(object):
 
 class BlockInfo(object):
 
-    def __init__(self, row, col, row_step, col_step) -> None:
+    def __init__(self, y_num, x_num, y_step, x_step) -> None:
         super().__init__()
-        self.row = row
-        self.col = col
-        self.row_step = row_step
-        self.col_step = col_step
+        self.y_num = y_num
+        self.x_num = x_num
+        self.y_step = y_step
+        self.x_step = x_step
 
 
 class ReconstructResult(object):
@@ -93,19 +93,18 @@ class ReconstructResult(object):
 
 class DetectorParams(object):
 
-    def __init__(self, col_step, row_step, row_index, col_index, cfg: VideoConfig,
-                 region_save_path: Path) -> None:
+    def __init__(self, x_step, y_step, x_index, y_index, cfg: VideoConfig, region_save_path: Path) -> None:
         super().__init__()
         # self.video_path = video_path
         # self.region_save_path = region_save_path
         self.cfg = cfg
-        self.row_step = col_step
-        self.col_step = row_step
-        self.col_index = row_index
-        self.row_index = col_index
-        self.start = [self.row_index * row_step, self.col_index * col_step]
-        self.end = [(self.row_index + 1) * row_step, (self.col_index + 1) * col_step]
+        self.y_step = y_step
+        self.x_step = x_step
+        self.y_index = y_index
+        self.x_index = x_index
+        self.start = [self.x_index * x_step, self.y_index * y_step]
+        self.end = [(self.x_index + 1) * x_step, (self.y_index + 1) * y_step]
         self.region_save_path = region_save_path
         self.region_save_path.mkdir(exist_ok=True, parents=True)
         logger.debug(
-            'Detector [{},{}]: region save to: [{}]'.format(self.col_index, self.col_index, str(self.region_save_path)))
+            'Detector [{},{}]: region save to: [{}]'.format(self.y_index, self.y_index, str(self.region_save_path)))

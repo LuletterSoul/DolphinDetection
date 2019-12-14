@@ -42,8 +42,8 @@ beta = 15
 
 class DetectionResult(object):
 
-    def __init__(self, frame, original_frame, status, regions, binary, thresh, coordinates, row_index,
-                 col_index, frame_index, rects) -> None:
+    def __init__(self, frame, original_frame, status, regions, binary, thresh, coordinates, y_index,
+                 x_index, frame_index, rects) -> None:
         super().__init__()
         self.frame = frame
         self.original_frame = original_frame
@@ -52,14 +52,14 @@ class DetectionResult(object):
         self.binary = binary
         self.thresh = thresh
         self.coordinates = coordinates
-        self.row_index = row_index
-        self.col_index = col_index
+        self.y_index = y_index
+        self.x_index = x_index
         self.frame_index = frame_index
         self.rects = rects
 
 
 class Detector(object):
-    def __init__(self, col_step, row_step, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
+    def __init__(self, x_step, y_step, x_index, y_index, cfg: VideoConfig, sq: Queue, rq: Queue,
                  region_save_path: Path) -> None:
         super().__init__()
         # self.video_path = video_path
@@ -68,18 +68,18 @@ class Detector(object):
         # self.routine = cfg.routine
         self.global_std = None
         self.global_mean = None
-        self.row_step = col_step
-        self.col_step = row_step
-        self.col_index = row_index
-        self.row_index = col_index
-        self.start = [self.row_index * row_step, self.col_index * col_step]
-        self.end = [(self.row_index + 1) * row_step, (self.col_index + 1) * col_step]
+        self.row_step = x_step
+        self.col_step = y_step
+        self.x_index = x_index
+        self.y_index = y_index
+        self.start = [self.x_index * x_step, self.y_index * y_step]
+        self.end = [(self.x_index + 1) * x_step, (self.y_index + 1) * y_step, ]
         self.sq = sq
         self.rq = rq
         self.region_save_path = region_save_path
         self.region_save_path.mkdir(exist_ok=True, parents=True)
         logger.debug(
-            'Detector [{},{}]: region save to: [{}]'.format(self.col_index, self.col_index, str(self.region_save_path)))
+            'Detector [{},{}]: region save to: [{}]'.format(self.x_index, self.x_index, str(self.region_save_path)))
         self.global_mean = np.array([80, 80, 80])
         self.global_std = np.array([50, 50, 50])
         self.dolphin_mean_intensity = np.array([130, 130, 130])
@@ -161,10 +161,10 @@ class Detector(object):
     def detect_mask(self):
         try:
             logger.debug(
-                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.col_index,
-                                                                           self.row_index))
+                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.x_index,
+                                                                           self.y_index))
             logger.debug(
-                'Detector [{},{}]: init saliency detector'.format(self.col_index, self.col_index))
+                'Detector [{},{}]: init saliency detector'.format(self.x_index, self.x_index))
             frame = self.get_frame()
             self.shape = frame.shape
 
@@ -209,12 +209,12 @@ class Detector(object):
             cv2.waitKey(1)
         self.detect_cnt += 1
         logger.debug(
-            'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.row_index,
+            'Detector: [{},{}] detect done [{}] frames..'.format(self.x_index, self.y_index,
                                                                  self.detect_cnt))
-        res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, self.row_index,
-                              self.col_index, self.current_block.index, self.back(rects, block.shape))
+        res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, self.y_index,
+                              self.x_index, self.current_block.index, self.back(rects, block.shape))
         end = time.time() - start
-        logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
+        logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.x_index, self.y_index, end))
         return res
 
         # do a bit of cleanup
@@ -247,23 +247,23 @@ class Detector(object):
         #     cv2.waitKey(1)
         self.detect_cnt += 1
         logger.info(
-            '~~~~ Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.row_index,
+            '~~~~ Detector: [{},{}] detect done [{}] frames..'.format(self.x_index, self.y_index,
                                                                       self.detect_cnt))
-        res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, self.row_index,
-                              self.col_index, block.index, self.back(rects, block.shape))
+        res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, self.y_index,
+                              self.x_index, block.index, self.back(rects, block.shape))
         # self.pass_detection_result(res)
         end = time.time() - start
-        logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
+        logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.x_index, self.y_index, end))
         # cv2.destroyAllWindows()
         return res
 
     def detect_thresh(self):
         try:
             logger.debug(
-                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.col_index,
-                                                                           self.row_index))
+                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.x_index,
+                                                                           self.y_index))
             logger.debug(
-                'Detector [{},{}]: init saliency detector'.format(self.col_index, self.col_index))
+                'Detector [{},{}]: init saliency detector'.format(self.x_index, self.x_index))
             frame = self.get_frame()
             self.shape = frame.shape
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -286,15 +286,15 @@ class Detector(object):
             # if not isinstance(mq, Queue):
             #     raise Exception('Queue must be capable of multi-processing safety.')
             logger.info(
-                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.col_index,
-                                                                           self.row_index))
+                'Detector: [{},{},{}] Init detection process......'.format(self.cfg.index, self.x_index,
+                                                                           self.y_index))
             # global global_mean, global_std, dolphin_mean_intensity
 
             # frame, of = self.get_frame()
             frame = self.get_frame()
 
             logger.debug(
-                'Detector [{},{}]: init saliency detector'.format(self.col_index, self.col_index))
+                'Detector [{},{}]: init saliency detector'.format(self.x_index, self.x_index))
             self.saliency = cv2.saliency.MotionSaliencyBinWangApr2014_create()
             self.saliency.setImagesize(frame.shape[1], frame.shape[0])
             self.saliency.init()
@@ -420,15 +420,15 @@ class Detector(object):
                 self.detect_cnt += 1
                 logger.debug('Current mean of bg: [{}].'.format(np.reshape(new_b, (1, -1))))
                 logger.debug(
-                    'Detector: [{},{}] detect done [{}] frames..'.format(self.col_index, self.row_index,
+                    'Detector: [{},{}] detect done [{}] frames..'.format(self.x_index, self.y_index,
                                                                          self.detect_cnt))
                 # self.rq.put(frame)
                 # self.rq.put(DetectionResult(frame,of, status, regions, dilated, thresh))
-                res = DetectionResult(frame, None, status, regions, dilated, thresh, coordinates, self.row_index,
-                                      self.col_index, self.current_block.index, self.back(rects))
+                res = DetectionResult(frame, None, status, regions, dilated, thresh, coordinates, self.y_index,
+                                      self.x_index, self.current_block.index, self.back(rects))
                 self.pass_detection_result(res)
                 end = time.time() - start
-                logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.col_index, self.row_index, end))
+                logger.debug('Detector: [{},{}]: using [{}] seconds'.format(self.x_index, self.y_index, end))
 
             # do a bit of cleanup
             cv2.destroyAllWindows()
@@ -444,31 +444,13 @@ class Detector(object):
         self.rq.put(res)
 
 
-class DetectorParams(object):
-
-    def __init__(self, col_step, row_step, row_index, col_index, cfg: VideoConfig,
-                 region_save_path: Path) -> None:
-        super().__init__()
-        # self.video_path = video_path
-        # self.region_save_path = region_save_path
-        self.cfg = cfg
-        self.row_step = col_step
-        self.col_step = row_step
-        self.col_index = row_index
-        self.row_index = col_index
-        self.start = [self.row_index * row_step, self.col_index * col_step]
-        self.end = [(self.row_index + 1) * row_step, (self.col_index + 1) * col_step]
-        self.region_save_path = region_save_path
-        self.region_save_path.mkdir(exist_ok=True, parents=True)
-        logger.debug(
-            'Detector [{},{}]: region save to: [{}]'.format(self.col_index, self.col_index, str(self.region_save_path)))
 
 
 class TaskBasedDetector(Detector):
 
-    def __init__(self, col_step, row_step, row_index, col_index, cfg: VideoConfig, sq: Queue, rq: Queue,
+    def __init__(self, x_step, y_step, x_index, y_index, cfg: VideoConfig, sq: Queue, rq: Queue,
                  region_save_path: Path) -> None:
-        super().__init__(col_step, row_step, row_index, col_index, cfg, sq, rq, region_save_path)
+        super().__init__(x_step, y_step, x_index, y_index, cfg, sq, rq, region_save_path)
 
     @classmethod
     def detect_based_task(self, block, args):
@@ -821,9 +803,6 @@ def detect(video_path: Path, region_save_path: Path, mq: Queue, cfg: VideoConfig
 
         cv2.destroyAllWindows()
         vs.release()
-
-
-
 
 
 def cal_mean_intensity(frame, idx, label_map, area, mean=None, mask_frame=None):
