@@ -16,6 +16,7 @@ from config import VideoConfig
 
 import cv2
 import imutils
+import time
 
 from .crop import crop_by_roi
 
@@ -91,3 +92,7 @@ def clear_cache_by_len(cache, len_cache):
             target=clear_cache,
             args=(cache,))
         thread.start()
+
+
+def generate_time_stamp(fmt='%m-%d-%H-%M'):
+    return time.strftime(fmt, time.localtime(time.time()))

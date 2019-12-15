@@ -17,12 +17,12 @@ from detection.params import ConstructResult, ConstructParams, BlockInfo, Detect
 import imutils
 import time
 
+
 # import ray
 
 
 # from interface import thresh as Thresh
 # import interface
-
 
 
 def ratio(area, total):
@@ -67,9 +67,11 @@ def detect_thresh_task(frame, block, params: DetectorParams):
     # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     # _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
     adaptive_thresh = adaptive_thresh_size(frame, (5, 5), block_size=21, C=params.cfg.alg['mean'])
+    adaptive_thresh = cv2.erode(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
+                                iterations=2)
     # adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
     dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
-                         iterations=1)
+                         iterations=2)
     img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     rects = []
     regions = []

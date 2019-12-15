@@ -14,9 +14,12 @@ import shutil
 import cv2
 import json
 from collections import namedtuple
+from pathlib import Path
 
 
-def clean_dir(path):
+def clean_dir(path: Path):
+    if not path.exists():
+        return
     shutil.rmtree(str(path))
     path \
         .mkdir(exist_ok=True, parents=True)

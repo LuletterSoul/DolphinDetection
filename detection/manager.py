@@ -50,10 +50,11 @@ class DetectionMonitor(object):
         self.quit = False
         # Communication Pipe between detector and stream receiver
         self.pipes = [Manager().Queue(c.max_streams_cache) for c in self.cfgs]
-        self.stream_path = stream_path
-        self.sample_path = sample_path
-        self.frame_path = frame_path
-        self.region_path = region_path
+        time_stamp = generate_time_stamp()
+        self.stream_path = stream_path / time_stamp
+        self.sample_path = sample_path / time_stamp
+        self.frame_path = frame_path / time_stamp
+        self.region_path = region_path / time_stamp
         self.offline_path = offline_path
         self.process_pool = None
         self.thread_pool = None
@@ -170,7 +171,7 @@ class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 
     def init_controllers(self):
         self.controllers = [
-            ProcessBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path,
+            ProcessBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path / str(cfg.index),
                                            self.frame_path / str(cfg.index),
                                            self.caps_queue[idx],
                                            self.pipes[idx]
@@ -192,7 +193,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
 
     def init_controllers(self):
         self.controllers = [
-            TaskBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path,
+            TaskBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path / str(cfg.index),
                                         self.frame_path / str(cfg.index),
                                         self.caps_queue[idx],
                                         self.pipes[idx]
@@ -253,7 +254,7 @@ class EmbeddingControlBasedThreadMonitor(EmbeddingControlMonitor):
 
     def init_controllers(self):
         self.controllers = [
-            ProcessBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path,
+            ProcessBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path / str(cfg.index),
                                            self.frame_path / str(cfg.index),
                                            self.caps_queue[idx],
                                            self.pipes[idx]
@@ -276,7 +277,8 @@ class EmbeddingControlBasedThreadAndProcessMonitor(EmbeddingControlMonitor):
 
     def init_controllers(self):
         self.controllers = [
-            ProcessAndThreadBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path,
+            ProcessAndThreadBasedDetectorController(cfg, self.stream_path / str(cfg.index),
+                                                    self.region_path / str(cfg.index),
                                                     self.frame_path / str(cfg.index),
                                                     self.caps_queue[idx],
                                                     self.pipes[idx]
@@ -296,14 +298,20 @@ class EmbeddingControlBasedThreadAndProcessMonitor(EmbeddingControlMonitor):
 
 
 class DetectorController(object):
-    def __init__(self, cfg: VideoConfig, stream_path: Path, region_path: Path, frame_path: Path,
+    def __init__(self, cfg: VideoConfig, stream_path: Path, candidate_path: Path, frame_path: Path,
                  frame_queue: Queue,
                  index_pool: Queue) -> None:
         super().__init__()
         self.cfg = cfg
         self.stream_path = stream_path
         self.frame_path = frame_path
-        self.region_path = region_path
+        self.candidate_path = candidate_path
+        self.block_path = candidate_path / 'blocks'
+        self.result_path = self.candidate_path / 'frames'
+        self.detect_stream_path = self.candidate_path / 'streams'
+        self.test_path = self.candidate_path / 'tests'
+        self.create_workspace()
+
         self.result_cnt = 0
         self.stream_cnt = 0
         # self.process_pool = process_pool
@@ -393,19 +401,20 @@ class DetectorController(object):
         self.detectors = []
         for i in range(self.x_num):
             for j in range(self.y_num):
-                region_detector_path = self.region_path / str(self.cfg.index) / (str(i) + '-' + str(j))
+                region_detector_path = self.block_path / (str(i) + '-' + str(j))
                 index = self.x_num * i + j
                 self.detectors.append(
                     Detector(self.x_step, self.y_step, i, j, self.cfg, self.send_pipes[index],
                              self.receive_pipes[index],
                              region_detector_path))
-        self.result_path = self.region_path / str(self.cfg.index) / 'frames'
-        self.detect_stream_path = self.region_path / str(self.cfg.index) / 'streams'
-        self.test_path = self.region_path / str(self.cfg.index) / 'tests'
+        logger.info('Detectors init done....')
+
+    def create_workspace(self):
+
         self.detect_stream_path.mkdir(exist_ok=True, parents=True)
         self.result_path.mkdir(exist_ok=True, parents=True)
+        self.block_path.mkdir(exist_ok=True, parents=True)
         self.test_path.mkdir(exist_ok=True, parents=True)
-        logger.info('Detectors init done....')
 
     # def start(self):
     #     self.process_pool.apply_async(self.control, (self,))
@@ -432,7 +441,7 @@ class DetectorController(object):
                 img_name = current_time + str(self.result_cnt) + '.png'
                 target = self.result_path / img_name
                 cv2.imwrite(str(target), r)
-                self.inform(img_name, result_queue[2])
+                self.save_bbox(img_name, result_queue[2])
             except Exception as e:
                 logger.error(e)
         return True
@@ -559,24 +568,24 @@ class DetectorController(object):
         constructed_frame = np.reshape(sub_frames, (self.x_num * self.x_step, self.y_num * self.y_step))
         return constructed_frame
 
-    def inform(self, frame_name, boundary_rect):
-        inform_path = str(INFORM_SAVE_PATH / 'inform.json')
+    def save_bbox(self, frame_name, boundary_rect):
+        bbox_path = str(self.candidate_path / 'bbox.json')
         self.save_cache[frame_name] = boundary_rect
 
-        if not osp.exists(inform_path):
-            fw = open(inform_path, 'w')
+        if not osp.exists(bbox_path):
+            fw = open(bbox_path, 'w')
             fw.write(json.dumps(self.save_cache, indent=4))
             fw.close()
 
         if len(self.save_cache) == 2:
-            fr = open(inform_path, 'r')
+            fr = open(bbox_path, 'r')
             save_file = json.load(fr)
             fr.close()
 
             for key in self.save_cache:
                 save_file[key] = self.save_cache[key]
 
-            fw = open(inform_path, 'w')
+            fw = open(bbox_path, 'w')
             fw.write(json.dumps(save_file, indent=4))
             fw.close()
 
@@ -588,8 +597,7 @@ class DetectionStreamRender(object):
     def __init__(self, detect_index, future_frames, controller: DetectorController) -> None:
         super().__init__()
         self.detect_index = detect_index
-        self.detect_stream_path = controller.region_path / str(controller.cfg.index) / 'streams'
-        self.detect_stream_path = controller.region_path / str(controller.cfg.index) / 'streams'
+        self.detect_stream_path = controller.detect_stream_path
         self.stream_cnt = 0
         self.is_trigger_write = False
         self.write_done = False
@@ -756,9 +764,9 @@ class ProcessBasedDetectorController(DetectorController):
 
 class TaskBasedDetectorController(ProcessBasedDetectorController):
 
-    def __init__(self, cfg: VideoConfig, stream_path: Path, region_path: Path, frame_path: Path, frame_queue: Queue,
+    def __init__(self, cfg: VideoConfig, stream_path: Path, candidate_path: Path, frame_path: Path, frame_queue: Queue,
                  index_pool: Queue) -> None:
-        super().__init__(cfg, stream_path, region_path, frame_path, frame_queue, index_pool)
+        super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool)
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
         #                     self.render_rect_cache, self.stream_render, 500, self.cfg))
@@ -772,7 +780,7 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         self.detect_params = []
         for i in range(self.x_num):
             for j in range(self.y_num):
-                region_detector_path = self.region_path / str(self.cfg.index) / (str(i) + '-' + str(j))
+                region_detector_path = self.block_path / (str(i) + '-' + str(j))
                 # index = self.col * i + j
                 # self.detectors.append(
                 #     TaskBasedDetector(self.col_step, self.row_step, i, j, self.cfg, self.send_pipes[index],
@@ -780,11 +788,6 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
                 #                       region_detector_path))
                 self.detect_params.append(
                     DetectorParams(self.x_step, self.y_step, i, j, self.cfg, region_detector_path))
-        self.result_path = self.region_path / str(self.cfg.index) / 'frames', DetectorParams
-        self.detect_stream_path = self.region_path / str(self.cfg.index) / 'streams'
-        self.test_path = self.region_path / str(self.cfg.index) / 'tests'
-        self.detect_stream_path.mkdir(exist_ok=True, parents=True)
-        self.test_path.mkdir(exist_ok=True, parents=True)
         logger.info('Detectors init done....')
 
     def init_control_range(self):
@@ -799,7 +802,9 @@ class TaskBasedDetectorController(ProcessBasedDetectorController):
         return [f.get() for f in args]
 
     def collect_and_reconstruct(self, args):
+        collect_start = time.time()
         results = self.collect(args)
+        logger.info('Controller [{}]: Collect consume [{}] seconds'.format(self.cfg.index, time.time() - collect_start))
         construct_result: ConstructResult = self.construct(results)
         if construct_result is not None:
             frame = construct_result.frame
