@@ -312,7 +312,7 @@
       "enable": true,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": "offline",
+      "online": "rtsp",
       "sample_internal": 15,
       "save_box": true,
       "show_box": true,
@@ -321,7 +321,7 @@
       "future_frames": 72,
       "alg": {
         "type": "thresh",
-        "mean": 40,
+        "mean": 60,
         "area_ratio": 0.03
       }
     }
