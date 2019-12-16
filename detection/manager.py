@@ -308,6 +308,7 @@ class DetectorController(object):
         self.candidate_path = candidate_path
         self.block_path = candidate_path / 'blocks'
         self.result_path = self.candidate_path / 'frames'
+        self.crop_result_path = self.candidate_path / 'crops'
         self.detect_stream_path = self.candidate_path / 'streams'
         self.test_path = self.candidate_path / 'tests'
         self.create_workspace()
@@ -413,6 +414,7 @@ class DetectorController(object):
 
         self.detect_stream_path.mkdir(exist_ok=True, parents=True)
         self.result_path.mkdir(exist_ok=True, parents=True)
+        self.crop_result_path.mkdir(exist_ok=True, parents=True)
         self.block_path.mkdir(exist_ok=True, parents=True)
         self.test_path.mkdir(exist_ok=True, parents=True)
 
@@ -435,13 +437,15 @@ class DetectorController(object):
             try:
                 # r = self.get_result_from_queue()
                 result_queue = self.get_result_from_queue()
-                r = result_queue[0]
+                r, rects = result_queue[0], result_queue[2]
                 self.result_cnt += 1
                 current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
                 img_name = current_time + str(self.result_cnt) + '.png'
+                label_name = current_time + str(self.result_cnt) + '-label.png'
                 target = self.result_path / img_name
                 cv2.imwrite(str(target), r)
-                self.save_bbox(img_name, result_queue[2])
+                self.label_crop(r, label_name, rects)
+                self.save_bbox(img_name, rects)
             except Exception as e:
                 logger.error(e)
         return True
@@ -590,6 +594,19 @@ class DetectorController(object):
             fw.close()
 
             self.save_cache = {}
+        
+    def label_crop(self, frame, label_name, rects):
+        shape = frame.shape
+        label_w, label_h = 224, 224
+        crop_path = self.crop_result_path / label_name
+        center_x, center_y = round(rects[0][0] + rects[0][2] / 2), round(rects[0][1] + rects[0][3] / 2)
+        start_x, start_y = round(center_x - label_w / 2), round(center_y -label_h / 2)
+        if start_x + label_w <= shape[1] and start_y + label_h <= shape[0]:
+            # [y0:y1, x0:x1]
+            cropped = frame[start_y:start_y+label_h, start_x:start_x+label_w]
+            cv2.imwrite(str(crop_path), cropped)
+
+
 
 
 class DetectionStreamRender(object):
