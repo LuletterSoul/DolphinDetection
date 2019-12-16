@@ -441,10 +441,9 @@ class DetectorController(object):
                 self.result_cnt += 1
                 current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
                 img_name = current_time + str(self.result_cnt) + '.png'
-                label_name = current_time + str(self.result_cnt) + '-label.png'
                 target = self.result_path / img_name
                 cv2.imwrite(str(target), r)
-                self.label_crop(r, label_name, rects)
+                self.label_crop(r, img_name, rects)
                 self.save_bbox(img_name, rects)
             except Exception as e:
                 logger.error(e)
