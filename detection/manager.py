@@ -604,13 +604,19 @@ class DetectorController(object):
         label_w, label_h = 224, 224
         crop_path = self.crop_result_path / label_name
         center_x, center_y = round(rects[0][0] + rects[0][2] / 2), round(rects[0][1] + rects[0][3] / 2)
-        start_x, start_y = round(center_x - label_w / 2), round(center_y -label_h / 2)
-        if start_x + label_w <= shape[1] and start_y + label_h <= shape[0]:
-            # [y0:y1, x0:x1]
-            cropped = frame[start_y:start_y+label_h, start_x:start_x+label_w]
-            cv2.imwrite(str(crop_path), cropped)
-
-
+        start_x, start_y = round(center_x - label_w / 2), round(center_y - label_h / 2)
+        end_x = start_x + label_w
+        end_y = start_y + label_h
+        if start_x < 0:
+            start_x = 0
+        if start_y < 0:
+            start_y = 0
+        if end_x > shape[1]:
+            end_x = shape[1]
+        if end_y > shape[0]:
+            end_y = shape[0]
+        cropped = frame[start_y:end_y, start_x:end_x]
+        cv2.imwrite(str(crop_path), cropped)
 
 
 class DetectionStreamRender(object):
