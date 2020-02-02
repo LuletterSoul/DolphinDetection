@@ -63,12 +63,19 @@ class MonitorType(Enum):
     TASK_BASED = 5
 
 
+class Env(Enum):
+    DEV = 1,
+    TEST = 2,
+    DEPLOYMENT = 3,
+
+
 # select monitor type, process-based means the system will create a process for each component,such as detector,
 # stream receiver, frame dispatcher and frame collector...
 # Required much resources because system divide resources into process units,
 # which are limited by CPU cores
 # MONITOR = MonitorType.PROCESS_BASED
 
+ENV = Env.DEV
 
 MONITOR = MonitorType.TASK_BASED
 
@@ -78,7 +85,20 @@ enable_options = {
     2: False,
     3: False,
     4: False,
-    5: True
+    5: True,
+    6: False,
+    7: False,
+    8: False,
+    9: False,
+    10: False,
+    11: False,
+    12: False,
+    13: False,
+    14: False,
+    15: False,
+    16: False,
+    17: False,
+    # 17: True,
 }
 
 
@@ -144,3 +164,7 @@ class LabelConfig:
 # example usage
 # User("tbrown", "Tom Brown").to_json()
 # User.from_json(User("tbrown", "Tom Brown").to_json()).to_json()
+class SystemStatus(Enum):
+    RUNNING = 1,
+    SHUT_DOWN = 2,
+    RESUME = 3

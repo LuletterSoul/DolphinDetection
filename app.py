@@ -12,7 +12,9 @@
 """
 
 import detection
+from multiprocessing import Process
 from config import *
+import sys
 
 if __name__ == '__main__':
     # if MONITOR == MonitorType.RAY_BASED:
@@ -45,11 +47,15 @@ if __name__ == '__main__':
 
         monitor.monitor()
     elif MONITOR == MonitorType.TASK_BASED:
-        monitor = detection.EmbeddingControlBasedTaskMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
+        monitor = detection.EmbeddingControlBasedTaskMonitor(VIDEO_CONFIG_DIR / 'video-test.json', STREAM_SAVE_DIR,
                                                              SAMPLE_SAVE_DIR,
                                                              FRAME_SAVE_DIR,
                                                              CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
+        # p = Process(target=monitor.monitor, args=())
+        # p.start()
         monitor.monitor()
+        sys.exit(0)
+
     else:
         monitor = detection.EmbeddingControlBasedThreadMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
                                                                SAMPLE_SAVE_DIR,

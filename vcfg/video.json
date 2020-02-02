@@ -304,15 +304,67 @@
         "y": 100
       },
       "routine": {
-        "row": 2,
-        "col": 2
+        "row": 1,
+        "col": 1
       },
-      "sample_rate": 5,
+      "sample_rate": 1,
       "draw_boundary": false,
       "enable": true,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": "offline",
+      "online": "rtsp",
+      "sample_internal": 15,
+      "save_box": true,
+      "show_box": true,
+      "rtsp": "rtsp://222.190.243.243/bp/jtdome",
+      "rtsp_saved_per_frame": 240,
+      "future_frames": 72,
+      "alg": {
+        "type": "thresh",
+        "mean": 40,
+        "area_ratio": 0.03
+      }
+    },
+    {
+      "index": 5,
+      "name": "video6_hungred_million",
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
+      "ip": "222.190.243.176",
+      "port": "8081",
+      "suffix": "",
+      "headers": {},
+      "m3u8_url": "",
+      "url": "",
+      "roi": {
+        "x": 0,
+        "y": 0,
+        "width": -1,
+        "height": -1
+      },
+      "resize": {
+        "width": 1000,
+        "height": -1,
+        "scale": -1
+      },
+      "show_window": false,
+      "window_position": {
+        "x": 100,
+        "y": 100
+      },
+      "routine": {
+        "row": 1,
+        "col": 1
+      },
+      "sample_rate": 1,
+      "draw_boundary": false,
+      "enable": true,
+      "filtered_ratio": 0.5,
+      "max_streams_cache": 5000,
+      "online": "rtsp",
       "sample_internal": 15,
       "save_box": true,
       "show_box": true,
