@@ -13,7 +13,9 @@
 import json
 import logging
 import os
+import psutil
 from pathlib import Path
+import time
 
 LOG_LEVER = logging.INFO
 
@@ -79,26 +81,38 @@ ENV = Env.DEV
 
 MONITOR = MonitorType.TASK_BASED
 
+# enable_options = {
+#     0: False,
+#     1: False,
+#     2: False,
+#     3: False,
+#     4: False,
+#     5: True,
+#     6: True,
+#     7: True,
+#     8: True,
+#     9: False,
+#     10: False,
+#     11: False,
+#     12: False,
+#     13: False,
+#     14: False,
+#     15: False,
+#     16: False,
+#     17: False,
+#     # 17: True,
+# }
+
 enable_options = {
-    0: False,
-    1: False,
-    2: False,
-    3: False,
-    4: False,
-    5: True,
+    0: True,
+    1: True,
+    2: True,
+    3: True,
+    4: True,
+    5: False,
     6: False,
     7: False,
     8: False,
-    9: False,
-    10: False,
-    11: False,
-    12: False,
-    13: False,
-    14: False,
-    15: False,
-    16: False,
-    17: False,
-    # 17: True,
 }
 
 
@@ -161,6 +175,7 @@ class LabelConfig:
     def from_json(cls, json_dict):
         return cls(**json_dict)
 
+
 # example usage
 # User("tbrown", "Tom Brown").to_json()
 # User.from_json(User("tbrown", "Tom Brown").to_json()).to_json()
@@ -168,3 +183,21 @@ class SystemStatus(Enum):
     RUNNING = 1,
     SHUT_DOWN = 2,
     RESUME = 3
+
+
+_timer = getattr(time, 'monotonic', time.time)
+num_cpus = psutil.cpu_count() or 1
+
+
+def timer():
+    return _timer() * num_cpus
+
+
+pid_cpuinfo = {}
+
+
+def cpu_usage():
+    id = os.getpid()
+    p = psutil.Process(id)
+    # while True:
+    #     print(p.cpu_percent())

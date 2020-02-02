@@ -12,6 +12,7 @@
 """
 import os
 import threading
+import psutil
 from multiprocessing.queues import Queue
 from multiprocessing import Manager
 from pathlib import Path
@@ -19,7 +20,7 @@ from pathlib import Path
 
 import cv2
 
-from config import VideoConfig, SystemStatus
+from config import VideoConfig, SystemStatus, cpu_usage
 from utils import logger
 import time
 import shutil
@@ -64,7 +65,11 @@ class VideoCaptureThreading:
         self.status.set(SystemStatus.RUNNING)
         threading.Thread(target=self.update, args=(), daemon=True).start()
         threading.Thread(target=self.listen, args=(), daemon=True).start()
+        threading.Thread(target=cpu_usage).start()
         return self
+
+    # def cal_cpu_usage(self):
+    #         cpu_usage(id)
 
     def listen(self):
         logger.info('Video Capture [{}]: Start listen event'.format(self.cfg.index))
@@ -97,6 +102,8 @@ class VideoCaptureThreading:
             grabbed, frame = self.cap.read()
             if not grabbed:
                 self.update_capture(cnt)
+                end = time.time()
+                logger.info('Current src consumes time: [{}] seconds'.format(end - start))
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
@@ -104,8 +111,9 @@ class VideoCaptureThreading:
             cnt += 1
             self.post_frame_process(frame)
             self.runtime = time.time() - start
+
         logger.info(
-            '*******************************Init video capture [{}] exit********************************'.format(
+            '*******************************Video capture [{}] exit********************************'.format(
                 self.cfg.index))
         # logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
 
@@ -120,7 +128,7 @@ class VideoCaptureThreading:
         self.handle_history()
         src = self.load_next_src()
         if src == -1:
-            self.status.set(SystemStatus.SHUT_DOWN)
+            self.cancel()
         self.cap = cv2.VideoCapture(src)
 
     def handle_history(self):
@@ -188,14 +196,19 @@ class VideoOfflineCapture(VideoCaptureThreading):
 class VideoOfflineCallbackCapture(VideoOfflineCapture):
 
     def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
-                 cfg: VideoConfig, idx, controller, sample_rate=5, width=640, height=480,
+                 cfg: VideoConfig, idx, controller, shut_down_event, sample_rate=5, width=640, height=480,
                  delete_post=True):
         super().__init__(video_path, sample_path, offline_path, index_pool, frame_queue, cfg, idx, sample_rate, width,
                          height, delete_post)
         self.controller = controller
+        self.shut_down_event = shut_down_event
 
     def pass_frame(self, frame):
         self.controller.dispatch_frame(frame)
+
+    def cancel(self):
+        super().cancel()
+        self.shut_down_event.set()
 
 
 # Sample video stream at intervals
@@ -331,7 +344,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             #     self.cancel()
         # logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
         logger.info(
-            '*******************************video capture [{}] exit********************************'.format(
+            '*******************************Video capture [{}] exit********************************'.format(
                 self.cfg.index))
 
     def post_frame_process(self, frame):

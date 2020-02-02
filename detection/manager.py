@@ -24,9 +24,11 @@ from typing import List
 from utils import clean_dir, logger
 from config import SystemStatus
 from config import enable_options
+# from pynput.keyboard import Key, Controller, Listener
 # import keyboard
 # from capture import *
 import cv2
+import sys
 import imutils
 import time
 import threading
@@ -66,6 +68,8 @@ class DetectionMonitor(object):
         self.offline_path = offline_path
         self.process_pool = None
         self.thread_pool = None
+        self.shut_down_event = Manager().Event()
+        self.shut_down_event.clear()
         if build_pool:
             self.process_pool = Pool(processes=cpu_count() - 1)
             self.thread_pool = ThreadPoolExecutor()
@@ -78,9 +82,39 @@ class DetectionMonitor(object):
         self.call()
         self.wait()
 
+    # def set_runtime(self, runtime):
+    #     self.runtime = runtime
+
+    def shut_down_from_keyboard(self):
+        while True:
+            logger.info('Click Double Enter to shut down system.')
+            c = sys.stdin.read(1)
+            logger.info(c)
+            if c == '\n':
+                self.notify_shut_down()
+                break
+
+        # if keycode == Key.enter:
+        #     self.shut_down_event.set()
+
+    def shut_down_after(self, runtime=-1):
+        if runtime == -1:
+            return
+        logger.info('System will exit after [{}] seconds'.format(runtime))
+        threading.Timer(runtime, self.notify_shut_down).start()
+
+    def notify_shut_down(self):
+        self.shut_down_event.set()
+
     def listen(self):
+        # Listener(on_press=self.shut_down_from_keyboard).start()
+        threading.Thread(target=self.shut_down_from_keyboard, daemon=True).start()
         logger.info('*******************************Monitor: Listening exit event********************************')
-        input('Enter for exit')
+        # if self.runtime != -1:
+        #     time.sleep(self.runtime)
+        # else:
+        #     input('')
+        self.shut_down_event.wait()
         logger.info('*******************************Monitor: preparing exit system********************************')
         self.cancel()
 
@@ -162,7 +196,6 @@ class EmbeddingControlMonitor(DetectionMonitor):
         )
 
     def call(self):
-
         self.init_caps()
         # Init stream receiver firstly, ensures video index that is arrived before detectors begin detection..
         for i, cfg in enumerate(self.cfgs):
@@ -238,7 +271,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             VideoOfflineCallbackCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
                                         self.offline_path / str(c.index),
                                         self.pipes[idx],
-                                        self.caps_queue[idx], c, idx, self.controllers[idx], c.sample_rate,
+                                        self.caps_queue[idx], c, idx, self.controllers[idx], self.shut_down_event,
+                                        c.sample_rate,
                                         delete_post=False))
 
     def cancel(self):
@@ -250,7 +284,6 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
 
         # Init detector controller
         self.init_controllers()
-
         self.init_caps()
         # Init stream receiver firstly, ensures video index that is arrived before detectors begin detection..
         for i, cfg in enumerate(self.cfgs):
@@ -420,7 +453,7 @@ class DetectorController(object):
             # original_head = self.original_frame_cache.keys()[0]
             thread = threading.Thread(
                 target=clear_cache,
-                args=(self.original_frame_cache,),daemon=True)
+                args=(self.original_frame_cache,), daemon=True)
             # self.clear_cache(self.original_frame_cache)
             thread.start()
             logger.info(
@@ -432,13 +465,13 @@ class DetectorController(object):
         if last_detect_internal > time_thresh and len(self.render_frame_cache) > 500:
             thread = threading.Thread(
                 target=clear_cache,
-                args=(self.render_frame_cache,),daemon=True)
+                args=(self.render_frame_cache,), daemon=True)
             thread.start()
             logger.info('Clear half render frame caches')
         if len(self.render_rect_cache) > 500:
             thread = threading.Thread(
                 target=clear_cache,
-                args=(self.render_rect_cache,),daemon=True)
+                args=(self.render_rect_cache,), daemon=True)
             thread.start()
 
     def init_control_range(self):
@@ -495,21 +528,22 @@ class DetectorController(object):
                 break
             try:
                 # r = self.get_result_from_queue()
-                result_queue = self.get_result_from_queue()
-                r, rects = result_queue[0], result_queue[2]
-                self.result_cnt += 1
-                current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
-                img_name = current_time + str(self.result_cnt) + '.png'
-                target = self.result_path / img_name
-                cv2.imwrite(str(target), r)
-                self.label_crop(r, img_name, rects)
-                self.save_bbox(img_name, rects)
+                if not self.result_queue.empty():
+                    result_queue = self.result_queue.get(timeout=1)
+                    r, rects = result_queue[0], result_queue[2]
+                    self.result_cnt += 1
+                    current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
+                    img_name = current_time + str(self.result_cnt) + '.png'
+                    target = self.result_path / img_name
+                    cv2.imwrite(str(target), r)
+                    self.label_crop(r, img_name, rects)
+                    self.save_bbox(img_name, rects)
             except Exception as e:
                 logger.error(e)
         return True
 
     def get_result_from_queue(self):
-        return self.result_queue.get()
+        return self.result_queue.get(timeout=2)
 
     def collect_and_reconstruct(self, args, pool):
         logger.info('Controller [{}] start collect and construct'.format(self.cfg.index))
@@ -525,7 +559,7 @@ class DetectorController(object):
             construct_result: ConstructResult = self.construct(results)
             # logger.debug('Done Construct sub-frames into a original frame....')
             cnt += 1
-            if cnt % 100 == 0:
+            if (cnt * self.cfg.sample_rate) % 100 == 0:
                 end = time.time() - start
                 logger.info(
                     'Detection controller [{}]: Operation Speed Rate [{}]s/100fs, unit process rate: [{}]s/f'.format(
@@ -699,7 +733,7 @@ class DetectionStreamRender(object):
         self.quit = Manager().Event()
         self.quit.clear()
         self.status = Manager().Value('i', SystemStatus.RUNNING)
-        threading.Thread(target=self.listen,daemon=True).start()
+        threading.Thread(target=self.listen, daemon=True).start()
 
     def listen(self):
         if self.quit.wait():
@@ -843,14 +877,14 @@ class DetectionStreamRender(object):
         rect_render_thread = threading.Thread(
             target=self.rect_render_task,
             args=(current_idx, current_time, frame_cache,
-                  rect_cache, render_cache,),daemon=True)
+                  rect_cache, render_cache,), daemon=True)
         # rect_render_thread.setDaemon(True)
         rect_render_thread.start()
         # self.rect_render_task(current_idx, current_time, frame_cache, rect_cache, render_cache)
         # self.original_render_task(current_idx, current_time, frame_cache)
         original_render_thread = threading.Thread(
             target=self.original_render_task,
-            args=(current_idx, current_time, frame_cache,),daemon=True)
+            args=(current_idx, current_time, frame_cache,), daemon=True)
         # original_render_thread.setDaemon(True)
         original_render_thread.start()
         self.write_done = True
@@ -1100,9 +1134,10 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         self.cfg.index))
                 break
             try:
-                frame = self.display_pipe.get()
-                cv2.imshow('Controller {}'.format(self.cfg.index), frame)
-                cv2.waitKey(1)
+                if not self.display_pipe.empty():
+                    frame = self.display_pipe.get(timeout=1)
+                    cv2.imshow('Controller {}'.format(self.cfg.index), frame)
+                    cv2.waitKey(1)
             except Exception as e:
                 logger.error(e)
         return True
@@ -1116,9 +1151,9 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         self.init_detectors()
         # self.dispatch_based_queue(pool)
         # res = self.pool.submit(self.write_frame_work, ())
-        threading.Thread(target=self.listen,daemon=True).start()
-        threading.Thread(target=self.write_frame_work,daemon=True).start()
-        threading.Thread(target=self.display,daemon=True).start()
+        threading.Thread(target=self.listen, daemon=True).start()
+        threading.Thread(target=self.write_frame_work, daemon=True).start()
+        threading.Thread(target=self.display, daemon=True).start()
         return True
 
 
