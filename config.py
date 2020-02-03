@@ -102,7 +102,7 @@ MONITOR = MonitorType.TASK_BASED
 #     17: False,
 #     # 17: True,
 # }
-
+#
 enable_options = {
     0: True,
     1: True,
@@ -119,7 +119,8 @@ enable_options = {
 class VideoConfig:
     def __init__(self, index, name, shape, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
-                 online, sample_internal, save_box, show_box, rtsp, rtsp_saved_per_frame, future_frames,
+                 online, sample_internal, save_box, show_box, rtsp, enable_sample_frame, rtsp_saved_per_frame,
+                 future_frames,
                  alg):
         self.index = index
         self.name = name
@@ -145,6 +146,7 @@ class VideoConfig:
         self.save_box = save_box
         self.show_box = show_box
         self.rtsp = rtsp
+        self.enable_sample_frame = enable_sample_frame
         self.rtsp_saved_per_frame = rtsp_saved_per_frame
         self.future_frames = future_frames
         self.alg = alg

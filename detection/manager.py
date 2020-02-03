@@ -892,6 +892,7 @@ class DetectionStreamRender(object):
         return True
 
     def rect_render_task(self, current_idx, current_time, frame_cache, rect_cache, render_cache):
+        start = time.time()
         target = self.rect_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info(
             'Video Render [{}]: Rect Render Task [{}]: Writing detection stream frame into: [{}]'.format(
@@ -927,12 +928,15 @@ class DetectionStreamRender(object):
                                                 frame_cache)
         video_write.release()
         logger.info(
-            'Video Render [{}]: Rect Render Task [{}]: Done write detection stream frame into: [{}]'.format(self.index,
-                                                                                                            self.stream_cnt,
-                                                                                                            str(
-                                                                                                                target)))
+            'Video Render [{}]: Rect Render Task [{}]: Consume [{}] seconds.Done write detection stream frame into: [{}]'.format(
+                self.index,
+                self.stream_cnt,
+                time.time() - start,
+                str(
+                    target)))
 
     def original_render_task(self, current_idx, current_time, frame_cache):
+        start = time.time()
         target = self.original_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info(
             'Video Render [{}]: Original Render Task [{}]: Writing detection stream frame into: [{}]'.format(
@@ -963,9 +967,10 @@ class DetectionStreamRender(object):
         next_cnt = self.write_original_video_work(video_write, next_cnt, end_cnt, frame_cache)
         video_write.release()
         logger.info(
-            'Video Render [{}]: Original Render Task [{}]: Done write detection stream frame into: [{}]'.format(
+            'Video Render [{}]: Original Render Task [{}]: Consume [{}] seconds.Done write detection stream frame into: [{}]'.format(
                 self.index,
                 self.stream_cnt,
+                time.time() - start,
                 str(target)))
 
 
@@ -1114,13 +1119,13 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             #                      (async_futures, self.construct_params, self.block_info, self.cfg,))
             # r.get()
             # collect_and_reconstruct.remote(async_futures, self.construct_params, self.block_info, self.cfg)
-        self.dispatch_cnt += 1
-        if self.dispatch_cnt % 100 == 0:
-            end = time.time() - start
-            logger.info(
-                'Detection controller [{}]: Operation Speed Rate [{}]s/100fs, unit process rate: [{}]s/f'.format(
-                    self.cfg.index, round(end, 2), round(end / 100, 2)))
-            self.dispatch_cnt = 0
+        # self.dispatch_cnt += 1
+        # if self.dispatch_cnt % 100 == 0:
+        #     end = time.time() - start
+        #     logger.info(
+        #         'Detection controller [{}]: Operation Speed Rate [{}]s/100fs, unit process rate: [{}]s/f'.format(
+        #             self.cfg.index, round(end, 2), round(end / 100, 2)))
+        #     self.dispatch_cnt = 0
         self.clear_original_cache()
 
     def display(self):

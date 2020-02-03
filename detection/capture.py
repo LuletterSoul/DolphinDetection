@@ -330,13 +330,23 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             self.cfg.index))
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
+            s = time.time()
             grabbed, frame = self.cap.read()
+            e = 1 / (time.time() - s)
+            logger.info(
+                'Video capture [{}]: Receive Rate [{}]s/100fs, [{}]/FPS'.format(
+                    self.cfg.index, round(e * 100, 2), round(e, 2)))
+            s = time.time()
             if not grabbed:
                 self.update_capture(cnt)
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
             self.pass_frame(frame)
+            e = 1 / (time.time() - s)
+            logger.info(
+                'Video capture [{}]: Operation Speed Rate [{}]s/100fs, [{}]/FPS'.format(
+                    self.cfg.index, round(e * 100, 2), round(e, 2)))
             self.post_frame_process(frame)
             cnt += 1
             self.runtime = time.time() - start
@@ -349,7 +359,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
 
     def post_frame_process(self, frame):
         self.sample_cnt += 1
-        if self.sample_cnt % self.cfg.rtsp_saved_per_frame == 0:
+        if self.sample_cnt % self.cfg.rtsp_saved_per_frame and self.cfg.enable_sample_frame == 0:
             current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
             self.sample_cnt = 0
             # if current_time != self.saved_time:

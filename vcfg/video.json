@@ -48,6 +48,7 @@
       "save_box": true,
       "show_box": false,
       "rtsp": "",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
       "alg": {
@@ -103,6 +104,7 @@
       "save_box": false,
       "show_box": false,
       "rtsp": "",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
       "alg": {
@@ -158,6 +160,7 @@
       "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/gp/1101",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
       "alg": {
@@ -213,6 +216,7 @@
       "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/gp/1102",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
       "alg": {
@@ -265,6 +269,7 @@
       "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtview",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
       "alg": {
@@ -312,11 +317,12 @@
       "enable": true,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": "rtsp",
+      "online": "offline",
       "sample_internal": 15,
       "save_box": true,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,
       "future_frames": 120,
       "alg": {
