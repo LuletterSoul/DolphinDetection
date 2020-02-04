@@ -10,12 +10,15 @@
 @version 1.0
 @desc:
 """
+import time
 from typing import List
+
+import imutils
+
+from .component import mog2_dict
+from detection.params import ConstructResult, ConstructParams, BlockInfo, DetectorParams
 from utils import *
 from .detector import DetectionResult
-from detection.params import ConstructResult, ConstructParams, BlockInfo, DetectorParams
-import imutils
-import time
 
 
 # import ray
@@ -30,13 +33,13 @@ def ratio(area, total):
 
 
 def is_in_ratio(area, total, cfg: VideoConfig):
-    # logger.info('Area ration: [{}]'.format((area / total) * 100))
+    logger.info('Area ration: [{}]'.format((area / total) * 100))
     return ratio(area, total) <= cfg.filtered_ratio
 
 
 def less_ratio(area, shape, cfg: VideoConfig):
     total = shape[0] * shape[1]
-    # logger.info('Area ration: [{}]'.format(self.ratio(area, total)))
+    logger.info('Area ration: [{}]'.format(ratio(area, total)))
     return ratio(area, total) >= cfg.alg['area_ratio']
 
 
@@ -45,17 +48,62 @@ def detect_based_task(block, params: DetectorParams):
     frame = block.frame
     # if args.cfg.alg['type'] == 'saliency':
     #     res = detect_saliency()
-    if params.cfg.alg['type'] == 'thresh':
+
+    if params.cfg.alg['type'] == 'mog2':
+        res = detect_based_mog2(frame, block, params)
+
+    elif params.cfg.alg['type'] == 'thresh':
         shape = frame.shape
         # logger.info(shape)
         # logger.info(params.start)
         # logger.info(params.end)
         res = detect_thresh_task(frame, block, params)
-    if params.cfg.alg['type'] == 'thresh_mask':
+    elif params.cfg.alg['type'] == 'thresh_mask':
         shape = frame.shape
         mask = np.zeros((shape[0], shape[1])).astype(np.uint8)
         mask[60:420, :] = 255
         res = detect_mask_task(frame, mask, block, params)
+    return res
+
+
+def detect_based_mog2(frame, block, params: DetectorParams):
+    cfg = params.cfg
+    mog2 = mog2_dict[cfg.index]
+    start = time.time()
+    dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
+    if frame is None:
+        logger.info('Detector: [{},{}] empty frame')
+        return
+    binary = mog2.apply(frame)
+    # erode = cv2.erode(binary, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+    binary = cv2.erode(binary,  erode_kernel)
+    binary = cv2.dilate(binary,  dilate_kernel)
+    img_con, contours, hierarchy = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    rects = []
+    regions = []
+    status = None
+    coordinates = []
+    for c in contours:
+        rect = cv2.boundingRect(c)
+        area = cv2.contourArea(c)
+        # self.is_in_ratio(area, self.shape[0] * self.shape[1])
+        if less_ratio(area, frame.shape, params.cfg) and rect[2] / rect[3] < 10:
+            logger.info("~~~~~~~~~~~~~~~~~~~~~~~Area:[{}]".format(area))
+            rects.append(rect)
+    cv2.drawContours(img_con, contours, -1, 255, -1)
+    # if self.cfg.show_window:
+    #     cv2.imshow("Contours", img_con)
+    #     cv2.waitKey(1)
+    # self.detect_cnt += 1
+    # logger.info(
+    #     '~~~~ Detector: [{},{}] detect done [{}] frames..'.format(params.col_index, params.row_index,
+    #                                                               params))
+    res = DetectionResult(None, None, status, regions, binary, binary, coordinates, params.x_index,
+                          params.y_index, block.index, back(rects, params.start, frame.shape, block.shape, params.cfg))
+    end = time.time() - start
+    logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
+    # cv2.destroyAllWindows()
     return res
 
 
@@ -211,3 +259,6 @@ def construct(results: List[DetectionResult], params: ConstructParams):
     except Exception as e:
         traceback.print_exc()
         logger.error(e)
+
+
+import cv2
