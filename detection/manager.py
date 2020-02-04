@@ -24,6 +24,7 @@ from typing import List
 from utils import clean_dir, logger
 from config import SystemStatus
 from config import enable_options
+from .component import stream_pipes
 # from pynput.keyboard import Key, Controller, Listener
 # import keyboard
 # from capture import *
@@ -294,8 +295,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         for i in range(len(self.cfgs)):
             if self.process_pool is not None:
                 self.task_futures.append(self.process_pool.apply_async(self.caps[i].read, ()))
-                # self.caps[i].read()
-            # r.get()
+                self.task_futures[-1].get()
 
     def wait(self):
         if self.process_pool is not None:
@@ -396,8 +396,9 @@ class DetectorController(object):
         self.y_step = 0
         self.block_info = BlockInfo(self.y_num, self.x_num, self.y_step, self.x_step)
 
-        self.send_pipes = [Manager().Queue() for i in range(self.x_num * self.y_num)]
-        self.receive_pipes = [Manager().Queue() for i in range(self.x_num * self.y_num)]
+        # self.send_pipes = [Manager().Queue() for i in range(self.x_num * self.y_num)]
+        # self.receive_pipes = [Manager().Queue() for i in range(self.x_num * self.y_num)]
+        self.pipe = stream_pipes[self.cfg.index]
         self.index_pool = index_pool
         self.frame_queue = frame_queue
         self.result_queue = Manager().Queue(self.cfg.max_streams_cache)
@@ -608,10 +609,10 @@ class DetectorController(object):
 
     def construct(self, results: List[DetectionResult]):
         # sub_frames = [r.frame for r in results]
-        # sub_binary = [r.binary for r in results]
+        sub_binary = [r.binary for r in results]
         # sub_thresh = [r.thresh for r in results]
         # constructed_frame = self.construct_rgb(sub_frames)
-        # constructed_binary = self.construct_gray(sub_binary)
+        constructed_binary = self.construct_gray(sub_binary)
         # constructed_thresh = self.construct_gray(sub_thresh)
         logger.info('Controller [{}]: Construct frames into a original frame....'.format(self.cfg.index))
         try:
@@ -647,7 +648,7 @@ class DetectorController(object):
             threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
             self.clear_render_cache()
             # return constructed_frame, constructed_binary, constructed_thresh
-            return ConstructResult(original_frame, None, None)
+            return ConstructResult(original_frame, constructed_binary, None)
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
@@ -661,9 +662,9 @@ class DetectorController(object):
 
     def construct_gray(self, sub_frames):
         sub_frames = np.array(sub_frames)
-        sub_frames = np.reshape(sub_frames, (self.x_num, self.y_num, self.x_step, self.y_step))
+        sub_frames = np.reshape(sub_frames, (self.y_num, self.x_num, self.y_step, self.x_step))
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3))
-        constructed_frame = np.reshape(sub_frames, (self.x_num * self.x_step, self.y_num * self.y_step))
+        constructed_frame = np.reshape(sub_frames, (self.y_num * self.y_step, self.x_num * self.x_step))
         return constructed_frame
 
     def save_bbox(self, frame_name, boundary_rect):
@@ -1029,15 +1030,14 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         # self.pool = ThreadPoolExecutor()
         # self.threads = []
         self.display_pipe = Manager().Queue(1000)
+        self.detect_params = []
+        self.detectors = []
 
     def init_detectors(self):
         logger.info(
             '*******************************Controller [{}]: Init total [{}] detectors********************************'.format(
                 self.cfg.index,
                 self.x_num * self.y_num))
-        # logger.info('Init total [{}] detectors....'.format(self.x_num * self.y_num))
-        self.detectors = []
-        self.detect_params = []
         for i in range(self.x_num):
             for j in range(self.y_num):
                 region_detector_path = self.block_path / (str(i) + '-' + str(j))
@@ -1069,6 +1069,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         results = args
         logger.info('Controller [{}]: Collect consume [{}] seconds'.format(self.cfg.index, time.time() - collect_start))
         construct_result: ConstructResult = self.construct(results)
+        self.pipe[0].send(construct_result.binary)
         if construct_result is not None:
             frame = construct_result.frame
             if self.cfg.draw_boundary:
@@ -1093,18 +1094,24 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             self.dispatch_frame(frame)
         return True
 
+    def send(self, frame):
+        self.pipe[0].send(frame)
+
     def dispatch_frame(self, frame):
         start = time.time()
         self.frame_cnt.set(self.frame_cnt.get() + 1)
         self.original_frame_cache[self.frame_cnt.get()] = frame
+        # threading.Thread(target=self.send, args=(frame,)).start()
         # self.render_frame_cache[self.frame_cnt.get()] = frame
         # logger.info(self.original_frame_cache.keys())
         frame, original_frame = preprocess(frame, self.cfg)
         if self.frame_cnt.get() % self.cfg.sample_rate == 0:
             logger.info('Controller [{}]: Dispatch frame to all detectors....'.format(self.cfg.index))
             async_futures = []
+            # s = time.time()
+            # logger.info('Post frame Consume [{}] seconds'.format(time.time() - s))
             for d in self.detect_params:
-                block = DispatchBlock(crop_by_se(frame, d.start, d.end),
+                block= DispatchBlock(crop_by_se(frame, d.start, d.end),
                                       self.frame_cnt.get(), original_frame.shape)
                 # async_futures.append(pool.apply_async(d.detect_based_task, (block,)))
                 async_futures.append(detect_based_task(block, d))

@@ -275,7 +275,7 @@
       "alg": {
         "type": "thresh_mask",
         "mean": 80,
-        "area_ratio": 0.03
+        "area_ratio": 3
       }
     },
     {

@@ -81,39 +81,27 @@ ENV = Env.DEV
 
 MONITOR = MonitorType.TASK_BASED
 
-# enable_options = {
-#     0: False,
-#     1: False,
-#     2: False,
-#     3: False,
-#     4: False,
-#     5: True,
-#     6: True,
-#     7: True,
-#     8: True,
-#     9: False,
-#     10: False,
-#     11: False,
-#     12: False,
-#     13: False,
-#     14: False,
-#     15: False,
-#     16: False,
-#     17: False,
-#     # 17: True,
-# }
-#
 enable_options = {
-    0: True,
-    1: True,
-    2: True,
-    3: True,
-    4: True,
-    5: False,
-    6: False,
-    7: False,
-    8: False,
+    0: False,
+    1: False,
+    2: False,
+    3: False,
+    4: False,
+    5: True,
+    6: False
 }
+#
+# enable_options = {
+#     0: True,
+#     1: True,
+#     2: True,
+#     3: True,
+#     4: True,
+#     5: False,
+#     6: False,
+#     7: False,
+#     8: False,
+# }
 
 
 class VideoConfig:
