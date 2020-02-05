@@ -43,6 +43,7 @@ class VideoCaptureThreading:
         # self.grabbed, self.frame = self.cap.read()
         self.status = Manager().Value('i', SystemStatus.SHUT_DOWN)
         self.src = -1
+        self.cap = None
         self.sample_rate = sample_rate
         self.frame_queue = frame_queue
         self.delete_post = delete_post
@@ -58,10 +59,11 @@ class VideoCaptureThreading:
         if self.status.get() == SystemStatus.RUNNING:
             print('[!] Threaded video capturing has already been started.')
             return None
-        src = self.load_next_src()
-        logger.info('Loading next video stream from [{}]....'.format(src))
-        self.cap = cv2.VideoCapture(src)
-        logger.info('Loading done from: [{}]'.format(src))
+        self.update_capture(0)
+        # src = self.load_next_src()
+        # logger.info('Loading next video stream from [{}]....'.format(src))
+        # self.cap = cv2.VideoCapture(src)
+        # logger.info('Loading done from: [{}]'.format(src))
         self.status.set(SystemStatus.RUNNING)
         threading.Thread(target=self.update, args=(), daemon=True).start()
         threading.Thread(target=self.listen, args=(), daemon=True).start()
@@ -84,10 +86,14 @@ class VideoCaptureThreading:
         logger.debug('Loading video stream from video index pool....')
         self.posix = self.get_posix()
         self.src = str(self.posix)
-        if not os.path.exists(self.src):
-            logger.info('Video path not exist: [{}]'.format(self.src))
-            return -1
-        return self.src
+        if self.posix == -1:
+            return self.src
+        basename = os.path.basename(self.src)
+        filename, extention = os.path.splitext(basename)
+        if extention == '.mp4' or extention == '.mov':
+            return self.src
+        else:
+            return 0
 
     def get_posix(self):
         return self.video_path / self.index_pool.get()
@@ -104,6 +110,7 @@ class VideoCaptureThreading:
                 self.update_capture(cnt)
                 end = time.time()
                 logger.info('Current src consumes time: [{}] seconds'.format(end - start))
+                start = time.time()
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
@@ -124,12 +131,20 @@ class VideoCaptureThreading:
     def update_capture(self, cnt):
         logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
         logger.debug('Read next frame from video ....')
-        self.cap.release()
         self.handle_history()
-        src = self.load_next_src()
-        if src == -1:
-            self.cancel()
+        while True:
+            src = self.load_next_src()
+            if src == str(-1):
+                self.cancel()
+                return False
+            elif src == 0:
+                continue
+            else:
+                break
+        if self.cap is not None:
+            self.cap.release()
         self.cap = cv2.VideoCapture(src)
+        return True
 
     def handle_history(self):
         if self.posix.exists() and self.delete_post:
@@ -208,7 +223,8 @@ class VideoOfflineCallbackCapture(VideoOfflineCapture):
 
     def cancel(self):
         super().cancel()
-        self.shut_down_event.set()
+        if not self.shut_down_event.is_set():
+            self.shut_down_event.set()
 
 
 # Sample video stream at intervals
