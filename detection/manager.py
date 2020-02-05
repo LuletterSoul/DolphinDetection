@@ -87,14 +87,13 @@ class DetectionMonitor(object):
     #     self.runtime = runtime
 
     def shut_down_from_keyboard(self):
-        while True:
-            logger.info('Click Double Enter to shut down system.')
+        logger.info('Click Double Enter to shut down system.')
+        while True and not self.shut_down_event.is_set():
             c = sys.stdin.read(1)
             logger.info(c)
             if c == '\n':
                 self.notify_shut_down()
                 break
-
         # if keycode == Key.enter:
         #     self.shut_down_event.set()
 
@@ -105,7 +104,8 @@ class DetectionMonitor(object):
         threading.Timer(runtime, self.notify_shut_down).start()
 
     def notify_shut_down(self):
-        self.shut_down_event.set()
+        if not self.shut_down_event.is_set():
+            self.shut_down_event.set()
 
     def listen(self):
         # Listener(on_press=self.shut_down_from_keyboard).start()
@@ -427,7 +427,7 @@ class DetectorController(object):
         self.runtime = time.time()
         # self.clear_point = 0
         # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        self.stream_render = DetectionStreamRender(0, self.cfg.future_frames, self)
+        self.stream_render = DetectionStreamRender(self.cfg, 0, self.cfg.future_frames, self)
 
         self.save_cache = {}
 
@@ -624,6 +624,7 @@ class DetectorController(object):
                 time.sleep(0.5)
                 # logger.info(self.original_frame_cache.keys())
             original_frame = self.original_frame_cache[current_index]
+            render_frame = original_frame.copy()
             for r in results:
                 if len(r.rects):
                     self.result_queue.put((original_frame, r.frame_index, r.rects))
@@ -634,13 +635,9 @@ class DetectorController(object):
                     for rect in r.rects:
                         color = np.random.randint(0, 255, size=(3,))
                         color = [int(c) for c in color]
-                        p1 = (rect[0] - 80, rect[1] - 80)
-                        p2 = (rect[0] + 100, rect[1] + 100)
-                        # cv2.rectangle(original_frame, (rect[0] - 20, rect[1] - 20),
-                        #               (rect[0] + rect[2] + 20, rect[1] + rect[3] + 20),
-                        #               color, 2)
-                        cv2.rectangle(original_frame, p1, p2, color, 2)
-                    self.render_frame_cache[current_index] = original_frame
+                        p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
+                        cv2.rectangle(render_frame, p1, p2, color, 2)
+                    self.render_frame_cache[current_index] = render_frame
                     self.render_rect_cache[current_index] = r.rects
                     threading.Thread(target=self.stream_render.reset, args=(current_index,), daemon=True).start()
                     # self.stream_render.reset(current_index)
@@ -691,29 +688,34 @@ class DetectorController(object):
             self.save_cache = {}
 
     def label_crop(self, frame, label_name, rects):
-        shape = frame.shape
-        label_w, label_h = 224, 224
+        # label_w, label_h = 224, 224
         crop_path = self.crop_result_path / label_name
-        center_x, center_y = round(rects[0][0] + rects[0][2] / 2), round(rects[0][1] + rects[0][3] / 2)
-        start_x, start_y = round(center_x - label_w / 2), round(center_y - label_h / 2)
-        end_x = start_x + label_w
-        end_y = start_y + label_h
-        if start_x < 0:
-            start_x = 0
-        if start_y < 0:
-            start_y = 0
-        if end_x > shape[1]:
-            end_x = shape[1]
-        if end_y > shape[0]:
-            end_y = shape[0]
-        cropped = frame[start_y:end_y, start_x:end_x]
+        # # p1 = (rect[0] - 80, rect[1] - 80)
+        # # p2 = (rect[0] + 100, rect[1] + 100)
+        # center_x, center_y = round(rects[0][0] + rects[0][2] / 2), round(rects[0][1] + rects[0][3] / 2)
+        # start_x, start_y = round(center_x - label_w / 2), round(center_y - label_h / 2)
+        # end_x = start_x + label_w
+        # end_y = start_y + label_h
+        # # start_x, start_y = rects[0][0] - 77, rects[0][1] - 77
+        # # end_x = rects[0][0] + 97
+        # # end_y = rects[0][1] + 97
+        # if start_x < 0:
+        #     start_x = 0
+        # if start_y < 0:
+        #     start_y = 0
+        # if end_x > shape[1]:
+        #     end_x = shape[1]
+        # if end_y > shape[0]:
+        #     end_y = shape[0]
+        cropped = crop_by_rect(self.cfg, rects[0], frame)
         cv2.imwrite(str(crop_path), cropped)
 
 
 class DetectionStreamRender(object):
 
-    def __init__(self, detect_index, future_frames, controller: DetectorController) -> None:
+    def __init__(self, cfg, detect_index, future_frames, controller: DetectorController) -> None:
         super().__init__()
+        self.cfg = cfg
         self.detect_index = detect_index
         self.rect_stream_path = controller.rect_stream_path
         self.original_stream_path = controller.original_stream_path
@@ -808,9 +810,10 @@ class DetectionStreamRender(object):
                                     break
                                 color = np.random.randint(0, 255, size=(3,))
                                 color = [int(c) for c in color]
-                                p1 = (first_rect[0] + int(delta_x * i) - 80, first_rect[1] + int(delta_y * i) - 80)
-                                p2 = (first_rect[0] + int(delta_x * i) + 100, first_rect[1] + int(delta_y * i) + 100)
+                                # p1 = (first_rect[0] + int(delta_x * i) - 80, first_rect[1] + int(delta_y * i) - 80)
+                                # p2 = (first_rect[0] + int(delta_x * i) + 100, first_rect[1] + int(delta_y * i) + 100)
                                 frame = frame_cache[next_cnt]
+                                p1, p2 = bbox_points(self.cfg, first_rect, frame.shape, delta_x, delta_y)
                                 cv2.rectangle(frame, p1, p2, color, 2)
                             if not draw_flag:
                                 frame = frame_cache[next_cnt]
@@ -1069,7 +1072,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         results = args
         logger.info('Controller [{}]: Collect consume [{}] seconds'.format(self.cfg.index, time.time() - collect_start))
         construct_result: ConstructResult = self.construct(results)
-        self.pipe[0].send(construct_result.binary)
+        if self.cfg.show_window:
+            self.pipe[0].send(construct_result.binary)
         if construct_result is not None:
             frame = construct_result.frame
             if self.cfg.draw_boundary:
@@ -1111,7 +1115,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             # s = time.time()
             # logger.info('Post frame Consume [{}] seconds'.format(time.time() - s))
             for d in self.detect_params:
-                block= DispatchBlock(crop_by_se(frame, d.start, d.end),
+                block = DispatchBlock(crop_by_se(frame, d.start, d.end),
                                       self.frame_cnt.get(), original_frame.shape)
                 # async_futures.append(pool.apply_async(d.detect_based_task, (block,)))
                 async_futures.append(detect_based_task(block, d))

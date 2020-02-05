@@ -51,6 +51,10 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh",
         "mean": 80
@@ -107,6 +111,10 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh",
         "mean": 80
@@ -163,6 +171,10 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh",
         "mean": 80
@@ -219,6 +231,10 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh",
         "mean": 80
@@ -272,6 +288,10 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh_mask",
         "mean": 80,
@@ -312,7 +332,7 @@
         "row": 1,
         "col": 1
       },
-      "sample_rate": 5,
+      "sample_rate": 1,
       "draw_boundary": false,
       "enable": true,
       "filtered_ratio": 0.5,
@@ -325,6 +345,10 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,
       "future_frames": 120,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh",
         "mean": 40,

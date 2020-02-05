@@ -54,5 +54,4 @@ def display():
         cv2.imshow('Dolphin Monitor', frame)
         cv2.waitKey(1)
 
-
-Process(target=display).start()
+# Process(target=display).start()
