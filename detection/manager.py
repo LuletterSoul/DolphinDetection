@@ -11,7 +11,7 @@
 @desc:
 """
 
-from multiprocessing import Manager, Pool, cpu_count
+from multiprocessing import Manager, Pool, cpu_count, Queue
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 import stream
 import interface as I
@@ -109,6 +109,7 @@ class EmbeddingControlMonitor(DetectionMonitor):
                  offline_path: Path = None, build_pool=True) -> None:
         super().__init__(video_config_path, stream_path, sample_path, frame_path, region_path, offline_path, build_pool)
         self.caps_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
+        self.msg_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
         self.caps = []
         self.controllers = []
 
@@ -196,7 +197,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             TaskBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path / str(cfg.index),
                                         self.frame_path / str(cfg.index),
                                         self.caps_queue[idx],
-                                        self.pipes[idx]
+                                        self.pipes[idx],
+                                        self.msg_queue[idx]
                                         ) for
             idx, cfg in enumerate(self.cfgs)]
         for i, cfg in enumerate(self.cfgs):
@@ -300,7 +302,8 @@ class EmbeddingControlBasedThreadAndProcessMonitor(EmbeddingControlMonitor):
 class DetectorController(object):
     def __init__(self, cfg: VideoConfig, stream_path: Path, candidate_path: Path, frame_path: Path,
                  frame_queue: Queue,
-                 index_pool: Queue) -> None:
+                 index_pool: Queue,
+                 msg_queue: Queue) -> None:
         super().__init__()
         self.cfg = cfg
         self.stream_path = stream_path
@@ -328,6 +331,7 @@ class DetectorController(object):
         self.receive_pipes = [Manager().Queue() for i in range(self.x_num * self.y_num)]
         self.index_pool = index_pool
         self.frame_queue = frame_queue
+        self.msg_queue = msg_queue
         self.result_queue = Manager().Queue(self.cfg.max_streams_cache)
         self.quit = False
         self.frame_cnt = Manager().Value('i', 0)
@@ -552,6 +556,7 @@ class DetectorController(object):
                     self.render_frame_cache[current_index] = original_frame
                     self.render_rect_cache[current_index] = r.rects
                     self.stream_render.reset(current_index)
+
             self.stream_render.notify(current_index)
             self.clear_render_cache()
             # return constructed_frame, constructed_binary, constructed_thresh
@@ -875,8 +880,8 @@ class ProcessBasedDetectorController(DetectorController):
 class TaskBasedDetectorController(ProcessBasedDetectorController):
 
     def __init__(self, cfg: VideoConfig, stream_path: Path, candidate_path: Path, frame_path: Path, frame_queue: Queue,
-                 index_pool: Queue) -> None:
-        super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool)
+                 index_pool: Queue, msg_queue: Queue) -> None:
+        super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool, msg_queue)
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
         #                     self.render_rect_cache, self.stream_render, 500, self.cfg))
