@@ -11,14 +11,14 @@
 @desc:
 """
 
-from config import *
-from multiprocessing import Manager, Pipe, Process
-import interface
-import threading
-import imutils
+from multiprocessing import Pipe
+
 import cv2
-import numpy as np
 import imutils
+import numpy as np
+
+import interface
+from config import *
 
 cfgs = interface.load_video_config(VIDEO_CONFIG_DIR / 'video.json')
 cfgs = [c for c in cfgs if enable_options[c.index]]

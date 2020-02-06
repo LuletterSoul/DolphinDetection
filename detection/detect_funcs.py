@@ -21,6 +21,7 @@ from utils import *
 from .detector import DetectionResult
 
 
+
 # import ray
 
 
@@ -77,8 +78,8 @@ def detect_based_mog2(frame, block, params: DetectorParams):
         return
     binary = mog2.apply(frame)
     # erode = cv2.erode(binary, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
-    binary = cv2.erode(binary,  erode_kernel)
-    binary = cv2.dilate(binary,  dilate_kernel)
+    binary = cv2.erode(binary, erode_kernel)
+    binary = cv2.dilate(binary, dilate_kernel)
     img_con, contours, hierarchy = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     rects = []
     regions = []
@@ -176,6 +177,28 @@ def detect_mask_task(frame, mask, block, params: DetectorParams):
     end = time.time() - start
     logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
     return res
+
+
+def detect(frame):
+    if frame is None:
+        logger.info('Detector: [{},{}] empty frame')
+        return None
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+    adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, C=40)
+    dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+                         iterations=1)
+    img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    rects = []
+    for c in contours:
+        rect = cv2.boundingRect(c)
+        rects.append(rect)
+    cv2.drawContours(img_con, contours, -1, 255, -1)
+    # if self.cfg.show_window:
+    #     cv2.imshow("Contours", img_con)
+    #     cv2.waitKey(1)
+    # self.detect_cnt += 1
+    return rects
 
 
 def collect(args):

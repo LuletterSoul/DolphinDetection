@@ -12,9 +12,13 @@
 """
 
 import detection
-from multiprocessing import Process
+import multiprocessing as mp
+# from multiprocessing import Process
 from config import *
 import sys
+from classfy.model import model
+import traceback
+import numpy as np
 
 if __name__ == '__main__':
     # if MONITOR == MonitorType.RAY_BASED:
@@ -31,7 +35,6 @@ if __name__ == '__main__':
     #         print(ray.errors(all_jobs=True))
     #     except Exception as e:
     #         print(e)
-
     if MONITOR == MonitorType.PROCESS_THREAD_BASED:
         monitor = detection.EmbeddingControlBasedThreadAndProcessMonitor(VIDEO_CONFIG_DIR / 'video.json',
                                                                          STREAM_SAVE_DIR, SAMPLE_SAVE_DIR,

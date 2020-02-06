@@ -11,32 +11,35 @@
 @desc:
 """
 
-from multiprocessing import Pool, cpu_count
+import os.path as osp
+import sys
+import threading
+import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
-import stream
-import interface as I
-from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
-from .capture import *
-from .detector import *
-from .detect_funcs import detect_based_task
-from utils import *
+from enum import Enum
+import multiprocessing as mp
+from multiprocessing import Pool, cpu_count
 from typing import List
-from utils import clean_dir, logger
-from config import SystemStatus
-from config import enable_options
-from .component import stream_pipes
+
 # from pynput.keyboard import Key, Controller, Listener
 # import keyboard
 # from capture import *
 import cv2
-import sys
 import imutils
-import time
-import threading
-import traceback
 
-import os.path as osp
-from enum import Enum
+import interface as I
+import stream
+from classfy.model import model
+from config import SystemStatus, ObjectClass
+from config import enable_options
+from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
+from utils import *
+from utils import clean_dir, logger
+from .capture import *
+from .component import stream_pipes
+from .detect_funcs import detect_based_task
+from .detector import *
 
 
 class MonitorType(Enum):
@@ -290,11 +293,11 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         for i, cfg in enumerate(self.cfgs):
             res = self.init_stream_receiver(i)
             # logger.debug(res.get())
-
+        model.init_model()
         # Run video capture from stream
         for i in range(len(self.cfgs)):
             if self.process_pool is not None:
-                self.task_futures.append(self.process_pool.apply_async(self.caps[i].read, ()))
+                self.task_futures.append(self.process_pool.apply_async(self.caps[i].read, (model,)))
                 self.task_futures[-1].get()
 
     def wait(self):
@@ -607,8 +610,10 @@ class DetectorController(object):
         logger.info('Collect sub-frames from all detectors....')
         return res
 
-    def construct(self, results: List[DetectionResult]):
+    def construct(self, *args):
         # sub_frames = [r.frame for r in results]
+        results = args[0]
+        _model = args[1]
         sub_binary = [r.binary for r in results]
         # sub_thresh = [r.thresh for r in results]
         # constructed_frame = self.construct_rgb(sub_frames)
@@ -633,16 +638,24 @@ class DetectorController(object):
                         logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
                         continue
                     for rect in r.rects:
-                        color = np.random.randint(0, 255, size=(3,))
-                        color = [int(c) for c in color]
-                        p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
-                        cv2.rectangle(render_frame, p1, p2, color, 2)
-                    self.render_frame_cache[current_index] = render_frame
-                    self.render_rect_cache[current_index] = r.rects
-                    threading.Thread(target=self.stream_render.reset, args=(current_index,), daemon=True).start()
+                        candidate = crop_by_rect(self.cfg, rect, render_frame)
+                        if _model.predict(candidate) == 0:
+                            logger.info(
+                                '============================Controller [{}]: Dolphin Detected============================'.format(
+                                    self.cfg.index))
+                            if self.cfg.render:
+                                color = np.random.randint(0, 255, size=(3,))
+                                color = [int(c) for c in color]
+                                p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
+                                cv2.rectangle(render_frame, p1, p2, color, 2)
+                                self.render_frame_cache[current_index] = render_frame
+                                self.render_rect_cache[current_index] = r.rects
+                                threading.Thread(target=self.stream_render.reset, args=(current_index,),
+                                                 daemon=True).start()
                     # self.stream_render.reset(current_index)
             # self.stream_render.notify(current_index)
-            threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
+            if self.cfg.render:
+                threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
             self.clear_render_cache()
             # return constructed_frame, constructed_binary, constructed_thresh
             return ConstructResult(original_frame, constructed_binary, None)
@@ -1066,12 +1079,12 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
     def collect(self, args):
         return [f.result() for f in args]
 
-    def collect_and_reconstruct(self, args):
+    def collect_and_reconstruct(self, *args):
         collect_start = time.time()
         # results = self.collect(args)
-        results = args
+        # results = args[0]
         logger.info('Controller [{}]: Collect consume [{}] seconds'.format(self.cfg.index, time.time() - collect_start))
-        construct_result: ConstructResult = self.construct(results)
+        construct_result: ConstructResult = self.construct(*args)
         if self.cfg.show_window:
             self.pipe[0].send(construct_result.binary)
         if construct_result is not None:
@@ -1101,8 +1114,9 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
     def send(self, frame):
         self.pipe[0].send(frame)
 
-    def dispatch_frame(self, frame):
+    def dispatch_frame(self, *args):
         start = time.time()
+        frame = args[0]
         self.frame_cnt.set(self.frame_cnt.get() + 1)
         self.original_frame_cache[self.frame_cnt.get()] = frame
         # threading.Thread(target=self.send, args=(frame,)).start()
@@ -1125,7 +1139,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 # async_futures.append(detect_td.start())
                 # async_futures.append(self.pool.submit(detect_based_task, block, d))
                 # async_futures.append(detect_based_task.remote(block, d))
-            self.collect_and_reconstruct(async_futures)
+            self.collect_and_reconstruct(async_futures, args[1])
             # r = pool.apply_async(collect_and_reconstruct,
             #                      (async_futures, self.construct_params, self.block_info, self.cfg,))
             # r.get()

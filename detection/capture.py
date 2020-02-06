@@ -24,6 +24,7 @@ from config import VideoConfig, SystemStatus, cpu_usage
 from utils import logger
 import time
 import shutil
+from classfy.model import model
 
 
 # import ray
@@ -55,7 +56,7 @@ class VideoCaptureThreading:
     def set(self, var1, var2):
         self.cap.set(var1, var2)
 
-    def __start__(self):
+    def __start__(self, *args):
         if self.status.get() == SystemStatus.RUNNING:
             print('[!] Threaded video capturing has already been started.')
             return None
@@ -65,7 +66,7 @@ class VideoCaptureThreading:
         # self.cap = cv2.VideoCapture(src)
         # logger.info('Loading done from: [{}]'.format(src))
         self.status.set(SystemStatus.RUNNING)
-        threading.Thread(target=self.update, args=(), daemon=True).start()
+        threading.Thread(target=self.update, args=(*args,), daemon=True).start()
         threading.Thread(target=self.listen, args=(), daemon=True).start()
         # threading.Thread(target=cpu_usage).start()
         return self
@@ -98,7 +99,7 @@ class VideoCaptureThreading:
     def get_posix(self):
         return self.video_path / self.index_pool.get()
 
-    def update(self):
+    def update(self, *args):
         cnt = 0
         start = time.time()
         logger.info('*******************************Init video capture [{}]********************************'.format(
@@ -114,7 +115,7 @@ class VideoCaptureThreading:
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
-            self.pass_frame(frame)
+            self.pass_frame(frame, args[0])
             cnt += 1
             self.post_frame_process(frame)
             self.runtime = time.time() - start
@@ -124,8 +125,8 @@ class VideoCaptureThreading:
                 self.cfg.index))
         # logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
 
-    def pass_frame(self, frame):
-        self.frame_queue.put(frame, block=True)
+    def pass_frame(self, *args):
+        self.frame_queue.put(args[0], block=True)
         # logger.info('Passed frame...')
 
     def update_capture(self, cnt):
@@ -156,9 +157,9 @@ class VideoCaptureThreading:
     def post_frame_process(self, frame):
         pass
 
-    def read(self):
+    def read(self, *args):
         if self.status.get() == SystemStatus.SHUT_DOWN:
-            self.__start__()
+            self.__start__(*args)
         return True
         # with self.read_lock:
         # frame = self.frame.copy()
@@ -218,8 +219,9 @@ class VideoOfflineCallbackCapture(VideoOfflineCapture):
         self.controller = controller
         self.shut_down_event = shut_down_event
 
-    def pass_frame(self, frame):
-        self.controller.dispatch_frame(frame)
+    def pass_frame(self, *args):
+        assert len(args) >= 2
+        self.controller.dispatch_frame(*args)
 
     def cancel(self):
         super().cancel()
@@ -339,7 +341,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
     def handle_history(self):
         pass
 
-    def update(self):
+    def update(self, *args):
         cnt = 0
         start = time.time()
         logger.info('*******************************Init video capture [{}]********************************'.format(
@@ -349,6 +351,8 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             s = time.time()
             grabbed, frame = self.cap.read()
             e = 1 / (time.time() - s)
+            # logger.info(self.cap.get(cv2.CAP_PROP_POS_MSEC))
+            # logger.info(self.cap.getRTPTimeStampTs())
             logger.info(
                 'Video capture [{}]: Receive Rate [{}]s/100fs, [{}]/FPS'.format(
                     self.cfg.index, round(e * 100, 2), round(e, 2)))
@@ -358,7 +362,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
-            self.pass_frame(frame)
+            self.pass_frame(frame, args[0])
             e = 1 / (time.time() - s)
             logger.info(
                 'Video capture [{}]: Operation Speed Rate [{}]s/100fs, [{}]/FPS'.format(
@@ -396,5 +400,6 @@ class VideoRtspCallbackCapture(VideoRtspCapture):
                          delete_post)
         self.controller = controller
 
-    def pass_frame(self, frame):
-        self.controller.dispatch_frame(frame)
+    def pass_frame(self, *args):
+        assert len(args) >= 2
+        self.controller.dispatch_frame(args[0], args[1])

@@ -51,6 +51,7 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "render": true,
       "bbox": {
         "w": 224,
         "h": 224
@@ -111,6 +112,7 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "render": true,
       "bbox": {
         "w": 224,
         "h": 224
@@ -171,6 +173,7 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "render": true,
       "bbox": {
         "w": 224,
         "h": 224
@@ -231,6 +234,7 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "render": true,
       "bbox": {
         "w": 224,
         "h": 224
@@ -288,6 +292,7 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "render": true,
       "bbox": {
         "w": 224,
         "h": 224
@@ -345,6 +350,7 @@
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,
       "future_frames": 120,
+      "render": true,
       "bbox": {
         "w": 224,
         "h": 224
