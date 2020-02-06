@@ -11,7 +11,7 @@
 @desc:
 """
 
-from multiprocessing import Manager, Pool, cpu_count, Queue
+from multiprocessing import Manager, Pool, cpu_count, Process
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 import stream
 import interface as I
@@ -220,7 +220,15 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                         self.caps_queue[idx], c, idx, self, c.sample_rate,
                                         delete_post=False))
 
+    def init_websocket_servers(self):
+        p = []
+        for idx, cfg in enumerate(self.cfgs):
+            p.append(Process(target=websocket_server, args=(23456, self.msg_queue[idx])))
+        for i in range(len(p)):
+            p[i].start()
+
     def call(self):
+        self.init_websocket_servers()
 
         self.init_caps()
         # Init stream receiver firstly, ensures video index that is arrived before detectors begin detection..
@@ -556,6 +564,12 @@ class DetectorController(object):
                     self.render_frame_cache[current_index] = original_frame
                     self.render_rect_cache[current_index] = r.rects
                     self.stream_render.reset(current_index)
+
+                    # send the message to the client
+                    json_msg = creat_json_msg(camera_index=self.cfg.index, timestamp='2020-2-5-11-41',
+                                              frame_index=current_index, rects=r.rects)
+                    self.msg_queue.put(json_msg)
+                    logger.info('send message to the client')
 
             self.stream_render.notify(current_index)
             self.clear_render_cache()
