@@ -15,11 +15,9 @@ import os.path as osp
 import sys
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from enum import Enum
-from multiprocessing import cpu_count, Process
+from multiprocessing import cpu_count
 
-import interface as I
 import stream
-from config import enable_options
 from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
 from utils import NoDaemonPool as Pool
 from .capture import *
@@ -234,9 +232,10 @@ class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 
 class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, cfgs, stream_path: Path, sample_path, frame_path, region_path: Path,
+    def __init__(self, cfgs, model, stream_path: Path, sample_path, frame_path, region_path: Path,
                  offline_path: Path = None) -> None:
         super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path)
+        self.model = model
         self.task_futures = []
         # self.process_pool = None
         # self.thread_pool = None
@@ -285,11 +284,10 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         for i, cfg in enumerate(self.cfgs):
             res = self.init_stream_receiver(i)
             # logger.debug(res.get())
-        model.init_model()
         # Run video capture from stream
         for i in range(len(self.cfgs)):
             if self.process_pool is not None:
-                self.task_futures.append(self.process_pool.apply_async(self.caps[i].read, (model,)))
+                self.task_futures.append(self.process_pool.apply_async(self.caps[i].read, (self.model,)))
                 self.task_futures[-1].get()
 
     def wait(self):

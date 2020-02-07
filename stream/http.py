@@ -18,10 +18,11 @@ app = Flask(__name__)
 
 class HttpServer(object):
 
-    def __init__(self, host_ip="127.0.0.1", host_port="8080", mode='dev', source_root=""):
+    def __init__(self, host_ip="127.0.0.1", host_port="8080", mode='dev', root="data/candidates"):
         self.host_ip = host_ip
         self.host_port = host_port
         self.mode = mode
+        self.set_root(root)
 
     @staticmethod
     @app.route('/video/', methods=['GET'])
@@ -29,10 +30,17 @@ class HttpServer(object):
         camera = request.args.get('camera')
         date = request.args.get("date")
         video_id = request.args.get("v_id")
-
-        url = "{}/{}/{}.mp4".format(camera, date, video_id)
-
+        url = "{}/{}/render-streams/{}.mp4".format(date, camera, video_id)
         return app.send_static_file(url)
+
+    @staticmethod
+    @app.route('/', methods=['GET'])
+    def root():
+        return "Hello word!"
+
+    @staticmethod
+    def set_root(root):
+        app.static_folder = root
 
     def run(self):
         if self.mode == 'dev':

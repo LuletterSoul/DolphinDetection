@@ -38,9 +38,13 @@ class DolphinClassifier(object):
         self.device = None
         self.model = None
 
-    def init_model(self):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = torch.load(str(self.model_path))
+    def run(self):
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda")
+            self.model = torch.load(str(self.model_path))
+        else:
+            self.device = torch.device("cpu")
+            self.model = torch.load(str(self.model_path), map_location="cpu")
         self.model.eval()
         print(self.model)
         print(self.device)
@@ -54,8 +58,6 @@ class DolphinClassifier(object):
         index = output.data.cpu().numpy().argmax()
         return index
 
-
-model = DolphinClassifier(MODEL_PATH)
 
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

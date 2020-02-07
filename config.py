@@ -127,24 +127,42 @@ class ServerConfig(Config):
     Server configuration definitions
     """
 
-    def __init__(self, mode, http_ip, http_port, root, stream_save_path, sample_save_dir,
+    def __init__(self, mode, http_ip, http_port, root, classify_model_path, stream_save_path, sample_save_dir,
                  frame_save_dir,
                  candidate_save_dir, offline_stream_save_dir) -> None:
         self.mode = mode
         self.http_ip = http_ip
         self.http_port = http_port
-        if root == '':
-            self.stream_save_path = Path(os.path.join(PROJECT_DIR, stream_save_path))
-            self.sample_save_dir = Path(os.path.join(PROJECT_DIR, sample_save_dir))
-            self.frame_save_dir = Path(os.path.join(PROJECT_DIR, frame_save_dir))
-            self.candidate_save_dir = Path(os.path.join(PROJECT_DIR, candidate_save_dir))
-            self.offline_stream_save_dir = Path(os.path.join(PROJECT_DIR, offline_stream_save_dir))
+        self.classify_model_path = classify_model_path
+        self.stream_save_path = stream_save_path
+        self.sample_save_dir = sample_save_dir
+        self.frame_save_dir = frame_save_dir
+        self.candidate_save_dir = candidate_save_dir
+        self.offline_stream_save_dir = offline_stream_save_dir
+        self.root = root
+        self.convert_to_poxis()
+
+    def set_root(self, root):
+        self.root = root
+        self.convert_to_poxis()
+
+    def set_candidate_save_dir(self, cdp):
+        self.candidate_save_dir = cdp
+        self.convert_to_poxis()
+
+    def convert_to_poxis(self, ):
+        if self.root == '':
+            self.stream_save_path = Path(os.path.join(PROJECT_DIR, self.stream_save_path))
+            self.sample_save_dir = Path(os.path.join(PROJECT_DIR, self.sample_save_dir))
+            self.frame_save_dir = Path(os.path.join(PROJECT_DIR, self.frame_save_dir))
+            self.candidate_save_dir = Path(os.path.join(PROJECT_DIR, self.candidate_save_dir))
+            self.offline_stream_save_dir = Path(os.path.join(PROJECT_DIR, self.offline_stream_save_dir))
         else:
-            self.stream_save_path = Path(os.path.join(root, stream_save_path))
-            self.sample_save_dir = Path(os.path.join(root, sample_save_dir))
-            self.frame_save_dir = Path(os.path.join(root, frame_save_dir))
-            self.candidate_save_dir = Path(os.path.join(root, candidate_save_dir))
-            self.offline_stream_save_dir = Path(os.path.join(root, offline_stream_save_dir))
+            self.stream_save_path = Path(os.path.join(self.root, self.stream_save_path))
+            self.sample_save_dir = Path(os.path.join(self.root, self.sample_save_dir))
+            self.frame_save_dir = Path(os.path.join(self.root, self.frame_save_dir))
+            self.candidate_save_dir = Path(os.path.join(self.root, self.candidate_save_dir))
+            self.offline_stream_save_dir = Path(os.path.join(self.root, self.offline_stream_save_dir))
 
 
 class VideoConfig(Config):

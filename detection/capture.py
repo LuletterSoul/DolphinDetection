@@ -11,20 +11,20 @@
 @desc:
 """
 import os
+import shutil
 import threading
-import psutil
-from multiprocessing.queues import Queue
+import time
 from multiprocessing import Manager
+from multiprocessing.queues import Queue
 from pathlib import Path
-# from .manager import TaskBasedDetectorController
 
 import cv2
 
-from config import VideoConfig, SystemStatus, cpu_usage
+from config import VideoConfig, SystemStatus
 from utils import logger
-import time
-import shutil
-from classfy.model import model
+
+
+# from .manager import TaskBasedDetectorController
 
 
 # import ray
@@ -354,7 +354,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             # logger.info(self.cap.get(cv2.CAP_PROP_POS_MSEC))
             # logger.info(self.cap.getRTPTimeStampTs())
             logger.info(
-                'Video capture [{}]: Receive Rate [{}]s/100fs, [{}]/FPS'.format(
+                'Video capture [{}]: Receive Rate [{}]/FPS'.format(
                     self.cfg.index, round(e * 100, 2), round(e, 2)))
             s = time.time()
             if not grabbed:
@@ -365,7 +365,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             self.pass_frame(frame, args[0])
             e = 1 / (time.time() - s)
             logger.info(
-                'Video capture [{}]: Operation Speed Rate [{}]s/100fs, [{}]/FPS'.format(
+                'Video capture [{}]: Operation Speed Rate [{}]/FPS'.format(
                     self.cfg.index, round(e * 100, 2), round(e, 2)))
             self.post_frame_process(frame)
             cnt += 1
