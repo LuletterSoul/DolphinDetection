@@ -10,17 +10,12 @@
 @version 1.0
 @desc:
 """
-import time
 from multiprocessing import Queue
-import traceback
+
+from utils import *
 
 # from interface import thresh as Thresh
 # import interface
-
-import imutils
-
-from config import VideoConfig
-from utils import *
 
 # from utils.log import logger
 

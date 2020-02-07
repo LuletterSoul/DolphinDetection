@@ -44,14 +44,15 @@ class MonitorType(Enum):
 # Monitor will build multiple video stream receivers according the video configuration
 class DetectionMonitor(object):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, sample_path: Path, frame_path: Path,
+    def __init__(self, cfgs: Path, stream_path: Path, sample_path: Path, frame_path: Path,
                  region_path: Path,
                  offline_path: Path = None, build_pool=True) -> None:
         super().__init__()
-        # self.cfgs = I.load_video_config(video_config_path)[-1:]
-        self.cfgs = I.load_video_config(video_config_path)
+        # self.cfgs = I.load_video_config(cfgs)[-1:]
+        # self.cfgs = I.load_video_config(cfgs)
         # self.cfgs = [c for c in self.cfgs if c.enable]
-        self.cfgs = [c for c in self.cfgs if enable_options[c.index]]
+        # self.cfgs = [c for c in cfgs if enable_options[c.index]]
+        self.cfgs = cfgs
         self.quit = False
         # Communication Pipe between detector and stream receiver
         self.pipes = [Manager().Queue(c.max_streams_cache) for c in self.cfgs]
@@ -153,9 +154,9 @@ class DetectionMonitor(object):
 # But a controller will manager [row*col] concurrency threads or processes
 # row and col are definied in video configuration
 class EmbeddingControlMonitor(DetectionMonitor):
-    def __init__(self, video_config_path: Path, stream_path: Path, sample_path: Path, frame_path: Path, region_path,
+    def __init__(self, cfgs: Path, stream_path: Path, sample_path: Path, frame_path: Path, region_path,
                  offline_path: Path = None, build_pool=True) -> None:
-        super().__init__(video_config_path, stream_path, sample_path, frame_path, region_path, offline_path, build_pool)
+        super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path, build_pool)
         self.caps_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
         self.caps = []
         self.controllers = []
@@ -212,9 +213,9 @@ class EmbeddingControlMonitor(DetectionMonitor):
 
 class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, sample_path, frame_path, region_path: Path,
+    def __init__(self, cfgs: Path, stream_path: Path, sample_path, frame_path, region_path: Path,
                  offline_path: Path = None) -> None:
-        super().__init__(video_config_path, stream_path, sample_path, frame_path, region_path, offline_path)
+        super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path)
 
     def init_controllers(self):
         self.controllers = [
@@ -233,9 +234,9 @@ class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 
 class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, sample_path, frame_path, region_path: Path,
+    def __init__(self, cfgs, stream_path: Path, sample_path, frame_path, region_path: Path,
                  offline_path: Path = None) -> None:
-        super().__init__(video_config_path, stream_path, sample_path, frame_path, region_path, offline_path)
+        super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path)
         self.task_futures = []
         # self.process_pool = None
         # self.thread_pool = None
@@ -315,9 +316,9 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
 
 class EmbeddingControlBasedThreadMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, sample_path, frame_path, region_path: Path,
+    def __init__(self, cfgs: Path, stream_path: Path, sample_path, frame_path, region_path: Path,
                  offline_path: Path = None) -> None:
-        super().__init__(video_config_path, stream_path, sample_path, frame_path, region_path, offline_path)
+        super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path)
 
     def init_controllers(self):
         self.controllers = [
@@ -337,10 +338,10 @@ class EmbeddingControlBasedThreadMonitor(EmbeddingControlMonitor):
 
 class EmbeddingControlBasedThreadAndProcessMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, video_config_path: Path, stream_path: Path, sample_path: Path, frame_path: Path,
+    def __init__(self, cfgs: Path, stream_path: Path, sample_path: Path, frame_path: Path,
                  region_path: Path,
                  offline_path=None) -> None:
-        super().__init__(video_config_path, stream_path, sample_path, frame_path, region_path, offline_path)
+        super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path)
 
     def init_controllers(self):
         self.controllers = [

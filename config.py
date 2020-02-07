@@ -13,9 +13,10 @@
 import json
 import logging
 import os
-import psutil
-from pathlib import Path
 import time
+from pathlib import Path
+
+import psutil
 
 LOG_LEVER = logging.INFO
 
@@ -107,8 +108,50 @@ enable_options = {
 #     8: False,
 # }
 
+class Config(object):
+    """
+    Base configuration class, built-in json to object method
+    """
 
-class VideoConfig:
+    def to_json(self):
+        return json.dumps(self.__dict__)
+
+    @classmethod
+    def from_json(cls, json_dict):
+        # json_dict = json.loads(json_str)
+        return cls(**json_dict)
+
+
+class ServerConfig(Config):
+    """
+    Server configuration definitions
+    """
+
+    def __init__(self, mode, http_ip, http_port, root, stream_save_path, sample_save_dir,
+                 frame_save_dir,
+                 candidate_save_dir, offline_stream_save_dir) -> None:
+        self.mode = mode
+        self.http_ip = http_ip
+        self.http_port = http_port
+        if root == '':
+            self.stream_save_path = Path(os.path.join(PROJECT_DIR, stream_save_path))
+            self.sample_save_dir = Path(os.path.join(PROJECT_DIR, sample_save_dir))
+            self.frame_save_dir = Path(os.path.join(PROJECT_DIR, frame_save_dir))
+            self.candidate_save_dir = Path(os.path.join(PROJECT_DIR, candidate_save_dir))
+            self.offline_stream_save_dir = Path(os.path.join(PROJECT_DIR, offline_stream_save_dir))
+        else:
+            self.stream_save_path = Path(os.path.join(root, stream_save_path))
+            self.sample_save_dir = Path(os.path.join(root, sample_save_dir))
+            self.frame_save_dir = Path(os.path.join(root, frame_save_dir))
+            self.candidate_save_dir = Path(os.path.join(root, candidate_save_dir))
+            self.offline_stream_save_dir = Path(os.path.join(root, offline_stream_save_dir))
+
+
+class VideoConfig(Config):
+    """
+    Video configuration object
+    """
+
     def __init__(self, index, name, shape, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
                  online, sample_internal, render, save_box, show_box, rtsp, enable_sample_frame, rtsp_saved_per_frame,
@@ -145,14 +188,6 @@ class VideoConfig:
         self.bbox = bbox
         self.alg = alg
 
-    def to_json(self):
-        return json.dumps(self.__dict__)
-
-    @classmethod
-    def from_json(cls, json_dict):
-        # json_dict = json.loads(json_str)
-        return cls(**json_dict)
-
 
 class LabelConfig:
     """
@@ -163,13 +198,6 @@ class LabelConfig:
         self.start = start
         self.end = end
         self.center = center
-
-    def to_json(self):
-        return json.dumps(self.__dict__)
-
-    @classmethod
-    def from_json(cls, json_dict):
-        return cls(**json_dict)
 
 
 # example usage
