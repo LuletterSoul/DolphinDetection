@@ -220,15 +220,14 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                         self.caps_queue[idx], c, idx, self, c.sample_rate,
                                         delete_post=False))
 
-    def init_websocket_servers(self):
-        p = []
+    def init_websocket_clients(self):
         for idx, cfg in enumerate(self.cfgs):
-            p.append(Process(target=websocket_server, args=(23456, self.msg_queue[idx])))
-        for i in range(len(p)):
-            p[i].start()
+            thread = threading.Thread(target=websocket_client, args=(self.msg_queue[idx], ))
+            logger.info(f'websocket client [{cfg.index}] is initializing...')
+            thread.start()
 
     def call(self):
-        self.init_websocket_servers()
+        self.init_websocket_clients()
 
         self.init_caps()
         # Init stream receiver firstly, ensures video index that is arrived before detectors begin detection..
@@ -364,7 +363,7 @@ class DetectorController(object):
         self.runtime = time.time()
         # self.clear_point = 0
         # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        self.stream_render = DetectionStreamRender(0, self.cfg.future_frames, self)
+        self.stream_render = DetectionStreamRender(0, self.cfg.future_frames, self.msg_queue, self)
 
         self.save_cache = {}
 
@@ -446,6 +445,7 @@ class DetectorController(object):
         current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
         target = self.result_path / (current_time + str(self.result_cnt) + '.png')
         logger.info('Writing stream frame into: [{}]'.format(str(target)))
+
         while True:
             if self.quit:
                 break
@@ -566,10 +566,10 @@ class DetectorController(object):
                     self.stream_render.reset(current_index)
 
                     # send the message to the client
-                    json_msg = creat_json_msg(camera_index=self.cfg.index, timestamp='2020-2-5-11-41',
-                                              frame_index=current_index, rects=r.rects)
+                    json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
+                                                     timestamp=current_index, rects=r.rects)
                     self.msg_queue.put(json_msg)
-                    logger.info('send message to the client')
+                    logger.info(f'put detect message in msg_queue...')
 
             self.stream_render.notify(current_index)
             self.clear_render_cache()
@@ -638,7 +638,7 @@ class DetectorController(object):
 
 class DetectionStreamRender(object):
 
-    def __init__(self, detect_index, future_frames, controller: DetectorController) -> None:
+    def __init__(self, detect_index, future_frames, msg_queue: Queue, controller: DetectorController) -> None:
         super().__init__()
         self.detect_index = detect_index
         self.rect_stream_path = controller.rect_stream_path
@@ -657,6 +657,7 @@ class DetectionStreamRender(object):
         self.next_prepare_event.set()
         # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
         self.fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+        self.msg_queue = msg_queue
 
     def reset(self, detect_index):
         if detect_index - self.detect_index > self.future_frames:
@@ -836,6 +837,9 @@ class DetectionStreamRender(object):
                                                                                                             self.stream_cnt,
                                                                                                             str(
                                                                                                                 target)))
+        msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target))
+        self.msg_queue.put(msg_json)
+        logger.info(f'put packaged message in the msg_queue...')
 
     def original_render_task(self, current_idx, current_time, frame_cache):
         target = self.original_stream_path / (current_time + str(self.stream_cnt) + '.mp4')

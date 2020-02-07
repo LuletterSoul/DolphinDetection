@@ -1,39 +1,35 @@
 import socket
 import json
+import time
 from utils import logger
+from config import WEBSOCKET_SERVER_IP, WEBSOCKET_SERVER_PORT
 
 
-def websocket_server(server_port, q):
-    host = socket.gethostbyname(socket.gethostname())
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind((host, server_port))
-    server.listen(1)
-
-    client = None
+def websocket_client(q):
+    address = (WEBSOCKET_SERVER_IP, WEBSOCKET_SERVER_PORT)
+    server = None
+    history_msg_json = None
     while True:
-        if client is None:
-            logger.info('waiting client to connect...')
-            client, address = server.accept()
-            logger.info(f'client {address} connected!')
+        if server is None:
+            logger.info(f'waiting to connect to server {address}...')
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.connect(address)
+            logger.info(f'connect to server {address} successfully')
         try:
+            if history_msg_json is not None:
+                server.send(history_msg_json.encode('utf-8'))
+                logger.info(f'client send history message to server {address} successfully')
+                history_msg_json = None
             while not q.empty():
+                print(q.qsize())
                 msg_json = q.get(1)
-                client.sendall(msg_json.encode('utf-8'))
+                server.send(msg_json.encode('utf-8'))
+                logger.info(f'client send message to server {address} successfully')
+                # time.sleep(10)
         except Exception as e:
-            logger.info('client lost...')
-            client = None
+            server = None
+            history_msg_json = msg_json
             logger.error(e)
-
-
-def creat_json_msg(camera_index, timestamp, frame_index, rects):
-    position_json = creat_position_json(rects)
-    msg = {'camera_index': camera_index,
-           'timestamp': timestamp,
-           'frame_index': frame_index,
-           'position': position_json}
-    msg_json = json.dumps(msg)
-    return msg_json
 
 
 def creat_position_json(rects):
@@ -43,6 +39,38 @@ def creat_position_json(rects):
     """
     position = []
     for rect in rects:
-        position.append({'x': rect[0], 'y': rect[1], 'w': rect[2], 'h': rect[3]})
+        position.append({'lx': rect[0], 'ly': rect[1], 'rx': rect[0] + rect[2], 'ry': rect[1] + rect[3]})
     position_json = json.dumps(position)
     return position_json
+
+
+def creat_detect_msg_json(video_stream, channel, timestamp, rects):
+    position_json = creat_position_json(rects)
+    msg = {
+        'cmdType': 'notify',
+        "appId": "10080",
+        'clientId': 'jt001',
+        'data': {
+            'notifyType': 'detectedNotify',
+            'videoStream': video_stream,
+            'channel': channel,
+            'timestamp': timestamp,
+            'coordinates': position_json
+        }
+    }
+    msg_json = json.dumps(msg)
+    return msg_json
+
+
+def creat_packaged_msg_json(filename, path):
+    msg = {
+        'cmdType': 'notify',
+        'clientId': 'jt001',
+        'data': {
+            'notifyType': 'packagedNotify',
+            'filename': filename,
+            'path': path
+        }
+    }
+    msg_json = json.dumps(msg)
+    return msg_json
