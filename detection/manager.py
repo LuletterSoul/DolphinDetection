@@ -13,33 +13,24 @@
 
 import os.path as osp
 import sys
-import threading
-import time
-import traceback
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from enum import Enum
-import multiprocessing as mp
-from multiprocessing import Pool, cpu_count
-from typing import List
-
-# from pynput.keyboard import Key, Controller, Listener
-# import keyboard
-# from capture import *
-import cv2
-import imutils
+from multiprocessing import cpu_count, Process
 
 import interface as I
 import stream
-from classfy.model import model
-from config import SystemStatus, ObjectClass
 from config import enable_options
 from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
-from utils import *
-from utils import clean_dir, logger
+from utils import NoDaemonPool as Pool
 from .capture import *
 from .component import stream_pipes
 from .detect_funcs import detect_based_task
 from .detector import *
+
+
+# from pynput.keyboard import Key, Controller, Listener
+# import keyboard
+# from capture import *
 
 
 class MonitorType(Enum):
@@ -652,9 +643,11 @@ class DetectorController(object):
                                 self.render_rect_cache[current_index] = r.rects
                                 threading.Thread(target=self.stream_render.reset, args=(current_index,),
                                                  daemon=True).start()
+                                # Process(target=self.stream_render.reset, daemon=False, args=(current_index,)).start()
                     # self.stream_render.reset(current_index)
             # self.stream_render.notify(current_index)
             if self.cfg.render:
+                # Process(target=self.stream_render.notify, daemon=False, args=(current_index,)).start()
                 threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
             self.clear_render_cache()
             # return constructed_frame, constructed_binary, constructed_thresh

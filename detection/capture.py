@@ -379,7 +379,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
 
     def post_frame_process(self, frame):
         self.sample_cnt += 1
-        if self.sample_cnt % self.cfg.rtsp_saved_per_frame and self.cfg.enable_sample_frame == 0:
+        if self.sample_cnt % self.cfg.rtsp_saved_per_frame and self.cfg.enable_sample_frame:
             current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
             self.sample_cnt = 0
             # if current_time != self.saved_time:
