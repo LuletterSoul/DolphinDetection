@@ -565,7 +565,7 @@ class DetectorController(object):
                     self.render_rect_cache[current_index] = r.rects
                     self.stream_render.reset(current_index)
 
-                    # send the message to the client
+                    # send the message to the server
                     json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
                                                      timestamp=current_index, rects=r.rects)
                     self.msg_queue.put(json_msg)
@@ -837,6 +837,7 @@ class DetectionStreamRender(object):
                                                                                                             self.stream_cnt,
                                                                                                             str(
                                                                                                                 target)))
+        # send message to server
         msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target))
         self.msg_queue.put(msg_json)
         logger.info(f'put packaged message in the msg_queue...')
