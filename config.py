@@ -163,12 +163,14 @@ class ServerConfig(Config):
             self.sample_save_dir = Path(os.path.join(PROJECT_DIR, self.sample_save_dir))
             self.frame_save_dir = Path(os.path.join(PROJECT_DIR, self.frame_save_dir))
             self.candidate_save_dir = Path(os.path.join(PROJECT_DIR, self.candidate_save_dir))
+            self.classify_model_path = Path(os.path.join(PROJECT_DIR, self.classify_model_path))
             self.offline_stream_save_dir = Path(os.path.join(PROJECT_DIR, self.offline_stream_save_dir))
         else:
             self.stream_save_path = Path(os.path.join(self.root, self.stream_save_path))
             self.sample_save_dir = Path(os.path.join(self.root, self.sample_save_dir))
             self.frame_save_dir = Path(os.path.join(self.root, self.frame_save_dir))
             self.candidate_save_dir = Path(os.path.join(self.root, self.candidate_save_dir))
+            self.classify_model_path = Path(os.path.join(self.root, self.classify_model_path))
             self.offline_stream_save_dir = Path(os.path.join(self.root, self.offline_stream_save_dir))
 
 

@@ -10,16 +10,13 @@
 @version 1.0
 @desc:
 """
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
-from torch.utils.data import DataLoader
-from torch.autograd import Variable
-from torchvision import datasets, transforms
-from classfy.base import *
-from config import PROJECT_DIR, MODEL_PATH
 import os
-import multiprocessing as mp
+
+import torch
+
+from classfy.base import *
+from config import PROJECT_DIR
+from utils import logger
 from pathlib import Path
 
 """
@@ -33,12 +30,14 @@ data_dir2 = os.path.join(PROJECT_DIR, 'data/test/0206')
 #                                        transforms.ToTensor(), ])
 class DolphinClassifier(object):
 
-    def __init__(self, model_path) -> None:
+    def __init__(self, model_path: Path) -> None:
         self.model_path = model_path
         self.device = None
         self.model = None
 
     def run(self):
+        if not self.model_path.exists():
+            raise Exception(f'Model init failed: model not exisit at [{str(self.model_path)}].')
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
             self.model = torch.load(str(self.model_path))
@@ -57,8 +56,6 @@ class DolphinClassifier(object):
         output = self.model(input)
         index = output.data.cpu().numpy().argmax()
         return index
-
-
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # print(device)
