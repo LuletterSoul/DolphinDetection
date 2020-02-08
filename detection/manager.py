@@ -20,11 +20,14 @@ import imutils
 
 import stream
 from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
+from stream.websocket import *
 from utils import NoDaemonPool as Pool
 from .capture import *
 from .component import stream_pipes
 from .detect_funcs import detect_based_task
 from .detector import *
+
+import asyncio
 
 
 # from pynput.keyboard import Key, Controller, Listener
@@ -157,6 +160,7 @@ class EmbeddingControlMonitor(DetectionMonitor):
                  offline_path: Path = None, build_pool=True) -> None:
         super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path, build_pool)
         self.caps_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
+        self.msg_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
         self.caps = []
         self.controllers = []
 
@@ -233,10 +237,11 @@ class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 
 class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, cfgs, model, stream_path: Path, sample_path, frame_path, region_path: Path,
+    def __init__(self, cfgs, scfg, model, stream_path: Path, sample_path, frame_path, region_path: Path,
                  offline_path: Path = None) -> None:
         super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path)
         self.model = model
+        self.scfg = scfg
         self.task_futures = []
         # self.process_pool = None
         # self.thread_pool = None
@@ -246,7 +251,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             TaskBasedDetectorController(cfg, self.stream_path / str(cfg.index), self.region_path / str(cfg.index),
                                         self.frame_path / str(cfg.index),
                                         self.caps_queue[idx],
-                                        self.pipes[idx]
+                                        self.pipes[idx],
+                                        self.msg_queue[idx]
                                         ) for
             idx, cfg in enumerate(self.cfgs)]
         for i, cfg in enumerate(self.cfgs):
@@ -276,8 +282,15 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             cap.quit.set()
             self.controllers[idx].quit.set()
 
-    def call(self):
+    def init_websocket_clients(self):
+        for idx, cfg in enumerate(self.cfgs):
+            threading.Thread(target=websocket_client, daemon=True,
+                             args=(self.msg_queue[idx], cfg, self.scfg)).start()
+            logger.info(f'Controller [{cfg.index}]: Websocket client [{cfg.index}] is initializing...')
+            # asyncio.get_running_loop().run_until_complete(websocket_client_async(self.msg_queue[idx]))
 
+    def call(self):
+        self.init_websocket_clients()
         # Init detector controller
         self.init_controllers()
         self.init_caps()
@@ -367,7 +380,8 @@ class EmbeddingControlBasedThreadAndProcessMonitor(EmbeddingControlMonitor):
 class DetectorController(object):
     def __init__(self, cfg: VideoConfig, stream_path: Path, candidate_path: Path, frame_path: Path,
                  frame_queue: Queue,
-                 index_pool: Queue) -> None:
+                 index_pool: Queue,
+                 msg_queue: Queue) -> None:
         super().__init__()
         self.cfg = cfg
         self.stream_path = stream_path
@@ -395,6 +409,7 @@ class DetectorController(object):
         self.pipe = stream_pipes[self.cfg.index]
         self.index_pool = index_pool
         self.frame_queue = frame_queue
+        self.msg_queue = msg_queue
         self.result_queue = Manager().Queue(self.cfg.max_streams_cache)
         self.quit = Manager().Event()
         self.quit.clear()
@@ -421,7 +436,7 @@ class DetectorController(object):
         self.runtime = time.time()
         # self.clear_point = 0
         # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        self.stream_render = DetectionStreamRender(self.cfg, 0, self.cfg.future_frames, self)
+        self.stream_render = DetectionStreamRender(self.cfg, 0, self.cfg.future_frames, self.msg_queue, self)
 
         self.save_cache = {}
 
@@ -630,10 +645,15 @@ class DetectorController(object):
                         continue
                     for rect in r.rects:
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
-                        if _model.predict(candidate) == 0:
+                        # if _model.predict(candidate) == 0:
+                        if True:
                             logger.info(
                                 '============================Controller [{}]: Dolphin Detected============================'.format(
                                     self.cfg.index))
+                            json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
+                                                             timestamp=current_index, rects=r.rects)
+                            self.msg_queue.put(json_msg)
+                            logger.info(f'put detect message in msg_queue...')
                             if self.cfg.render:
                                 color = np.random.randint(0, 255, size=(3,))
                                 color = [int(c) for c in color]
@@ -649,6 +669,7 @@ class DetectorController(object):
             if self.cfg.render:
                 # Process(target=self.stream_render.notify, daemon=False, args=(current_index,)).start()
                 threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
+
             self.clear_render_cache()
             # return constructed_frame, constructed_binary, constructed_thresh
             return ConstructResult(original_frame, constructed_binary, None)
@@ -719,7 +740,7 @@ class DetectorController(object):
 
 class DetectionStreamRender(object):
 
-    def __init__(self, cfg, detect_index, future_frames, controller: DetectorController) -> None:
+    def __init__(self, cfg, detect_index, future_frames, msg_queue: Queue, controller: DetectorController) -> None:
         super().__init__()
         self.cfg = cfg
         self.detect_index = detect_index
@@ -737,6 +758,7 @@ class DetectionStreamRender(object):
         self.original_frame_cache = controller.original_frame_cache
         self.next_prepare_event = Manager().Event()
         self.next_prepare_event.set()
+        self.msg_queue = msg_queue
         # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
         self.fourcc = cv2.VideoWriter_fourcc(*'MP4V')
         self.quit = Manager().Event()
@@ -945,6 +967,10 @@ class DetectionStreamRender(object):
                 str(
                     target)))
 
+        msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target))
+        self.msg_queue.put(msg_json)
+        logger.info(f'put packaged message in the msg_queue...')
+
     def original_render_task(self, current_idx, current_time, frame_cache):
         start = time.time()
         target = self.original_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
@@ -1029,8 +1055,8 @@ class ThreadBasedDetectorController(DetectorController):
 class TaskBasedDetectorController(ThreadBasedDetectorController):
 
     def __init__(self, cfg: VideoConfig, stream_path: Path, candidate_path: Path, frame_path: Path, frame_queue: Queue,
-                 index_pool: Queue) -> None:
-        super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool)
+                 index_pool: Queue, msg_queue: Queue) -> None:
+        super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool, msg_queue)
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
         #                     self.render_rect_cache, self.stream_render, 500, self.cfg))
@@ -1089,8 +1115,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             # if self.cfg.show_window:
             #     frame = imutils.resize(frame, width=800)
             #     self.display_pipe.put(frame)
-                # cv2.imshow('Reconstructed Frame', frame)
-                # cv2.waitKey(1)
+            # cv2.imshow('Reconstructed Frame', frame)
+            # cv2.waitKey(1)
         else:
             logger.error('Empty reconstruct result.')
         return True
