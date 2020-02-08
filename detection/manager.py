@@ -645,8 +645,7 @@ class DetectorController(object):
                         continue
                     for rect in r.rects:
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
-                        # if _model.predict(candidate) == 0:
-                        if True:
+                        if _model.predict(candidate) == 0:
                             logger.info(
                                 '============================Controller [{}]: Dolphin Detected============================'.format(
                                     self.cfg.index))
