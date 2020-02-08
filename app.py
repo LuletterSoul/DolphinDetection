@@ -32,6 +32,7 @@ class DolphinDetectionServer:
         self.vcfgs = [c for c in vcfgs if switcher_options[str(c.index)]]
         self.classification_model = DolphinClassifier(self.cfg.classify_model_path)
         self.monitor = detection.EmbeddingControlBasedTaskMonitor(self.vcfgs,
+                                                                  self.cfg,
                                                                   self.classification_model,
                                                                   self.cfg.stream_save_path,
                                                                   self.cfg.sample_save_dir,
@@ -79,6 +80,10 @@ def load_cfg(args):
         server_config.http_ip = args.http_ip
     if args.http_port is not None:
         server_config.http_port = args.http_port
+    if args.wc_ip is not None:
+        server_config.wc_ip= args.wc_ip
+    if args.wc_port is not None:
+        server_config.http_port = args.wc_port
     if args.root is not None:
         server_config.set_root(args.root)
     if args.cdp is not None:
@@ -144,6 +149,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--http_ip', type=str, help='Http server ip address')
     parser.add_argument('--http_port', type=int, help='Http server listen port')
+    parser.add_argument('--wc_ip', type=str, help='Websocket server ip address')
+    parser.add_argument('--wc_port', type=int, help='Websocket server listen port')
     parser.add_argument('--root', type=str,
                         help='Redirect data root path,default path is [PROJECT DIR/data/...].' +
                              'PROJECT DIR is depend on which project is deployed.' +

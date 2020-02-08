@@ -62,6 +62,10 @@ BINARY_SAVE_PATH = PROJECT_DIR / 'data/labels/binarys'
 
 INFORM_SAVE_PATH = PROJECT_DIR / 'vcfg'
 
+WEBSOCKET_SERVER_IP = '118.190.136.20'
+# WEBSOCKET_SERVER_IP = '192.168.1.7'
+WEBSOCKET_SERVER_PORT = 3400
+
 MODEL_PATH = PROJECT_DIR / 'model/bc-model.pth'
 
 from enum import Enum
@@ -134,12 +138,15 @@ class ServerConfig(Config):
     Server configuration definitions
     """
 
-    def __init__(self, env, http_ip, http_port, root, classify_model_path, stream_save_path, sample_save_dir,
+    def __init__(self, env, http_ip, http_port, wc_ip, wc_port, root, classify_model_path, stream_save_path,
+                 sample_save_dir,
                  frame_save_dir,
                  candidate_save_dir, offline_stream_save_dir) -> None:
         self.env = env
         self.http_ip = http_ip
         self.http_port = http_port
+        self.wc_ip = wc_ip
+        self.wc_port = wc_port
         self.classify_model_path = classify_model_path
         self.stream_save_path = stream_save_path
         self.sample_save_dir = sample_save_dir
