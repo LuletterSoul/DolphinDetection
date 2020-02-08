@@ -12,16 +12,17 @@
 """
 from flask import Flask, url_for, request, redirect
 from multiprocessing import Process
+from config import Environment
 
 app = Flask(__name__)
 
 
 class HttpServer(object):
 
-    def __init__(self, host_ip="127.0.0.1", host_port="8080", mode='dev', root="data/candidates"):
+    def __init__(self, host_ip="127.0.0.1", host_port="8080", env='dev', root="data/candidates"):
         self.host_ip = host_ip
         self.host_port = host_port
-        self.mode = mode
+        self.env = env
         self.set_root(root)
 
     @staticmethod
@@ -43,11 +44,11 @@ class HttpServer(object):
         app.static_folder = root
 
     def run(self):
-        if self.mode == 'dev':
+        if self.env == Environment.DEV:
             Process(target=app.run, args=(self.host_ip, self.host_port, False,), daemon=True).start()
-        elif self.mode == 'test':
+        elif self.env == Environment.TEST:
             Process(target=app.run, args=(self.host_ip, self.host_port, False,), daemon=True).start()
-        elif self.mode == 'prod':
+        elif self.env == Environment.PROD:
             Process(target=app.run, args=(self.host_ip, self.host_port, True,), daemon=True).start()
 
 

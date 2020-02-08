@@ -16,11 +16,10 @@ from multiprocessing import Pipe
 import cv2
 import imutils
 import numpy as np
-
-import interface
 from config import *
+from interface import load_video_config
 
-cfgs = interface.load_video_config(VIDEO_CONFIG_DIR / 'video.json')
+cfgs = load_video_config(VIDEO_CONFIG_DIR / 'video-dev.json')
 cfgs = [c for c in cfgs if enable_options[c.index]]
 stream_pipes = {}
 

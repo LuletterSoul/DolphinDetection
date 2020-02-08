@@ -18,6 +18,13 @@ from pathlib import Path
 
 import psutil
 
+
+class Environment(object):
+    PROD = 'prod'
+    TEST = 'test'
+    DEV = 'dev'
+
+
 LOG_LEVER = logging.INFO
 
 PROJECT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -127,10 +134,10 @@ class ServerConfig(Config):
     Server configuration definitions
     """
 
-    def __init__(self, mode, http_ip, http_port, root, classify_model_path, stream_save_path, sample_save_dir,
+    def __init__(self, env, http_ip, http_port, root, classify_model_path, stream_save_path, sample_save_dir,
                  frame_save_dir,
                  candidate_save_dir, offline_stream_save_dir) -> None:
-        self.mode = mode
+        self.env = env
         self.http_ip = http_ip
         self.http_port = http_port
         self.classify_model_path = classify_model_path
