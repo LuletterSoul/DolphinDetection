@@ -21,7 +21,6 @@ def websocket_client(q):
                 logger.info(f'client send history message to server {address} successfully')
                 history_msg_json = None
             while not q.empty():
-                print(q.qsize())
                 msg_json = q.get(1)
                 server.send(msg_json.encode('utf-8'))
                 logger.info(f'client send message to server {address} successfully')
