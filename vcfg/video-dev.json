@@ -328,7 +328,7 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": false,
+      "show_window": true,
       "window_position": {
         "x": 100,
         "y": 100
@@ -386,7 +386,7 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": false,
+      "show_window": true,
       "window_position": {
         "x": 100,
         "y": 100
@@ -400,7 +400,7 @@
       "enable": true,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": "offline",
+      "online": "rtsp",
       "sample_internal": 15,
       "save_box": true,
       "show_box": true,

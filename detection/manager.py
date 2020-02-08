@@ -16,6 +16,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from enum import Enum
 from multiprocessing import cpu_count
+import imutils
 
 import stream
 from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
@@ -1077,8 +1078,6 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         # results = args[0]
         logger.info('Controller [{}]: Collect consume [{}] seconds'.format(self.cfg.index, time.time() - collect_start))
         construct_result: ConstructResult = self.construct(*args)
-        if self.cfg.show_window:
-            self.pipe[0].send(construct_result.binary)
         if construct_result is not None:
             frame = construct_result.frame
             if self.cfg.draw_boundary:
@@ -1086,8 +1085,10 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 frame = draw_boundary(frame, self.block_info)
                 # logger.info('Done constructing of sub-frames into a original frame....')
             if self.cfg.show_window:
-                frame = imutils.resize(frame, width=800)
-                self.display_pipe.put(frame)
+                self.pipe[0].send(construct_result)
+            # if self.cfg.show_window:
+            #     frame = imutils.resize(frame, width=800)
+            #     self.display_pipe.put(frame)
                 # cv2.imshow('Reconstructed Frame', frame)
                 # cv2.waitKey(1)
         else:
@@ -1175,7 +1176,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         # res = self.pool.submit(self.write_frame_work, ())
         threading.Thread(target=self.listen, daemon=True).start()
         threading.Thread(target=self.write_frame_work, daemon=True).start()
-        threading.Thread(target=self.display, daemon=True).start()
+        # threading.Thread(target=self.display, daemon=True).start()
         return True
 
 

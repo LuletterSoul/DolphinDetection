@@ -19,6 +19,7 @@ from classfy.model import DolphinClassifier
 from config import *
 import detection
 from stream.http import HttpServer
+from detection.component import run_player
 from utils import logger, sec2time
 from typing import List
 from interface import *
@@ -50,6 +51,7 @@ class DolphinDetectionServer:
                 self.cfg.env, start_time_str))
         self.http_server.run()
         self.classification_model.run()
+        run_player(self.vcfgs)
         self.monitor.monitor()
         end_time = time.time()
         end_time_str = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime(end_time))

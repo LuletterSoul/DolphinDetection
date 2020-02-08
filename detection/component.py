@@ -16,41 +16,50 @@ from multiprocessing import Pipe
 import cv2
 import imutils
 import numpy as np
-from config import *
-from interface import load_video_config
+from multiprocessing import Process
 
-cfgs = load_video_config(VIDEO_CONFIG_DIR / 'video-dev.json')
-cfgs = [c for c in cfgs if enable_options[c.index]]
 stream_pipes = {}
-
 mog2_dict = {}
 
-for cfg in cfgs:
-    # mog2_dict[cfg.index] = cv2.bgsegm.createBackgroundSubtractorGMG()
-    mog2_dict[cfg.index] = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
-    in_pipe, out_pipe = Pipe()
-    stream_pipes[cfg.index] = (in_pipe, out_pipe)
 
-
-def display():
+def display(vcfgs):
     col = 4
     row = len(stream_pipes) // col
     while True:
         if row == 0:
             frames = []
+            binary = []
             for k, v in stream_pipes.items():
-                frames.append(imutils.resize(v[1].recv(), width=500))
-            frame = np.concatenate(frames, axis=0)
+                recv = v[1].recv()
+                frames.append(imutils.resize(recv.frame, width=500))
+                binary.append(imutils.resize(recv.binary, width=500))
+            frames = np.concatenate(frames, axis=1)
+            binary = np.concatenate(binary, axis=1)
         else:
             frames = []
+            binary = []
             for i in range(row):
-                col_cat = []
+                frame_cat = []
+                binary_cat = []
                 for j in range(col):
                     for k, v in stream_pipes.items():
-                        col_cat.append(v[1].recv())
-                frames.append(np.concatenate(col_cat, axis=0))
-            frame = np.concatenate(frames, axis=1)
-        cv2.imshow('Dolphin Monitor', frame)
+                        recv = v[1].recv()
+                        binary_cat.append(imutils.resize(recv.binary, width=500))
+                        frame_cat.append(imutils.resize(recv.frame, width=500))
+                frames.append(np.concatenate(frame_cat, axis=1))
+                binary.append(np.concatenate(binary_cat, axis=1))
+            frames = np.concatenate(frames, axis=0)
+            binary = np.concatenate(binary, axis=0)
+
+        cv2.imshow('Dolphin Monitor', frames)
+        cv2.imshow('Dolphin Binary Monitor', binary)
         cv2.waitKey(1)
 
-# Process(target=display).start()
+
+def run_player(vcfgs):
+    for cfg in vcfgs:
+        # mog2_dict[cfg.index] = cv2.bgsegm.createBackgroundSubtractorGMG()
+        mog2_dict[cfg.index] = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
+        in_pipe, out_pipe = Pipe()
+        stream_pipes[cfg.index] = (in_pipe, out_pipe)
+    Process(target=display, args=(vcfgs,), daemon=True).start()
