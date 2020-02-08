@@ -818,7 +818,7 @@ class DetectionStreamRender(object):
                                 # p1 = (first_rect[0] + int(delta_x * i) - 80, first_rect[1] + int(delta_y * i) - 80)
                                 # p2 = (first_rect[0] + int(delta_x * i) + 100, first_rect[1] + int(delta_y * i) + 100)
                                 frame = frame_cache[next_cnt]
-                                p1, p2 = bbox_points(self.cfg, first_rect, frame.shape, delta_x, delta_y)
+                                p1, p2 = bbox_points(self.cfg, first_rect, frame.shape, int(delta_x), int(delta_y))
                                 cv2.rectangle(frame, p1, p2, color, 2)
                             if not draw_flag:
                                 frame = frame_cache[next_cnt]

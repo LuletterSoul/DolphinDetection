@@ -355,7 +355,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             # logger.info(self.cap.getRTPTimeStampTs())
             logger.info(
                 'Video capture [{}]: Receive Rate [{}]/FPS'.format(
-                    self.cfg.index, round(e * 100, 2), round(e, 2)))
+                    self.cfg.index, round(e, 2)))
             s = time.time()
             if not grabbed:
                 self.update_capture(cnt)
@@ -366,7 +366,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             e = 1 / (time.time() - s)
             logger.info(
                 'Video capture [{}]: Operation Speed Rate [{}]/FPS'.format(
-                    self.cfg.index, round(e * 100, 2), round(e, 2)))
+                    self.cfg.index, round(e, 2)))
             self.post_frame_process(frame)
             cnt += 1
             self.runtime = time.time() - start
