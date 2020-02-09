@@ -49,7 +49,7 @@ class HttpServer(object):
         elif self.env == Environment.TEST:
             Process(target=app.run, args=(self.host_ip, self.host_port, False,), daemon=True).start()
         elif self.env == Environment.PROD:
-            Process(target=app.run, args=(self.host_ip, self.host_port, True,), daemon=True).start()
+            Process(target=app.run, args=(self.host_ip, self.host_port, False,), daemon=True).start()
 
 
 if __name__ == '__main__':

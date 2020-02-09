@@ -4,7 +4,7 @@
   "http_port": 6006,
   "wc_ip": "118.190.136.20",
   "wc_port": 3400,
-  "classify_model_path": "model/bc-model0207.pth",
+  "classify_model_path": "model/bc-model-0207.pth",
   "root": "",
   "stream_save_path": "data/videos",
   "sample_save_dir": "data/samples",

@@ -625,13 +625,13 @@ class DetectorController(object):
         # constructed_frame = self.construct_rgb(sub_frames)
         constructed_binary = self.construct_gray(sub_binary)
         # constructed_thresh = self.construct_gray(sub_thresh)
-        logger.info('Controller [{}]: Construct frames into a original frame....'.format(self.cfg.index))
+        logger.info(f'Controller [{self.cfg.index}]: Construct frames into a original frame....')
         try:
             self.construct_cnt += 1
             current_index = results[0].frame_index
             while current_index not in self.original_frame_cache:
-                logger.info('Current index: [{}] not in original frame cache.May cache was cleared by timer'.format(
-                    current_index))
+                logger.info(
+                    f'Current index: [{current_index}] not in original frame cache.May cache was cleared by timer')
                 time.sleep(0.5)
                 # logger.info(self.original_frame_cache.keys())
             original_frame = self.original_frame_cache[current_index]
@@ -647,8 +647,7 @@ class DetectorController(object):
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
                         if _model.predict(candidate) == 0:
                             logger.info(
-                                '============================Controller [{}]: Dolphin Detected============================'.format(
-                                    self.cfg.index))
+                                f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
                             json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
                                                              timestamp=current_index, rects=r.rects)
                             self.msg_queue.put(json_msg)
@@ -793,8 +792,7 @@ class DetectionStreamRender(object):
             if not self.next_prepare_event.is_set():
                 self.next_prepare_event.set()
                 logger.info(
-                    'Notify detection stream writer.Current frame index [{}],Previous detected frame index [{}]...'.format(
-                        current_index, self.detect_index))
+                    f'Notify detection stream writer.Current frame index [{current_index}],Previous detected frame index [{self.detect_index}]...')
 
     def write_render_video_work(self, video_write, next_cnt, end_cnt, render_cache, rect_cache, frame_cache):
         if next_cnt < 1:
@@ -805,7 +803,7 @@ class DetectionStreamRender(object):
             try:
                 if self.status.get() == SystemStatus.SHUT_DOWN:
                     logger.info(
-                        'Video Render [{}]: render task interruped by exit signal'.format(self.index))
+                        f'Video Render [{self.index}]: render task interruped by exit signal')
                     return next_cnt
                 if next_cnt in render_cache:
                     forward_cnt = next_cnt + self.sample_rate
@@ -854,9 +852,9 @@ class DetectionStreamRender(object):
                     time.sleep(0.5)
                     if try_times > 100:
                         try_times = 0
-                        logger.info('Try time overflow.round to the next cnt: [{}]'.format(try_times))
+                        logger.info(f'Try time overflow.round to the next cnt: [{try_times}]')
                         next_cnt += 1
-                    logger.info('Lost frame index: [{}]'.format(next_cnt))
+                    logger.info(f'Lost frame index: [{next_cnt}]')
 
                 end = time.time()
                 if end - start > 30:
@@ -878,7 +876,7 @@ class DetectionStreamRender(object):
             try:
                 if self.status.get() == SystemStatus.SHUT_DOWN:
                     logger.info(
-                        'Video Render [{}]: original task interruped by exit signal'.format(self.index))
+                        f'Video Render [{self.index}]: original task interruped by exit signal')
                     return False
                 if next_cnt in frame_cache:
                     video_write.write(frame_cache[next_cnt])
@@ -888,9 +886,9 @@ class DetectionStreamRender(object):
                     time.sleep(0.5)
                     if try_times > 100:
                         try_times = 0
-                        logger.info('Try time overflow.round to the next cnt: [{}]'.format(try_times))
+                        logger.info(f'Try time overflow.round to the next cnt: [{try_times}]')
                         next_cnt += 1
-                    logger.info('Lost frame index: [{}]'.format(next_cnt))
+                    logger.info(f'Lost frame index: [{next_cnt}]')
 
                 end = time.time()
                 if end - start > 30:
@@ -926,8 +924,7 @@ class DetectionStreamRender(object):
         start = time.time()
         target = self.rect_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info(
-            'Video Render [{}]: Rect Render Task [{}]: Writing detection stream frame into: [{}]'.format(
-                self.index, self.stream_cnt, str(target)))
+            f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # fourcc = cv2.VideoWriter_fourcc(*'avc1')
         video_write = cv2.VideoWriter(str(target), self.fourcc, 24.0, (1920, 1080), True)
         next_cnt = current_idx - self.future_frames
@@ -938,17 +935,14 @@ class DetectionStreamRender(object):
         # wait the futures frames is accessable
         if not self.next_prepare_event.is_set():
             logger.info(
-                'Video Render [{}]: Rect Render Task [{}] wait frames accessible....'.format(self.index,
-                                                                                             self.stream_cnt))
+                f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}] wait frames accessible....')
             start = time.time()
             # wait the future frames prepared,if ocurring time out, give up waits
             self.next_prepare_event.wait(30)
             logger.info(
-                "Video Render [{}]: Rect Render Task [{}] wait [{}] seconds".format(self.controller.cfg.index,
-                                                                                    self.stream_cnt,
-                                                                                    time.time() - start))
-            logger.info(
-                'Video Render [{}]: Rect Render Task [{}] frames accessible....'.format(self.index, self.stream_cnt))
+                f"Video Render [{self.controller.cfg.index}]: Rect Render Task " +
+                f"[{self.stream_cnt}] wait [{round(time.time() - start,2)}] seconds")
+            logger.info(f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}] frames accessible...')
 
         # if not self.started:
         #     return False
@@ -959,13 +953,8 @@ class DetectionStreamRender(object):
                                                 frame_cache)
         video_write.release()
         logger.info(
-            'Video Render [{}]: Rect Render Task [{}]: Consume [{}] seconds.Done write detection stream frame into: [{}]'.format(
-                self.index,
-                self.stream_cnt,
-                time.time() - start,
-                str(
-                    target)))
-
+            f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}]: Consume [{time.time() - start}] ' +
+            f'seconds.Done write detection stream frame into: [{str(target)}]')
         msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target))
         self.msg_queue.put(msg_json)
         logger.info(f'put packaged message in the msg_queue...')
@@ -974,8 +963,7 @@ class DetectionStreamRender(object):
         start = time.time()
         target = self.original_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info(
-            'Video Render [{}]: Original Render Task [{}]: Writing detection stream frame into: [{}]'.format(
-                self.index, self.stream_cnt, str(target)))
+            f'Video Render [{self.index}]: Original Render Task [{self.stream_cnt}]: Writing detection stream frame into: [{str(target)}]')
         video_write = cv2.VideoWriter(str(target), self.fourcc, 24.0, (1920, 1080), True)
         next_cnt = current_idx - self.future_frames
         next_cnt = self.write_original_video_work(video_write, next_cnt, current_idx, frame_cache)
@@ -983,17 +971,13 @@ class DetectionStreamRender(object):
         # next_frame_cnt = 48
         # wait the futures frames is accessable
         if not self.next_prepare_event.is_set():
-            logger.info(
-                'Video Render [{}]: Original Render Task wait frames accessible....'.format(self.index))
+            logger.info(f'Video Render [{self.index}]: Original Render Task wait frames accessible....')
             start = time.time()
             # wait the future frames prepared,if ocurring time out, give up waits
             self.next_prepare_event.wait(30)
             logger.info(
-                "Video Render [{}]: Original Render Task [{}] wait [{}] seconds".format(self.controller.cfg.index,
-                                                                                        self.stream_cnt,
-                                                                                        time.time() - start))
-            logger.info('Video Render [{}]: Original Render Task [{}] frames accessible....'.format(self.index,
-                                                                                                    self.stream_cnt))
+                f"Video Render [{self.controller.cfg.index}]: Original Render Task [{self.stream_cnt}] wait [{time.time() - start}] seconds")
+            logger.info(f'Video Render [{self.index}]: Original Render Task [{self.stream_cnt}] frames accessible....')
         # logger.info('Render task Begin with frame [{}]'.format(next_cnt))
         # logger.info('After :[{}]'.format(render_cache.keys()))
         # if not self.started:
@@ -1002,11 +986,8 @@ class DetectionStreamRender(object):
         next_cnt = self.write_original_video_work(video_write, next_cnt, end_cnt, frame_cache)
         video_write.release()
         logger.info(
-            'Video Render [{}]: Original Render Task [{}]: Consume [{}] seconds.Done write detection stream frame into: [{}]'.format(
-                self.index,
-                self.stream_cnt,
-                time.time() - start,
-                str(target)))
+            f'Video Render [{self.index}]: Original Render Task [{self.stream_cnt}]: ' +
+            f'Consume [{round(time.time()-start,2)}] seconds.Done write detection stream frame into: [{str(target)}]')
 
 
 class ProcessBasedDetectorController(DetectorController):
