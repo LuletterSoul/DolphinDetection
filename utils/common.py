@@ -18,6 +18,7 @@ import cv2
 # import imutils
 import time
 from .crop import crop_by_roi
+import numpy as np
 
 
 def preprocess(frame, cfg: VideoConfig):
@@ -143,3 +144,47 @@ def sec2time(sec, n_msec=1):
     if d == 0:
         return pattern % (h, m, s)
     return ('%d days, ' + pattern) % (d, h, m, s)
+
+
+def createHistFeature(grid, small_grid=3):
+    """
+    # 生成颜色直方图特征
+    :param grid: 数据
+    :param small_grid: 细分的网格数
+    :return: 数据的特征
+    """
+    hist_mask = np.array([])
+    colnum = int(grid.shape[1] / small_grid)
+    rownum = int(grid.shape[0] / small_grid)
+    for i in range(small_grid):
+        for j in range(small_grid):
+            image = grid[i * colnum:(i + 1) * colnum, j * rownum:(j + 1) * rownum, :]
+            hist_mask0 = cv2.calcHist([image], [0], None, [16], [0, 255])
+            hist_mask1 = cv2.calcHist([image], [1], None, [16], [0, 255])
+            hist_mask2 = cv2.calcHist([image], [2], None, [16], [0, 255])
+            hist_mask_small = np.concatenate((hist_mask0, hist_mask1, hist_mask2), axis=0)
+            if (len(hist_mask) == 0):
+                hist_mask = hist_mask_small
+            else:
+                hist_mask = np.concatenate((hist_mask, hist_mask_small), axis=0)
+    return hist_mask
+
+
+def normalization(data):
+    return data / np.linalg.norm(data)
+
+
+def cal_hist_cosin_similarity(img1, img2):
+    # img1_hist_feat = np.squeeze(createHistFeature(img1))
+    # img2_hist_feat = np.squeeze(createHistFeature(img2))
+    return 1 - cal_hist_cosin_distance(img1, img2)
+
+
+def cal_hist_cosin_distance(img1, img2):
+    img1_hist_feat = np.squeeze(normalization(createHistFeature(img1)))
+    img2_hist_feat = np.squeeze(normalization(createHistFeature(img2)))
+    # num = float(img1_hist_feat * img2_hist_feat.T)
+    # denom = np.linalg.(img1_hist_feat) * np.linalg.norm(img2_hist_feat)
+    # cos = num / denom
+    # sim = 0.5 + 0.5 * cos
+    return np.dot(img1_hist_feat, img2_hist_feat)
