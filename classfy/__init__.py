@@ -11,8 +11,4 @@
 @desc:
 """
 
-from .detector import *
-from .manager import *
-from .params import *
-from .component import *
 # from .ray_manager import *

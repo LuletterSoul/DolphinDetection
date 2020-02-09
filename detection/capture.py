@@ -11,16 +11,20 @@
 @desc:
 """
 import os
+import shutil
 import threading
+import time
+from multiprocessing import Manager
 from multiprocessing.queues import Queue
 from pathlib import Path
 
 import cv2
 
-from config import VideoConfig
+from config import VideoConfig, SystemStatus
 from utils import logger
-import time
-import shutil
+
+
+# from .manager import TaskBasedDetectorController
 
 
 # import ray
@@ -38,73 +42,110 @@ class VideoCaptureThreading:
         # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         # self.grabbed, self.frame = self.cap.read()
-        self.started = False
-        self.read_lock = threading.Lock()
+        self.status = Manager().Value('i', SystemStatus.SHUT_DOWN)
         self.src = -1
-        self.thread = threading.Thread(target=self.update, args=())
+        self.cap = None
         self.sample_rate = sample_rate
         self.frame_queue = frame_queue
         self.delete_post = delete_post
         self.runtime = 0
         self.posix = None
+        self.quit = Manager().Event()
+        self.quit.clear()
 
     def set(self, var1, var2):
         self.cap.set(var1, var2)
 
-    def __start__(self):
-        if self.started:
+    def __start__(self, *args):
+        if self.status.get() == SystemStatus.RUNNING:
             print('[!] Threaded video capturing has already been started.')
             return None
-        src = self.load_next_src()
-        logger.info('Loading next video stream from [{}]....'.format(src))
-        self.cap = cv2.VideoCapture(src)
-        logger.info('Loading done from: [{}]'.format(src))
-        self.started = True
-        self.thread.start()
+        self.update_capture(0)
+        # src = self.load_next_src()
+        # logger.info('Loading next video stream from [{}]....'.format(src))
+        # self.cap = cv2.VideoCapture(src)
+        # logger.info('Loading done from: [{}]'.format(src))
+        self.status.set(SystemStatus.RUNNING)
+        threading.Thread(target=self.update, args=(*args,), daemon=True).start()
+        threading.Thread(target=self.listen, args=(), daemon=True).start()
+        # threading.Thread(target=cpu_usage).start()
         return self
+
+    # def cal_cpu_usage(self):
+    #         cpu_usage(id)
+
+    def listen(self):
+        logger.info('Video Capture [{}]: Start listen event'.format(self.cfg.index))
+        if self.quit.wait():
+            logger.info('Video Capture [{}]: Receive quit signal'.format(self.cfg.index))
+            self.cancel()
+
+    def cancel(self):
+        self.status.set(SystemStatus.SHUT_DOWN)
 
     def load_next_src(self):
         logger.debug('Loading video stream from video index pool....')
         self.posix = self.get_posix()
         self.src = str(self.posix)
-        if not os.path.exists(self.src):
-            logger.info('Video path not exist: [{}]'.format(self.src))
-            return -1
-        return self.src
+        if self.posix == -1:
+            return self.src
+        basename = os.path.basename(self.src)
+        filename, extention = os.path.splitext(basename)
+        if extention == '.mp4' or extention == '.mov':
+            return self.src
+        else:
+            return 0
 
     def get_posix(self):
         return self.video_path / self.index_pool.get()
 
-    def update(self):
+    def update(self, *args):
         cnt = 0
         start = time.time()
-        while self.started:
+        logger.info('*******************************Init video capture [{}]********************************'.format(
+            self.cfg.index))
+        while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
             grabbed, frame = self.cap.read()
             if not grabbed:
                 self.update_capture(cnt)
+                end = time.time()
+                logger.info('Current src consumes time: [{}] seconds'.format(end - start))
+                start = time.time()
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
-            self.pass_frame(frame)
+            self.pass_frame(frame, args[0])
             cnt += 1
             self.post_frame_process(frame)
             self.runtime = time.time() - start
-        logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
 
-    def pass_frame(self, frame):
-        self.frame_queue.put(frame, block=True)
+        logger.info(
+            '*******************************Video capture [{}] exit********************************'.format(
+                self.cfg.index))
+        # logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
+
+    def pass_frame(self, *args):
+        self.frame_queue.put(args[0], block=True)
         # logger.info('Passed frame...')
 
     def update_capture(self, cnt):
         logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
         logger.debug('Read next frame from video ....')
-        self.cap.release()
         self.handle_history()
-        src = self.load_next_src()
-        if src == -1:
-            self.started = False
+        while True:
+            src = self.load_next_src()
+            if src == str(-1):
+                self.cancel()
+                return False
+            elif src == 0:
+                continue
+            else:
+                break
+        if self.cap is not None:
+            self.cap.release()
         self.cap = cv2.VideoCapture(src)
+        return True
 
     def handle_history(self):
         if self.posix.exists() and self.delete_post:
@@ -116,17 +157,17 @@ class VideoCaptureThreading:
     def post_frame_process(self, frame):
         pass
 
-    def read(self):
-        if not self.started:
-            self.__start__()
-        return self.frame_queue.get()
+    def read(self, *args):
+        if self.status.get() == SystemStatus.SHUT_DOWN:
+            self.__start__(*args)
+        return True
         # with self.read_lock:
         # frame = self.frame.copy()
         # grabbed = self.grabbed
         # return self.grabbed, self.frame
 
     def stop(self):
-        self.started = False
+        self.status.set(SystemStatus.SHUT_DOWN)
         self.cap.release()
         self.thread.join()
 
@@ -171,13 +212,21 @@ class VideoOfflineCapture(VideoCaptureThreading):
 class VideoOfflineCallbackCapture(VideoOfflineCapture):
 
     def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
-                 cfg: VideoConfig, idx, monitor, sample_rate=5, width=640, height=480, delete_post=True):
+                 cfg: VideoConfig, idx, controller, shut_down_event, sample_rate=5, width=640, height=480,
+                 delete_post=True):
         super().__init__(video_path, sample_path, offline_path, index_pool, frame_queue, cfg, idx, sample_rate, width,
                          height, delete_post)
-        self.monitor = monitor
+        self.controller = controller
+        self.shut_down_event = shut_down_event
 
-    def pass_frame(self, frame):
-        self.monitor.callback(self.idx, frame)
+    def pass_frame(self, *args):
+        assert len(args) >= 2
+        self.controller.dispatch_frame(*args)
+
+    def cancel(self):
+        super().cancel()
+        if not self.shut_down_event.is_set():
+            self.shut_down_event.set()
 
 
 # Sample video stream at intervals
@@ -292,26 +341,45 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
     def handle_history(self):
         pass
 
-    def update(self):
+    def update(self, *args):
         cnt = 0
         start = time.time()
-        while self.started:
+        logger.info('*******************************Init video capture [{}]********************************'.format(
+            self.cfg.index))
+        while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
+            s = time.time()
             grabbed, frame = self.cap.read()
+            e = 1 / (time.time() - s)
+            # logger.info(self.cap.get(cv2.CAP_PROP_POS_MSEC))
+            # logger.info(self.cap.getRTPTimeStampTs())
+            logger.info(
+                'Video capture [{}]: Receive Rate [{}]/FPS'.format(
+                    self.cfg.index, round(e, 2)))
+            s = time.time()
             if not grabbed:
                 self.update_capture(cnt)
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
-            self.pass_frame(frame)
+            self.pass_frame(frame, args[0])
+            e = 1 / (time.time() - s)
+            logger.info(
+                'Video capture [{}]: Operation Speed Rate [{}]/FPS'.format(
+                    self.cfg.index, round(e, 2)))
             self.post_frame_process(frame)
             cnt += 1
             self.runtime = time.time() - start
-        logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
+            # if self.quit:
+            #     self.cancel()
+        # logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
+        logger.info(
+            '*******************************Video capture [{}] exit********************************'.format(
+                self.cfg.index))
 
     def post_frame_process(self, frame):
         self.sample_cnt += 1
-        if self.sample_cnt % self.cfg.rtsp_saved_per_frame == 0:
+        if self.sample_cnt % self.cfg.rtsp_saved_per_frame and self.cfg.enable_sample_frame:
             current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
             self.sample_cnt = 0
             # if current_time != self.saved_time:
@@ -326,11 +394,12 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
 class VideoRtspCallbackCapture(VideoRtspCapture):
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
                  idx,
-                 monitor,
+                 controller,
                  sample_rate=5, width=640, height=480, delete_post=True):
         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
                          delete_post)
-        self.monitor = monitor
+        self.controller = controller
 
-    def pass_frame(self, frame):
-        self.monitor.callback(self.idx, frame)
+    def pass_frame(self, *args):
+        assert len(args) >= 2
+        self.controller.dispatch_frame(args[0], args[1])
