@@ -21,7 +21,6 @@ from utils import *
 from .detector import DetectionResult
 
 
-
 # import ray
 
 
@@ -45,7 +44,7 @@ def less_ratio(area, shape, cfg: VideoConfig):
 
 
 # @ray.remote
-def detect_based_task(block, params: DetectorParams):
+def detect_based_task(block, params: DetectorParams) -> DetectionResult:
     frame = block.frame
     # if args.cfg.alg['type'] == 'saliency':
     #     res = detect_saliency()
@@ -140,8 +139,9 @@ def detect_thresh_task(frame, block, params: DetectorParams):
     # logger.info(
     #     '~~~~ Detector: [{},{}] detect done [{}] frames..'.format(params.col_index, params.row_index,
     #                                                               params))
+    original_rects = back(rects, params.start, frame.shape, block.shape, params.cfg)
     res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, params.x_index,
-                          params.y_index, block.index, back(rects, params.start, frame.shape, block.shape, params.cfg))
+                          params.y_index, block.index, original_rects, rects)
     end = time.time() - start
     logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
     # cv2.destroyAllWindows()

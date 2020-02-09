@@ -38,7 +38,7 @@ beta = 15
 class DetectionResult(object):
 
     def __init__(self, frame, original_frame, status, regions, binary, thresh, coordinates, y_index,
-                 x_index, frame_index, rects) -> None:
+                 x_index, frame_index, rects, down_rects) -> None:
         super().__init__()
         self.frame = frame
         self.original_frame = original_frame
@@ -51,6 +51,7 @@ class DetectionResult(object):
         self.x_index = x_index
         self.frame_index = frame_index
         self.rects = rects
+        self.down_rects = down_rects
 
 
 class Detector(object):
@@ -437,8 +438,6 @@ class Detector(object):
 
     def pass_detection_result(self, res: DetectionResult):
         self.rq.put(res)
-
-
 
 
 class TaskBasedDetector(Detector):

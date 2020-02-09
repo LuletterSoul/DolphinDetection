@@ -188,7 +188,9 @@ class VideoConfig(Config):
 
     def __init__(self, index, name, shape, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
-                 online, sample_internal, render, save_box, show_box, rtsp, enable_sample_frame, rtsp_saved_per_frame,
+                 online, sample_internal, detect_internal, pre_cache, render, save_box, show_box, rtsp,
+                 enable_sample_frame,
+                 rtsp_saved_per_frame,
                  future_frames, bbox,
                  alg):
         self.index = index
@@ -218,6 +220,8 @@ class VideoConfig(Config):
         self.enable_sample_frame = enable_sample_frame
         self.rtsp_saved_per_frame = rtsp_saved_per_frame
         self.future_frames = future_frames
+        self.detect_internal = detect_internal
+        self.pre_cache = pre_cache
         self.render = render
         self.bbox = bbox
         self.alg = alg
