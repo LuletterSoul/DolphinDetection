@@ -18,10 +18,12 @@ from enum import Enum
 from multiprocessing import cpu_count
 import imutils
 
+from skimage.measure import compare_ssim
 import stream
 from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
 from stream.websocket import *
 from utils import NoDaemonPool as Pool
+from utils import cal_hist_cosin_similarity
 from .capture import *
 from .component import stream_pipes
 from .detect_funcs import detect_based_task
@@ -438,7 +440,7 @@ class DetectorController(object):
         # self.clear_point = 0
         # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
         self.stream_render = DetectionStreamRender(self.cfg, 0, self.cfg.future_frames, self.msg_queue, self)
-
+        self.LOG_PREFIX = f'Controller [{self.cfg.index}]: '
         self.save_cache = {}
 
         # def __getstate__(self):
@@ -1197,39 +1199,10 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
                         # if _model.predict(candidate) == 0:
                         if True:
-                            diff_frame = current_index - self.last_detection
-                            logger.info(f'Diff frame [{diff_frame}]')
-                            if self.last_detection != -1 and 0 < diff_frame < self.cfg.detect_internal:
-                                hit_precision = 0
-                                hit_cnt = 0
-                                for idx in range(current_index + 1, current_index + 24):
-                                    if idx in self.original_frame_cache:
-                                        history_frame = self.original_frame_cache[idx]
-                                        sub_results = self.post_detect(history_frame, idx)
-                                        for sr_idx, sr in enumerate(sub_results):
-                                            rl = min(len(r.rects), len(sr.rects))
-                                            for rl_idx in range(rl):
-                                                sr_patch = crop_by_rect(self.cfg, sr.down_rects[rl_idx], sr.binary)
-                                                r_patch = crop_by_rect(self.cfg, results[sr_idx].down_rects[rl_idx],
-                                                                       r.binary)
-                                                white_num = np.sum((sr_patch == r_patch).astype(np.int))
-                                                logger.info(
-                                                    f'Controller [{self.cfg.index}]: White pixel num {white_num}')
-                                                logger.info(
-                                                    f'Controller [{self.cfg.index}]: Current frame white pixel num {np.sum(r_patch)}')
-                                                per_hit_precision = white_num / np.sum(r_patch)
-                                                logger.info(
-                                                    f'Controller [{self.cfg.index}]: Per Hit precision {round(per_hit_precision, 2)}')
-                                                hit_precision += per_hit_precision
-                                                cv2.imwrite('data/test/0208/' + str(current_index) + '_r_' + str(hit_cnt) + '.png', r_patch)
-                                                cv2.imwrite('data/test/0208/' + str(current_index) + '_sr_' + str(hit_cnt) + '.png', sr_patch)
-                                                hit_cnt += 1
-                                hit_precision /= hit_cnt
-                                logger.info(
-                                    f'Controller [{self.cfg.index}]: Final Hit precision {round(hit_precision, 2)}')
-                                # logger.info(
-                                #     f'Controller [{self.cfg.index}]: Continuous detection report after' +
-                                #     f'[{round(detect_internal, 2)} seconds].Skipped.............')
+                            is_filtered = self.filter_continuous_detect(current_index, original_frame, len(r.rects),
+                                                                        results)
+                            if is_filtered:
+                                self.last_detection = current_index
                                 return ConstructResult(original_frame, constructed_binary, None)
                             logger.info(
                                 f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
@@ -1237,7 +1210,6 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                                              timestamp=current_index, rects=r.rects)
                             self.msg_queue.put(json_msg)
                             logger.info(f'put detect message in msg_queue...')
-
                             if self.cfg.render:
                                 color = np.random.randint(0, 255, size=(3,))
                                 color = [int(c) for c in color]
@@ -1261,6 +1233,51 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
+
+    def filter_continuous_detect(self, current_index, original_frame, len_rect, results):
+        diff_frame = current_index - self.last_detection
+        if self.last_detection != -1 and 0 < diff_frame < self.cfg.detect_internal:
+            logger.info(
+                f'****************************Controller [{self.cfg.index}]: '
+                f'Enter continuous exception handle process at Frame '
+                f'[{current_index}]***********************************')
+            logger.info(f'Controller [{self.cfg.index}]: Diff frame [{diff_frame}]')
+            hit_precision = 0
+            hit_cnt = 0
+            for idx in range(current_index + 1, current_index + self.cfg.search_window_size):
+                if idx in self.original_frame_cache:
+                    history_frame = self.original_frame_cache[idx]
+                    sub_results = self.post_detect(history_frame, idx)
+                    for sr_idx, sr in enumerate(sub_results):
+                        rl = min(len_rect, len(sr.rects))
+                        for rl_idx in range(rl):
+                            sr_rgb_patch = crop_by_rect(self.cfg, sr.rects[rl_idx], history_frame)
+                            r_rgb_patch = crop_by_rect(self.cfg, results[sr_idx].rects[rl_idx],
+                                                       original_frame)
+                            cosine_similarity = cal_hist_cosin_similarity(sr_rgb_patch, r_rgb_patch)
+                            logger.info(
+                                f'Controller [{self.cfg.index}]: Cosine Distance {round(cosine_similarity, 2)}')
+                            logger.info(
+                                f'Controller [{self.cfg.index}]: Frame [{idx}]: cosine similarity '
+                                f'{round(cosine_similarity, 2)}')
+                            hit_precision += cosine_similarity
+                            # cv2.imwrite('data/test/0208/' + str(current_index) + '_r_' + str(
+                            #     hit_cnt) + '.png', r_patch)
+                            # cv2.imwrite('data/test/0208/' + str(current_index) + '_sr_' + str(
+                            #     hit_cnt) + '.png', sr_patch)
+                            hit_cnt += 1
+            if hit_cnt:
+                hit_precision /= hit_cnt
+                logger.info(
+                    f'Controller [{self.cfg.index}]: Hit count{hit_cnt}')
+            logger.info(
+                f'Controller [{self.cfg.index}]: Average hit precision {round(hit_precision, 2)}')
+            if hit_cnt and hit_precision >= 0.6:
+                logger.info(
+                    f'Controller [{self.cfg.index}]: Continuous detection report at' +
+                    f'Frame [{current_index}].Skipped by continuous exception filter rule.............')
+                return True
+            return False
 
     def dispatch_frame(self, *args):
         start = time.time()

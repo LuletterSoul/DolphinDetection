@@ -33,13 +33,13 @@ def ratio(area, total):
 
 
 def is_in_ratio(area, total, cfg: VideoConfig):
-    logger.info('Area ration: [{}]'.format((area / total) * 100))
+    # logger.info('Area ration: [{}]'.format((area / total) * 100))
     return ratio(area, total) <= cfg.filtered_ratio
 
 
 def less_ratio(area, shape, cfg: VideoConfig):
     total = shape[0] * shape[1]
-    logger.info('Area ration: [{}]'.format(ratio(area, total)))
+    # logger.info('Area ration: [{}]'.format(ratio(area, total)))
     return ratio(area, total) >= cfg.alg['area_ratio']
 
 

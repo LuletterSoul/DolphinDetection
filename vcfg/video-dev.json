@@ -47,10 +47,12 @@
       "rtsp": "rtsp://222.190.243.243/bp/jtview",
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
-      "future_frames": 48,
-      "detect_internal": 5,
+      "future_frames": 72,
+      "detect_internal": 72,
       "pre_cache": 48,
       "render": true,
+      "search_window_size": 24,
+      "similarity_thresh": 0.6,
       "bbox": {
         "w": 224,
         "h": 224
@@ -86,7 +88,7 @@
         "height": -1,
         "scale": -1
       },
-      "show_window": true,
+      "show_window": false,
       "window_position": {
         "x": 100,
         "y": 100
@@ -107,8 +109,10 @@
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,
-      "future_frames": 5,
-      "detect_internal": 2,
+      "future_frames": 72,
+      "detect_internal": 72,
+      "search_window_size": 24,
+      "similarity_thresh": 0.6,
       "pre_cache": 48,
       "render": true,
       "bbox": {
