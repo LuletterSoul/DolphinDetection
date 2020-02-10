@@ -81,7 +81,7 @@ def load_cfg(args):
     if args.http_port is not None:
         server_config.http_port = args.http_port
     if args.wc_ip is not None:
-        server_config.wc_ip= args.wc_ip
+        server_config.wc_ip = args.wc_ip
     if args.wc_port is not None:
         server_config.http_port = args.wc_port
     if args.root is not None:
