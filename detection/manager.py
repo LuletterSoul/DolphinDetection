@@ -16,21 +16,16 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from enum import Enum
 from multiprocessing import cpu_count
-import imutils
+from typing import List
 
-from skimage.measure import compare_ssim
 import stream
 from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
 from stream.websocket import *
 from utils import NoDaemonPool as Pool
-from utils import cal_hist_cosin_similarity
 from .capture import *
 from .component import stream_pipes
 from .detect_funcs import detect_based_task
 from .detector import *
-from typing import List
-
-import asyncio
 
 
 # from pynput.keyboard import Key, Controller, Listener
@@ -436,6 +431,7 @@ class DetectorController(object):
         # time scheduler to clear cache
         self.render_events = Manager().dict()
         self.last_detection = -1
+        self.continuous_filter_flag = False
         self.runtime = time.time()
         # self.clear_point = 0
         # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
@@ -1098,10 +1094,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         continue
                     for rect in r.rects:
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
-                        # if _model.predict(candidate) == 0:
-                        if True:
+                        if _model.predict(candidate) == 0:
                             diff_frame = current_index - self.last_detection
-                            logger.info(f'Diff frame [{diff_frame}]')
                             if self.last_detection != -1 and 0 < diff_frame < self.cfg.detect_internal:
                                 hit_precision = 0
                                 hit_cnt = 0
@@ -1197,12 +1191,11 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         continue
                     for rect in r.rects:
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
-                        # if _model.predict(candidate) == 0:
-                        if True:
+                        if _model.predict(candidate) == 0:
                             is_filtered = self.filter_continuous_detect(current_index, original_frame, len(r.rects),
                                                                         results)
                             if is_filtered:
-                                self.last_detection = current_index
+                                # self.last_detection = current_index
                                 return ConstructResult(original_frame, constructed_binary, None)
                             logger.info(
                                 f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
@@ -1236,14 +1229,21 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
 
     def filter_continuous_detect(self, current_index, original_frame, len_rect, results):
         diff_frame = current_index - self.last_detection
-        if self.last_detection != -1 and 0 < diff_frame < self.cfg.detect_internal:
+        if self.continuous_filter_flag:
+            logger.info(f'Controller [{self.cfg.index}]: Frame [{current_index}] is still in filter window range')
+            return True
+        if diff_frame > self.cfg.detect_internal:
+            self.continuous_filter_flag = False
+        if self.last_detection != -1 and 0 < diff_frame <= self.cfg.detect_internal:
             logger.info(
                 f'****************************Controller [{self.cfg.index}]: '
                 f'Enter continuous exception handle process at Frame '
                 f'[{current_index}]***********************************')
+
             logger.info(f'Controller [{self.cfg.index}]: Diff frame [{diff_frame}]')
             hit_precision = 0
             hit_cnt = 0
+            start = time.time()
             for idx in range(current_index + 1, current_index + self.cfg.search_window_size):
                 if idx in self.original_frame_cache:
                     history_frame = self.original_frame_cache[idx]
@@ -1272,10 +1272,13 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     f'Controller [{self.cfg.index}]: Hit count{hit_cnt}')
             logger.info(
                 f'Controller [{self.cfg.index}]: Average hit precision {round(hit_precision, 2)}')
+            logger.info(
+                self.LOG_PREFIX + f'continuous exception handle process consumes [{round(time.time() - start, 2)}]')
             if hit_cnt and hit_precision >= 0.6:
                 logger.info(
                     f'Controller [{self.cfg.index}]: Continuous detection report at' +
                     f'Frame [{current_index}].Skipped by continuous exception filter rule.............')
+                self.continuous_filter_flag = True
                 return True
             return False
 
@@ -1392,10 +1395,10 @@ class ProcessAndThreadBasedDetectorController(DetectorController):
         if self.frame_cnt.get() <= self.cfg.pre_cache:
             return
 
-        if self.frame_cnt.get() % self.cfg.sample_rate == 0:
+        pre_index = self.frame_cnt.get() - self.cfg.pre_cache
+        if pre_index % self.cfg.sample_rate == 0:
             logger.info('Controller [{}]: Dispatch frame to all detectors....'.format(self.cfg.index))
             async_futures = []
-            pre_index = self.frame_cnt.get() - self.cfg.pre_cache
             original_frame = self.original_frame_cache[pre_index]
             frame, original_frame = preprocess(original_frame, self.cfg)
             for d in self.detect_params:
