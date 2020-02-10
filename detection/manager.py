@@ -653,7 +653,7 @@ class DetectorController(object):
 
             self.save_cache = {}
 
-    def construct(self, *args):
+    def construct(self, *args) -> ConstructResult:
         pass
 
     def label_crop(self, frame, label_name, rects):
@@ -714,10 +714,10 @@ class DetectionStreamRender(object):
             self.status.set(SystemStatus.SHUT_DOWN)
 
     def next_st(self, detect_index):
-        if detect_index - self.detect_index == self.future_frames:
+        if detect_index - self.detect_index > self.future_frames:
             return detect_index
         else:
-            return -1
+            return self.detect_index
 
     def is_window_reach(self, detect_index):
         return detect_index - self.detect_index > self.future_frames
@@ -1074,7 +1074,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             sub_results.append(detect_based_task(block, d))
         return sub_results
 
-    def construct(self, *args):
+    def construct(self, *args) -> ConstructResult:
         # sub_frames = [r.frame for r in results]
         results = args[0]
         _model = args[1]
@@ -1096,17 +1096,17 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             render_frame = original_frame.copy()
             for r in results:
                 if len(r.rects):
-                    self.result_queue.put((original_frame, r.frame_index, r.rects))
                     if r.frame_index not in self.original_frame_cache:
                         logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
                         continue
                     for rect in r.rects:
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
-                        if _model.predict(candidate) == 0:
+                        # if _model.predict(candidate) == 0:
+                        if True:
                             is_filtered = self.filter_continuous_detect(current_index, original_frame, len(r.rects),
                                                                         results)
                             if is_filtered:
-                                # self.last_detection = current_index
+                                self.last_detection = current_index
                                 return ConstructResult(original_frame, constructed_binary, None)
                             logger.info(
                                 f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
@@ -1114,6 +1114,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                                              timestamp=current_index, rects=r.rects)
                             self.msg_queue.put(json_msg)
                             logger.info(f'put detect message in msg_queue...')
+                            self.result_queue.put((original_frame, r.frame_index, r.rects))
                             if self.cfg.render:
                                 color = np.random.randint(0, 255, size=(3,))
                                 color = [int(c) for c in color]
@@ -1123,7 +1124,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                 self.render_rect_cache[current_index] = r.rects
                                 threading.Thread(target=self.stream_render.reset, args=(current_index,),
                                                  daemon=True).start()
-                            self.last_detection = self.stream_render.next_st(current_index)
+                            self.last_detection = self.stream_render.detect_index
+                            logger.info(self.LOG_PREFIX + f'Last detection frame index [{self.last_detection}]')
                             # Process(target=self.stream_render.reset, daemon=False, args=(current_index,)).start()
                     # self.stream_render.reset(current_index)
             # self.stream_render.notify(current_index)
@@ -1137,21 +1139,23 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
+        finally:
+            return ConstructResult(original_frame, constructed_binary, None)
 
     def filter_continuous_detect(self, current_index, original_frame, len_rect, results):
         diff_frame = current_index - self.last_detection
-        if self.continuous_filter_flag:
-            logger.info(f'Controller [{self.cfg.index}]: Frame [{current_index}] is still in filter window range')
-            return True
-        if diff_frame > self.cfg.detect_internal:
-            self.continuous_filter_flag = False
-        if self.last_detection != -1 and 0 < diff_frame <= self.cfg.detect_internal:
+        # if self.continuous_filter_flag:
+        #     logger.info(f'Controller [{self.cfg.index}]: Frame [{current_index}] is still in filter window range')
+        #     return True
+        # if diff_frame > self.cfg.detect_internal:
+        #     self.continuous_filter_flag = False
+        logger.info(f'Controller [{self.cfg.index}]: Diff frame [{diff_frame}]')
+        if (self.last_detection != -1) and (0 <= diff_frame <= self.cfg.detect_internal):
             logger.info(
                 f'****************************Controller [{self.cfg.index}]: '
                 f'Enter continuous exception handle process at Frame '
                 f'[{current_index}]***********************************')
 
-            logger.info(f'Controller [{self.cfg.index}]: Diff frame [{diff_frame}]')
             hit_precision = 0
             hit_cnt = 0
             start = time.time()
@@ -1180,16 +1184,16 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             if hit_cnt:
                 hit_precision /= hit_cnt
                 logger.info(
-                    f'Controller [{self.cfg.index}]: Hit count{hit_cnt}')
+                    f'Controller [{self.cfg.index}]: Hit count {hit_cnt}')
             logger.info(
                 f'Controller [{self.cfg.index}]: Average hit precision {round(hit_precision, 2)}')
             logger.info(
-                self.LOG_PREFIX + f'continuous exception handle process consumes [{round(time.time() - start, 2)}]')
-            if hit_cnt and hit_precision >= 0.6:
+                self.LOG_PREFIX + f'continuous exception handle process consumes [{round(time.time() - start, 2)}]s')
+            if hit_cnt and hit_precision >= self.cfg.similarity_thresh:
                 logger.info(
                     f'Controller [{self.cfg.index}]: Continuous detection report at' +
                     f'Frame [{current_index}].Skipped by continuous exception filter rule.............')
-                self.continuous_filter_flag = True
+                # self.continuous_filter_flag = True
                 return True
             return False
 
