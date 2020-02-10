@@ -1162,6 +1162,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 f'[{current_index}]***********************************')
 
             hit_precision = 0
+            similarity_seq = []
             hit_cnt = 0
             start = time.time()
             for idx in range(current_index + 1, current_index + self.cfg.search_window_size):
@@ -1174,13 +1175,14 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                             sr_rgb_patch = crop_by_rect(self.cfg, sr.rects[rl_idx], history_frame)
                             r_rgb_patch = crop_by_rect(self.cfg, results[sr_idx].rects[rl_idx],
                                                        original_frame)
-                            cosine_similarity = cal_hist_cosin_similarity(sr_rgb_patch, r_rgb_patch)
+                            similarity = cal_rgb_similarity(sr_rgb_patch, r_rgb_patch, 'ssim')
                             logger.info(
-                                f'Controller [{self.cfg.index}]: Cosine Distance {round(cosine_similarity, 2)}')
+                                f'Controller [{self.cfg.index}]: Cosine Distance {round(similarity, 2)}')
                             logger.info(
                                 f'Controller [{self.cfg.index}]: Frame [{idx}]: cosine similarity '
-                                f'{round(cosine_similarity, 2)}')
-                            hit_precision += cosine_similarity
+                                f'{round(similarity, 2)}')
+                            hit_precision += similarity
+                            similarity_seq.append(similarity)
                             # cv2.imwrite('data/test/0208/' + str(current_index) + '_r_' + str(
                             #     hit_cnt) + '.png', r_patch)
                             # cv2.imwrite('data/test/0208/' + str(current_index) + '_sr_' + str(
@@ -1190,11 +1192,17 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 hit_precision /= hit_cnt
                 logger.info(
                     f'Controller [{self.cfg.index}]: Hit count {hit_cnt}')
+
             logger.info(
                 f'Controller [{self.cfg.index}]: Average hit precision {round(hit_precision, 2)}')
+
+            seq_std = cal_std_similarity(similarity_seq)
+            logger.info(
+                f'Controller [{self.cfg.index}]: Frame sequence std: {round(seq_std, 4)}')
             logger.info(
                 self.LOG_PREFIX + f'continuous exception handle process consumes [{round(time.time() - start, 2)}]s')
-            if hit_cnt and hit_precision >= self.cfg.similarity_thresh:
+
+            if hit_cnt and seq_std <= self.cfg.similarity_thresh:
                 logger.info(
                     f'Controller [{self.cfg.index}]: Continuous detection report at' +
                     f'Frame [{current_index}].Skipped by continuous exception filter rule.............')

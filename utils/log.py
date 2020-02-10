@@ -46,6 +46,7 @@ def setup_logging(log_dir, logger_name='main', level=logging.DEBUG):
     exp_errors_file_handler.setFormatter(Formatter(log_file_format))
 
     logger.addHandler(console_handler)
+    logger.addHandler(exp_file_info_handler)
     logger.addHandler(exp_file_debug_handler)
     logger.addHandler(exp_errors_file_handler)
     return logger

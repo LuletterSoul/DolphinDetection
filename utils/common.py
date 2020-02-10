@@ -18,6 +18,7 @@ import cv2
 # import imutils
 import time
 from .crop import crop_by_roi
+from skimage.measure import compare_ssim
 import numpy as np
 
 
@@ -174,13 +175,26 @@ def normalization(data):
     return data / np.linalg.norm(data)
 
 
-def cal_hist_cosin_similarity(img1, img2):
+def cal_rgb_similarity(img1, img2, alg='hist_cosine'):
+    if alg == 'hist_cosine':
+        return cal_hist_cosine_similarity(img1, img2)
+    elif alg == 'ssim':
+        return compare_ssim(img1, img2, multichannel=True)
+
+
+def cal_std_similarity(seq):
+    if not len(seq) or seq is None:
+        return 0
+    return normalization(seq).std()
+
+
+def cal_hist_cosine_similarity(img1, img2):
     # img1_hist_feat = np.squeeze(createHistFeature(img1))
     # img2_hist_feat = np.squeeze(createHistFeature(img2))
-    return cal_hist_cosin_distance(img1, img2)
+    return cal_hist_cosine_distance(img1, img2)
 
 
-def cal_hist_cosin_distance(img1, img2):
+def cal_hist_cosine_distance(img1, img2):
     img1_hist_feat = np.squeeze(normalization(createHistFeature(img1)))
     img2_hist_feat = np.squeeze(normalization(createHistFeature(img2)))
     # num = float(img1_hist_feat * img2_hist_feat.T)
@@ -188,3 +202,9 @@ def cal_hist_cosin_distance(img1, img2):
     # cos = num / denom
     # sim = 0.5 + 0.5 * cos
     return np.dot(img1_hist_feat, img2_hist_feat)
+
+
+def standardization(data):
+    mu = np.mean(data, axis=0)
+    sigma = np.std(data, axis=0)
+    return (data - mu) / sigma

@@ -112,7 +112,7 @@
       "future_frames": 72,
       "detect_internal": 72,
       "search_window_size": 24,
-      "similarity_thresh": 0.6,
+      "similarity_thresh": 0.005,
       "pre_cache": 48,
       "render": true,
       "bbox": {
