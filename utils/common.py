@@ -177,7 +177,7 @@ def normalization(data):
 def cal_hist_cosin_similarity(img1, img2):
     # img1_hist_feat = np.squeeze(createHistFeature(img1))
     # img2_hist_feat = np.squeeze(createHistFeature(img2))
-    return 1 - cal_hist_cosin_distance(img1, img2)
+    return cal_hist_cosin_distance(img1, img2)
 
 
 def cal_hist_cosin_distance(img1, img2):
