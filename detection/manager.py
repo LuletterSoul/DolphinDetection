@@ -1035,7 +1035,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         collect_start = time.time()
         # results = self.collect(args)
         # results = args[0]
-        logger.info('Controller [{}]: Collect consume [{}] seconds'.format(self.cfg.index, time.time() - collect_start))
+        logger.debug(
+            'Controller [{}]: Collect consume [{}] seconds'.format(self.cfg.index, time.time() - collect_start))
         construct_result: ConstructResult = self.construct(*args)
         if construct_result is not None:
             frame = construct_result.frame
@@ -1083,15 +1084,19 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         # constructed_frame = self.construct_rgb(sub_frames)
         constructed_binary = self.construct_gray(sub_binary)
         # constructed_thresh = self.construct_gray(sub_thresh)
-        logger.info(f'Controller [{self.cfg.index}]: Construct frames into a original frame....')
+        logger.debug(f'Controller [{self.cfg.index}]: Construct frames into a original frame....')
         try:
             self.construct_cnt += 1
             current_index = results[0].frame_index
+            try_time = 0
             while current_index not in self.original_frame_cache:
                 logger.info(
                     f'Current index: [{current_index}] not in original frame cache.May cache was cleared by timer')
-                time.sleep(0.5)
-                # logger.info(self.original_frame_cache.keys())
+                time.sleep(0.1)
+                try_time += 1
+                if try_time > 24:
+                    return ConstructResult(None, None, None)
+            # logger.info(self.original_frame_cache.keys())
             original_frame = self.original_frame_cache[current_index]
             render_frame = original_frame.copy()
             for r in results:
@@ -1101,8 +1106,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         continue
                     for rect in r.rects:
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
-                        # if _model.predict(candidate) == 0:
-                        if True:
+                        if _model.predict(candidate) == 0:
+                            # if True:
                             is_filtered = self.filter_continuous_detect(current_index, original_frame, len(r.rects),
                                                                         results)
                             if is_filtered:
@@ -1208,8 +1213,9 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         if self.frame_cnt.get() <= self.cfg.pre_cache:
             return
 
-        if self.frame_cnt.get() % self.cfg.sample_rate == 0:
-            logger.info('Controller [{}]: Dispatch frame to all detectors....'.format(self.cfg.index))
+        pre_index = self.frame_cnt.get() - self.cfg.pre_cache
+        if pre_index % self.cfg.sample_rate == 0:
+            logger.debug('Controller [{}]: Dispatch frame to all detectors....'.format(self.cfg.index))
             async_futures = []
             pre_index = self.frame_cnt.get() - self.cfg.pre_cache
             original_frame = self.original_frame_cache[pre_index]

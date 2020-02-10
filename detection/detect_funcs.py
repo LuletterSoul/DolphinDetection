@@ -146,7 +146,7 @@ def detect_thresh_task(frame, block, params: DetectorParams):
     res = DetectionResult(None, None, status, regions, binary, dilated, coordinates, params.x_index,
                           params.y_index, block.index, original_rects, rects)
     end = time.time() - start
-    logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
+    logger.debug('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
     # cv2.destroyAllWindows()
     return res
 

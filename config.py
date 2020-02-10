@@ -25,7 +25,7 @@ class Environment(object):
     DEV = 'dev'
 
 
-LOG_LEVER = logging.INFO
+LOG_LEVER = logging.DEBUG
 
 PROJECT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 CANDIDATE_SAVE_DIR = PROJECT_DIR / 'data/candidates'
