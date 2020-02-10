@@ -10,13 +10,17 @@
 @version 1.0
 @desc:
 """
-import shutil
-import cv2
 import json
+import shutil
 from collections import namedtuple
+from pathlib import Path
+
+from config import VideoConfig
 
 
-def clean_dir(path):
+def clean_dir(path: Path):
+    if not path.exists():
+        return
     shutil.rmtree(str(path))
     path \
         .mkdir(exist_ok=True, parents=True)
@@ -80,3 +84,57 @@ def crop_by_se(img, start, end):
         return img[y1:y2, x1:x2]
     else:
         raise Exception('Crop range out of bound.')
+
+
+def bbox_points(cfg: VideoConfig, rect, shape, delta_x=0, delta_y=0):
+    center_x, center_y = round(rect[0] + rect[2] / 2), round(rect[1] + rect[3] / 2)
+    start_x, start_y = round(center_x - cfg.bbox['w'] / 2 - delta_x), round(
+        center_y - cfg.bbox['h'] / 2 - delta_y)
+    end_x = start_x + cfg.bbox['w'] + delta_x
+    end_y = start_y + cfg.bbox['h'] + delta_y
+    if start_x < 0:
+        start_x = 0
+    if start_y < 0:
+        start_y = 0
+    if end_x > shape[1]:
+        end_x = shape[1]
+    if end_y > shape[0]:
+        end_y = shape[0]
+    p1 = (start_x, start_y)
+    p2 = (end_x, end_y)
+    return p1, p2
+
+
+def _bbox_points(w, h, rect, shape, delta_x=0, delta_y=0):
+    center_x, center_y = round(rect[0] + rect[2] / 2), round(rect[1] + rect[3] / 2)
+    start_x, start_y = round(center_x - w / 2 - delta_x), round(
+        center_y - h / 2 - delta_y)
+    end_x = start_x + w + delta_x
+    end_y = start_y + h + delta_y
+    if start_x < 0:
+        start_x = 0
+    if start_y < 0:
+        start_y = 0
+    if end_x > shape[1]:
+        end_x = shape[1]
+    if end_y > shape[0]:
+        end_y = shape[0]
+    p1 = (start_x, start_y)
+    p2 = (end_x, end_y)
+    return p1, p2
+
+
+def crop_by_rect(cfg: VideoConfig, rect, frame):
+    shape = frame.shape
+    p1, p2 = bbox_points(cfg, rect, shape)
+    start_x, start_y = p1
+    end_x, end_y = p2
+    return frame[start_y:end_y, start_x:end_x]
+
+
+def crop_by_rect_wh(w, h, rect, frame):
+    shape = frame.shape
+    p1, p2 = _bbox_points(w, h, rect, shape)
+    start_x, start_y = p1
+    end_x, end_y = p2
+    return frame[start_y:end_y, start_x:end_x]

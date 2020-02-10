@@ -83,6 +83,28 @@ def load_video_config(cfg_path: Path) -> List[VideoConfig]:
         return cfgs
 
 
+def load_server_config(server_cfg_path: Path) -> ServerConfig:
+    """
+    load server configuration into a dict object from json file 
+    :param server_cfg_path: 
+    :return: 
+    """
+    with open(server_cfg_path) as f:
+        cfg_obj = json.load(f)
+        return ServerConfig.from_json(cfg_obj)
+
+
+def load_json_config(json_path: Path):
+    """
+    load json configuration
+    :param json_path:
+    :return:
+    """
+    with open(json_path) as f:
+        cfg_obj = json.load(f)
+        return cfg_obj
+
+
 def load_label_config(cfg_path: Path):
     """
     load ground truth image label configuration into a dict object from json file

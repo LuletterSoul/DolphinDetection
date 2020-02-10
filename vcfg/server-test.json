@@ -1,0 +1,14 @@
+{
+  "env": "test",
+  "http_ip": "127.0.0.1",
+  "http_port": 6006,
+  "wc_ip": "118.190.136.20",
+  "wc_port": 3400,
+  "classify_model_path": "model/bc-model.pth",
+  "root": "",
+  "stream_save_path": "data/videos",
+  "sample_save_dir": "data/samples",
+  "frame_save_dir": "data/frames",
+  "candidate_save_dir": "data/candidates",
+  "offline_stream_save_dir": "data/offline"
+}

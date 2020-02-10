@@ -3,7 +3,11 @@
     {
       "index": 0,
       "name": "video1",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "cHZnNjcxLWF2LzE2LzE=/",
@@ -44,8 +48,14 @@
       "save_box": true,
       "show_box": false,
       "rtsp": "",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "render": true,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh",
         "mean": 80
@@ -54,7 +64,11 @@
     {
       "index": 1,
       "name": "video2",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "stream_13-",
@@ -95,8 +109,14 @@
       "save_box": false,
       "show_box": false,
       "rtsp": "",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "render": true,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh",
         "mean": 80
@@ -105,7 +125,11 @@
     {
       "index": 2,
       "name": "video3",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "stream_13-",
@@ -146,8 +170,14 @@
       "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/gp/1101",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "render": true,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh",
         "mean": 80
@@ -156,7 +186,11 @@
     {
       "index": 3,
       "name": "video4",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "stream_13-",
@@ -197,8 +231,14 @@
       "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/gp/1102",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 48,
+      "render": true,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh",
         "mean": 80
@@ -207,62 +247,16 @@
     {
       "index": 4,
       "name": "video5_watch",
-      "shape":[1080,1920,3],
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
       "ip": "222.190.243.176",
       "port": "8081",
       "suffix": "stream_13-",
       "headers": {
-        "User-Agent": "AppleCoreMedia/1.0.0.19B88(Macintosh;U;Intel Mac OS X 10_15_1;en_us)",
-        "Referer": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
-        "Accept-Encoding": "identity"
       },
-      "m3u8_url": "http://222.190.243.243:8081/hls/stream_13/stream_13_live.m3u8",
-      "url": "http://222.190.243.243:8081/hls/stream_13/stream_13-",
-      "roi": {
-        "x": 0,
-        "y": 300,
-        "width": -1,
-        "height": -1
-      },
-      "resize": {
-        "width": 1000,
-        "height": -1,
-        "scale": -1
-      },
-      "show_window": true,
-      "window_position": {
-        "x": 100,
-        "y": 100
-      },
-      "routine": {
-        "row": 2,
-        "col": 2
-      },
-      "sample_rate": 3,
-      "draw_boundary": true,
-      "enable": false,
-      "filtered_ratio": 0.5,
-      "max_streams_cache": 5000,
-      "online": "rtsp",
-      "sample_internal": 15,
-      "save_box": false,
-      "show_box": true,
-      "rtsp": "rtsp://222.190.243.243/bp/jtview",
-      "rtsp_saved_per_frame": 50,
-      "future_frames": 48,
-      "alg": {
-        "type": "thresh",
-        "mean": 80
-      }
-    },
-    {
-      "index": 5,
-      "name": "video6_hungred_million",
-      "shape":[1080,1920,3],
-      "ip": "222.190.243.176",
-      "port": "8081",
-      "suffix": "",
-      "headers": {},
       "m3u8_url": "",
       "url": "",
       "roi": {
@@ -282,10 +276,126 @@
         "y": 100
       },
       "routine": {
+        "row": 2,
+        "col": 3
+      },
+      "sample_rate": 5,
+      "draw_boundary": true,
+      "enable": false,
+      "filtered_ratio": 0.5,
+      "max_streams_cache": 5000,
+      "online": "rtsp",
+      "sample_internal": 15,
+      "save_box": false,
+      "show_box": true,
+      "rtsp": "rtsp://222.190.243.243/bp/jtview",
+      "enable_sample_frame": false,
+      "rtsp_saved_per_frame": 50,
+      "future_frames": 48,
+      "render": true,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
+      "alg": {
+        "type": "thresh_mask",
+        "mean": 80,
+        "area_ratio": 3
+      }
+    },
+    {
+      "index": 5,
+      "name": "video6_hungred_million",
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
+      "ip": "222.190.243.176",
+      "port": "8081",
+      "suffix": "",
+      "headers": {},
+      "m3u8_url": "",
+      "url": "",
+      "roi": {
+        "x": 0,
+        "y": 0,
+        "width": -1,
+        "height": -1
+      },
+      "resize": {
+        "width": 1000,
+        "height": -1,
+        "scale": -1
+      },
+      "show_window": false,
+      "window_position": {
+        "x": 100,
+        "y": 100
+      },
+      "routine": {
         "row": 1,
         "col": 1
       },
       "sample_rate": 5,
+      "draw_boundary": false,
+      "enable": true,
+      "filtered_ratio": 0.5,
+      "max_streams_cache": 5000,
+      "online": "rtsp",
+      "sample_internal": 15,
+      "save_box": true,
+      "show_box": true,
+      "rtsp": "rtsp://222.190.243.243/bp/jtdome",
+      "enable_sample_frame": false,
+      "rtsp_saved_per_frame": 240,
+      "future_frames": 120,
+      "render": true,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
+      "alg": {
+        "type": "thresh",
+        "mean": 40,
+        "area_ratio": 0.03
+      }
+    },
+    {
+      "index": 6,
+      "name": "video6_hungred_million",
+      "shape": [
+        1080,
+        1920,
+        3
+      ],
+      "ip": "222.190.243.176",
+      "port": "8081",
+      "suffix": "",
+      "headers": {},
+      "m3u8_url": "",
+      "url": "",
+      "roi": {
+        "x": 0,
+        "y": 0,
+        "width": -1,
+        "height": -1
+      },
+      "resize": {
+        "width": 1000,
+        "height": -1,
+        "scale": -1
+      },
+      "show_window": false,
+      "window_position": {
+        "x": 100,
+        "y": 100
+      },
+      "routine": {
+        "row": 1,
+        "col": 1
+      },
+      "sample_rate": 1,
       "draw_boundary": false,
       "enable": true,
       "filtered_ratio": 0.5,
@@ -295,8 +405,14 @@
       "save_box": true,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
+      "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,
-      "future_frames": 72,
+      "future_frames": 120,
+      "render": true,
+      "bbox": {
+        "w": 224,
+        "h": 224
+      },
       "alg": {
         "type": "thresh",
         "mean": 40,
