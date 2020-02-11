@@ -14,8 +14,8 @@ import json
 import shutil
 from collections import namedtuple
 from pathlib import Path
-
 from config import VideoConfig
+import cv2
 
 
 def clean_dir(path: Path):
@@ -88,10 +88,10 @@ def crop_by_se(img, start, end):
 
 def bbox_points(cfg: VideoConfig, rect, shape, delta_x=0, delta_y=0):
     center_x, center_y = round(rect[0] + rect[2] / 2), round(rect[1] + rect[3] / 2)
-    start_x, start_y = round(center_x - cfg.bbox['w'] / 2 - delta_x), round(
-        center_y - cfg.bbox['h'] / 2 - delta_y)
-    end_x = start_x + cfg.bbox['w'] + delta_x
-    end_y = start_y + cfg.bbox['h'] + delta_y
+    start_x, start_y = round(center_x - cfg.bbox['w'] / 2 - round(delta_x)), round(
+        center_y - cfg.bbox['h'] / 2 - round(delta_y))
+    end_x = start_x + cfg.bbox['w'] + round(delta_x)
+    end_y = start_y + cfg.bbox['h'] + round(delta_y)
     if start_x < 0:
         start_x = 0
     if start_y < 0:
@@ -129,7 +129,7 @@ def crop_by_rect(cfg: VideoConfig, rect, frame):
     p1, p2 = bbox_points(cfg, rect, shape)
     start_x, start_y = p1
     end_x, end_y = p2
-    return frame[start_y:end_y, start_x:end_x]
+    return cv2.resize(frame[start_y:end_y, start_x:end_x], (cfg.bbox['w'], cfg.bbox['h']))
 
 
 def crop_by_rect_wh(w, h, rect, frame):
@@ -137,4 +137,4 @@ def crop_by_rect_wh(w, h, rect, frame):
     p1, p2 = _bbox_points(w, h, rect, shape)
     start_x, start_y = p1
     end_x, end_y = p2
-    return frame[start_y:end_y, start_x:end_x]
+    return cv2.resize(frame[start_y:end_y, start_x:end_x], (w, h))

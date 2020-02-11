@@ -21,7 +21,6 @@ from utils import *
 from .detector import DetectionResult
 
 
-
 # import ray
 
 
@@ -34,18 +33,18 @@ def ratio(area, total):
 
 
 def is_in_ratio(area, total, cfg: VideoConfig):
-    logger.info('Area ration: [{}]'.format((area / total) * 100))
+    # logger.info('Area ration: [{}]'.format((area / total) * 100))
     return ratio(area, total) <= cfg.filtered_ratio
 
 
 def less_ratio(area, shape, cfg: VideoConfig):
     total = shape[0] * shape[1]
-    logger.info('Area ration: [{}]'.format(ratio(area, total)))
+    # logger.info('Area ration: [{}]'.format(ratio(area, total)))
     return ratio(area, total) >= cfg.alg['area_ratio']
 
 
 # @ray.remote
-def detect_based_task(block, params: DetectorParams):
+def detect_based_task(block, params: DetectorParams) -> DetectionResult:
     frame = block.frame
     # if args.cfg.alg['type'] == 'saliency':
     #     res = detect_saliency()
@@ -122,17 +121,20 @@ def detect_thresh_task(frame, block, params: DetectorParams):
     dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                          iterations=2)
     img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    binary = np.zeros(dilated.shape, dtype=np.uint8)
     rects = []
     regions = []
     status = None
     coordinates = []
+    filtered_contours = []
     for c in contours:
         rect = cv2.boundingRect(c)
         area = cv2.contourArea(c)
         # self.is_in_ratio(area, self.shape[0] * self.shape[1])
         if less_ratio(area, frame.shape, params.cfg) and rect[2] / rect[3] < 10:
             rects.append(rect)
-    cv2.drawContours(img_con, contours, -1, 255, -1)
+            filtered_contours.append(c)
+    cv2.drawContours(binary, filtered_contours, -1, 255, -1)
     # if self.cfg.show_window:
     #     cv2.imshow("Contours", img_con)
     #     cv2.waitKey(1)
@@ -140,10 +142,11 @@ def detect_thresh_task(frame, block, params: DetectorParams):
     # logger.info(
     #     '~~~~ Detector: [{},{}] detect done [{}] frames..'.format(params.col_index, params.row_index,
     #                                                               params))
-    res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, params.x_index,
-                          params.y_index, block.index, back(rects, params.start, frame.shape, block.shape, params.cfg))
+    original_rects = back(rects, params.start, frame.shape, block.shape, params.cfg)
+    res = DetectionResult(None, None, status, regions, binary, dilated, coordinates, params.x_index,
+                          params.y_index, block.index, original_rects, rects)
     end = time.time() - start
-    logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
+    logger.debug('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
     # cv2.destroyAllWindows()
     return res
 

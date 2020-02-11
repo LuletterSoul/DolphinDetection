@@ -48,8 +48,8 @@ class DolphinDetectionServer:
         start_time = time.time()
         start_time_str = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime(start_time))
         logger.info(
-            '*******************************Dolphin Detection System: Running Environment [{}] at [{}]********************************'.format(
-                self.cfg.env, start_time_str))
+            f'*******************************Dolphin Detection System: Running Environment [{self.cfg.env}] at '
+            f'[{start_time_str}]********************************')
         self.http_server.run()
         self.classification_model.run()
         run_player(self.vcfgs)
@@ -58,8 +58,9 @@ class DolphinDetectionServer:
         end_time_str = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime(end_time))
         run_time = sec2time(end_time - start_time)
         logger.info(
-            '*******************************Dolphin Detection System: Shut down at [{}].Total Running Time [{}]********************************'.
-                format(end_time_str, run_time))
+            f'*******************************Dolphin Detection System: Shut down at [{end_time_str}].'
+            f'Total Running Time '
+            f'[{run_time}]********************************')
 
 
 def load_cfg(args):
