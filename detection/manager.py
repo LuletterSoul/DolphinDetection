@@ -1108,6 +1108,9 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
                         continue
                     for rect in r.rects:
+                        if len(r.rects) >= 3:
+                            logger.info(f'To many rect candidates: [{len(r.rects)}].Abandoned..... ')
+                            return ConstructResult(original_frame, None, None)
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
                         if _model.predict(candidate) == 0:
                             # if True:
