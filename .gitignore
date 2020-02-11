@@ -139,4 +139,5 @@ dmypy.json
 /candidate
 /images
 /data
+/model
 
