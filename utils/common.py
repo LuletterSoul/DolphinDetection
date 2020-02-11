@@ -127,7 +127,7 @@ def clear_cache_by_len(cache, len_cache):
         thread.start()
 
 
-def generate_time_stamp(fmt='%m-%d-%H-%M'):
+def generate_time_stamp(fmt='%m%d%H%M'):
     return time.strftime(fmt, time.localtime(time.time()))
 
 

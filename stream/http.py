@@ -28,10 +28,10 @@ class HttpServer(object):
     @staticmethod
     @app.route('/video/', methods=['GET'])
     def video():
-        camera = request.args.get('camera')
+        channel = request.args.get('channel')
         date = request.args.get("date")
         video_id = request.args.get("v_id")
-        url = "{}/{}/render-streams/{}.mp4".format(date, camera, video_id)
+        url = "{}/{}/render-streams/{}.mp4".format(date, channel, video_id)
         return app.send_static_file(url)
 
     @staticmethod

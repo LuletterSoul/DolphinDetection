@@ -56,11 +56,11 @@ class DetectionMonitor(object):
         self.quit = False
         # Communication Pipe between detector and stream receiver
         self.pipes = [Manager().Queue(c.max_streams_cache) for c in self.cfgs]
-        time_stamp = generate_time_stamp()
-        self.stream_path = stream_path / time_stamp
-        self.sample_path = sample_path / time_stamp
-        self.frame_path = frame_path / time_stamp
-        self.region_path = region_path / time_stamp
+        self.time_stamp = generate_time_stamp()
+        self.stream_path = stream_path / self.time_stamp
+        self.sample_path = sample_path / self.time_stamp
+        self.frame_path = frame_path / self.time_stamp
+        self.region_path = region_path / self.time_stamp
         self.offline_path = offline_path
         self.process_pool = None
         self.thread_pool = None
@@ -241,7 +241,9 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         self.model = model
         self.scfg = scfg
         self.task_futures = []
-        # self.process_pool = None
+        for c in self.cfgs:
+            c.date = self.time_stamp
+            # self.process_pool = None
         # self.thread_pool = None
 
     def init_controllers(self):
@@ -413,6 +415,7 @@ class DetectorController(object):
         self.quit.clear()
         self.status = Manager().Value('i', SystemStatus.SHUT_DOWN)
         self.frame_cnt = Manager().Value('i', 0)
+        self.pre_cnt = 0
         # self.frame_cnt =
         self.next_prepare_event = Manager().Event()
         self.next_prepare_event.clear()
@@ -527,7 +530,7 @@ class DetectorController(object):
         logger.info(
             '*******************************Controler [{}]: Init detection frame frame routine********************************'.format(
                 self.cfg.index))
-        current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
+        current_time = generate_time_stamp()
         target = self.result_path / (current_time + str(self.result_cnt) + '.png')
         logger.info('Writing stream frame into: [{}]'.format(str(target)))
         while True:
@@ -542,7 +545,7 @@ class DetectorController(object):
                     result_queue = self.result_queue.get(timeout=1)
                     r, rects = result_queue[0], result_queue[2]
                     self.result_cnt += 1
-                    current_time = time.strftime('%m-%d-%H-%M-', time.localtime(time.time()))
+                    current_time = generate_time_stamp() + '_'
                     img_name = current_time + str(self.result_cnt) + '.png'
                     target = self.result_path / img_name
                     cv2.imwrite(str(target), r)
@@ -855,7 +858,7 @@ class DetectionStreamRender(object):
         return next_cnt
 
     def render_task(self, current_idx, render_cache, rect_cache, frame_cache):
-        current_time = time.strftime('%m-%d-%H-%M-%S-', time.localtime(time.time()))
+        current_time = generate_time_stamp() + '_'
         rect_render_thread = threading.Thread(
             target=self.rect_render_task,
             args=(current_idx, current_time, frame_cache,
@@ -908,7 +911,7 @@ class DetectionStreamRender(object):
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}]: Consume [{time.time() - start}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
-        msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target))
+        msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
         self.msg_queue.put(msg_json)
         logger.info(f'put packaged message in the msg_queue...')
 
@@ -1107,7 +1110,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     for rect in r.rects:
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
                         if _model.predict(candidate) == 0:
-                            # if True:
+                        # if True:
                             is_filtered = self.filter_continuous_detect(current_index, original_frame, len(r.rects),
                                                                         results)
                             if is_filtered:
@@ -1193,8 +1196,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 logger.info(
                     f'Controller [{self.cfg.index}]: Hit count {hit_cnt}')
 
-            logger.info(
-                f'Controller [{self.cfg.index}]: Average hit precision {round(hit_precision, 2)}')
+                logger.info(
+                    f'Controller [{self.cfg.index}]: Average hit precision {round(hit_precision, 2)}')
 
             seq_std = cal_std_similarity(similarity_seq)
             logger.info(
@@ -1204,7 +1207,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
 
             if hit_cnt and seq_std <= self.cfg.similarity_thresh:
                 logger.info(
-                    f'Controller [{self.cfg.index}]: Continuous detection report at' +
+                    f'Controller [{self.cfg.index}]: Continuous detection report at ' +
                     f'Frame [{current_index}].Skipped by continuous exception filter rule.............')
                 # self.continuous_filter_flag = True
                 return True
@@ -1221,25 +1224,28 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         if self.frame_cnt.get() <= self.cfg.pre_cache:
             return
 
-        pre_index = self.frame_cnt.get() - self.cfg.pre_cache
-        if pre_index % self.cfg.sample_rate == 0:
+        self.pre_cnt += 1
+        if self.pre_cnt % self.cfg.sample_rate == 0:
             logger.debug('Controller [{}]: Dispatch frame to all detectors....'.format(self.cfg.index))
             async_futures = []
-            pre_index = self.frame_cnt.get() - self.cfg.pre_cache
-            original_frame = self.original_frame_cache[pre_index]
-            frame, original_frame = preprocess(original_frame, self.cfg)
-            for d in self.detect_params:
-                block = DispatchBlock(crop_by_se(frame, d.start, d.end),
-                                      pre_index, original_frame.shape)
-                # async_futures.append(pool.apply_async(d.detect_based_task, (block,)))
-                async_futures.append(detect_based_task(block, d))
-                # detect_td = threading.Thread(
-                #     target=detect_based_task,
-                #     args=(detect_based_task, block, d))
-                # async_futures.append(detect_td.start())
-                # async_futures.append(self.pool.submit(detect_based_task, block, d))
-                # async_futures.append(detect_based_task.remote(block, d))
-            self.collect_and_reconstruct(async_futures, args[1])
+            try:
+                original_frame = self.original_frame_cache[self.pre_cnt]
+                frame, original_frame = preprocess(original_frame, self.cfg)
+                for d in self.detect_params:
+                    block = DispatchBlock(crop_by_se(frame, d.start, d.end),
+                                          self.pre_cnt, original_frame.shape)
+                    # async_futures.append(pool.apply_async(d.detect_based_task, (block,)))
+                    async_futures.append(detect_based_task(block, d))
+                    # detect_td = threading.Thread(
+                    #     target=detect_based_task,
+                    #     args=(detect_based_task, block, d))
+                    # async_futures.append(detect_td.start())
+                    # async_futures.append(self.pool.submit(detect_based_task, block, d))
+                    # async_futures.append(detect_based_task.remote(block, d))
+                self.collect_and_reconstruct(async_futures, args[1])
+            except Exception as e:
+                traceback.print_stack()
+                logger.error(e)
             # r = pool.apply_async(collect_and_reconstruct,
             #                      (async_futures, self.construct_params, self.block_info, self.cfg,))
             # r.get()

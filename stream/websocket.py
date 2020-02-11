@@ -5,6 +5,7 @@ import websockets
 
 from config import ServerConfig, VideoConfig
 from utils import logger
+import os
 
 
 def websocket_client(q, vcfg: VideoConfig, scfg: ServerConfig):
@@ -88,14 +89,20 @@ def creat_detect_msg_json(video_stream, channel, timestamp, rects):
     return msg_json
 
 
-def creat_packaged_msg_json(filename, path):
+def creat_packaged_msg_json(filename, path, cfg: VideoConfig):
+    v_id = os.path.splitext(filename)[0]
     msg = {
         'cmdType': 'notify',
         'clientId': 'jt001',
         'data': {
             'notifyType': 'packagedNotify',
             'filename': filename,
-            'path': path
+            'path': path,
+            'param': {
+                'v_id': v_id,
+                'channel': cfg.index,
+                'date': cfg.date
+            }
         }
     }
     msg_json = json.dumps(msg)
