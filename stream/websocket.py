@@ -1,6 +1,5 @@
 import json
 import socket
-
 import websockets
 
 from config import ServerConfig, VideoConfig
