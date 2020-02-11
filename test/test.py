@@ -21,6 +21,8 @@ from detection.detect_funcs import detect
 from utils import *
 from skimage.measure import compare_ssim
 import cv2
+import redis
+import base64
 
 
 def test_video_config():
@@ -178,11 +180,45 @@ def test_hist():
     # print(cal_hist_cosin_similarity(img1, img2))
 
 
+def encode_vector(ar):
+    return base64.encodebytes(ar.tobytes()).decode('ascii')
+
+
+def decode_vector(ar):
+    return np.fromstring(base64.decodebytes(bytes(ar.decode('ascii'), 'ascii')), dtype='uint16')
+
+
+def test_redis_performance():
+    img = cv2.imread('data/test/redis/1.png')
+    conn = redis.Redis('localhost')
+    start = time.time()
+    dict = Manager().dict()
+    for idx in range(100):
+        conn.set(idx, encode_vector(img.copy()))
+    logger.info(f'Redis write consume [{round(time.time() - start, 2)}] seconds')
+
+    start = time.time()
+    for idx in range(100):
+        new = decode_vector(conn.get(idx))
+    logger.info(f'Redis read consume [{round(time.time() - start, 2)}] seconds')
+
+    start = time.time()
+    for idx in range(100):
+        dict[idx] = img.copy()
+    logger.info(f'Manager dict write consume [{round(time.time() - start, 2)}] seconds')
+
+    start = time.time()
+    for idx in range(100):
+        new = dict[idx]
+    logger.info(f'Manager dict consume [{round(time.time() - start, 2)}] seconds')
+
+
 if __name__ == '__main__':
     # MOG2_substractor()
     # crop_from_frame()
-    test_hist()
+    # test_hist()
     # test_task_monitor(k)
+    test_redis_performance()
     # test_load_video_json()
     # test_load_label_json()
     # test_video_config()
