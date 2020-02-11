@@ -26,12 +26,12 @@ class HttpServer(object):
         self.set_root(root)
 
     @staticmethod
-    @app.route('/video/', methods=['GET'])
-    def video():
-        camera = request.args.get('camera')
-        date = request.args.get("date")
-        video_id = request.args.get("v_id")
-        url = "{}/{}/render-streams/{}.mp4".format(date, camera, video_id)
+    @app.route('/video/<date>/<channel>/<v_id>', methods=['GET'])
+    def video(date, channel, v_id):
+        # channel = request.args.get('channel')
+        # date = request.args.get("date")
+        # video_id = request.args.get("v_id")
+        url = "{}/{}/render-streams/{}".format(date, channel, v_id)
         return app.send_static_file(url)
 
     @staticmethod
@@ -49,7 +49,7 @@ class HttpServer(object):
         elif self.env == Environment.TEST:
             Process(target=app.run, args=(self.host_ip, self.host_port, False,), daemon=True).start()
         elif self.env == Environment.PROD:
-            Process(target=app.run, args=(self.host_ip, self.host_port, True,), daemon=True).start()
+            Process(target=app.run, args=(self.host_ip, self.host_port, False,), daemon=True).start()
 
 
 if __name__ == '__main__':
