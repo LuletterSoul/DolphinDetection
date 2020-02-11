@@ -1110,7 +1110,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     for rect in r.rects:
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
                         if _model.predict(candidate) == 0:
-                        # if True:
+                            # if True:
                             is_filtered = self.filter_continuous_detect(current_index, original_frame, len(r.rects),
                                                                         results)
                             if is_filtered:

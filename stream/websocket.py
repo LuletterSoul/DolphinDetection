@@ -90,7 +90,7 @@ def creat_detect_msg_json(video_stream, channel, timestamp, rects):
 
 
 def creat_packaged_msg_json(filename, path, cfg: VideoConfig):
-    v_id = os.path.splitext(filename)[0]
+    url = os.path.join('video', cfg.date, str(cfg.index), filename)
     msg = {
         'cmdType': 'notify',
         'clientId': 'jt001',
@@ -98,11 +98,7 @@ def creat_packaged_msg_json(filename, path, cfg: VideoConfig):
             'notifyType': 'packagedNotify',
             'filename': filename,
             'path': path,
-            'param': {
-                'v_id': v_id,
-                'channel': cfg.index,
-                'date': cfg.date
-            }
+            'url': url
         }
     }
     msg_json = json.dumps(msg)
