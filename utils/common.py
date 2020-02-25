@@ -131,6 +131,7 @@ def generate_time_stamp(fmt='%m%d%H%M'):
     return time.strftime(fmt, time.localtime(time.time()))
 
 
+
 def sec2time(sec, n_msec=1):
     ''' Convert seconds to 'D days, HH:MM:SS.FFF' '''
     if hasattr(sec, '__len__'):

@@ -30,20 +30,24 @@ data_dir2 = os.path.join(PROJECT_DIR, 'data/test/0206')
 #                                        transforms.ToTensor(), ])
 class DolphinClassifier(object):
 
-    def __init__(self, model_path: Path) -> None:
+    def __init__(self, model_path: Path, device_id='1') -> None:
         self.model_path = model_path
         self.device = None
         self.model = None
+        self.device_id = device_id
 
     def run(self):
+        # if self.device_id is not None:
+        #     os.environ['CUDA_VISIBLE_DEVICES'] = self.device_id
         if not self.model_path.exists():
-            raise Exception(f'Model init failed: model not exisit at [{str(self.model_path)}].')
+            raise Exception(f'Model init failed: model not exist at [{str(self.model_path)}].')
         if torch.cuda.is_available():
-            self.device = torch.device("cuda")
+            self.device = torch.device("cuda:" + str(self.device_id))
             self.model = torch.load(str(self.model_path))
         else:
             self.device = torch.device("cpu")
             self.model = torch.load(str(self.model_path), map_location="cpu")
+        self.model = self.model.to(self.device)
         self.model.eval()
         print(self.model)
         print(self.device)

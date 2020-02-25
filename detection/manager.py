@@ -858,7 +858,7 @@ class DetectionStreamRender(object):
         return next_cnt
 
     def render_task(self, current_idx, render_cache, rect_cache, frame_cache):
-        current_time = generate_time_stamp() + '_'
+        current_time = generate_time_stamp('%m%d%H%M%S') + '_'
         rect_render_thread = threading.Thread(
             target=self.rect_render_task,
             args=(current_idx, current_time, frame_cache,
@@ -1112,8 +1112,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                             logger.info(f'To many rect candidates: [{len(r.rects)}].Abandoned..... ')
                             return ConstructResult(original_frame, None, None)
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
-                        if _model.predict(candidate) == 0:
-                            # if True:
+                        # if _model.predict(candidate) == 0:
+                        if True:
                             is_filtered = self.filter_continuous_detect(current_index, original_frame, len(r.rects),
                                                                         results)
                             if is_filtered:

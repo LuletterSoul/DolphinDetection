@@ -138,7 +138,8 @@ class ServerConfig(Config):
     Server configuration definitions
     """
 
-    def __init__(self, env, http_ip, http_port, wc_ip, wc_port, root, classify_model_path, stream_save_path,
+    def __init__(self, env, http_ip, http_port, wc_ip, wc_port, root, classify_model_path, detect_model_path,
+                 stream_save_path,
                  sample_save_dir,
                  frame_save_dir,
                  candidate_save_dir, offline_stream_save_dir) -> None:
@@ -147,7 +148,8 @@ class ServerConfig(Config):
         self.http_port = http_port
         self.wc_ip = wc_ip
         self.wc_port = wc_port
-        self.classify_model_path = classify_model_path
+        self.classify_model_path = Path(os.path.join(PROJECT_DIR, classify_model_path))
+        self.detect_model_path = Path(os.path.join(PROJECT_DIR, detect_model_path))
         self.stream_save_path = stream_save_path
         self.sample_save_dir = sample_save_dir
         self.frame_save_dir = frame_save_dir
@@ -170,14 +172,14 @@ class ServerConfig(Config):
             self.sample_save_dir = Path(os.path.join(PROJECT_DIR, self.sample_save_dir))
             self.frame_save_dir = Path(os.path.join(PROJECT_DIR, self.frame_save_dir))
             self.candidate_save_dir = Path(os.path.join(PROJECT_DIR, self.candidate_save_dir))
-            self.classify_model_path = Path(os.path.join(PROJECT_DIR, self.classify_model_path))
+            # self.classify_model_path =
             self.offline_stream_save_dir = Path(os.path.join(PROJECT_DIR, self.offline_stream_save_dir))
         else:
             self.stream_save_path = Path(os.path.join(self.root, self.stream_save_path))
             self.sample_save_dir = Path(os.path.join(self.root, self.sample_save_dir))
             self.frame_save_dir = Path(os.path.join(self.root, self.frame_save_dir))
             self.candidate_save_dir = Path(os.path.join(self.root, self.candidate_save_dir))
-            self.classify_model_path = Path(os.path.join(self.root, self.classify_model_path))
+            # self.classify_model_path = Path(os.path.join(self.root, self.classify_model_path))
             self.offline_stream_save_dir = Path(os.path.join(self.root, self.offline_stream_save_dir))
 
 
@@ -188,7 +190,8 @@ class VideoConfig(Config):
 
     def __init__(self, index, name, shape, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
-                 online, sample_internal, detect_internal, search_window_size,similarity_thresh, pre_cache, render, save_box, show_box,
+                 online, sample_internal, detect_internal, search_window_size, similarity_thresh, pre_cache, render,
+                 save_box, show_box,
                  rtsp,
                  enable_sample_frame,
                  rtsp_saved_per_frame,

@@ -11,9 +11,5 @@
 @desc:
 """
 
-from .detector import *
-from .manager import *
-from .params import *
-from .component import *
-from .ssd import *
+from .deep_model import SSDDetector
 # from .ray_manager import *

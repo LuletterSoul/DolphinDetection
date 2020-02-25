@@ -129,6 +129,10 @@ class VideoCaptureThreading:
         self.frame_queue.put(args[0], block=True)
         # logger.info('Passed frame...')
 
+    def decode_fourcc(self, v):
+        v = int(v)
+        return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
+
     def update_capture(self, cnt):
         logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
         logger.debug('Read next frame from video ....')
@@ -144,7 +148,11 @@ class VideoCaptureThreading:
                 break
         if self.cap is not None:
             self.cap.release()
+
         self.cap = cv2.VideoCapture(src)
+        res = self.cap.set(cv2.CAP_PROP_FOURCC, 844715353.0)
+        print(res)
+        print(self.decode_fourcc(self.cap.get(cv2.CAP_PROP_FOURCC)))
         return True
 
     def handle_history(self):
