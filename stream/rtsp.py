@@ -18,11 +18,13 @@ import subprocess as sp
 from moviepy.compat import PY3, DEVNULL
 from moviepy.config import get_setting
 import cv2
+import time
 
 
 class FFMPEG_VideoStreamer(FFMPEG_VideoWriter):
 
-    def __init__(self, filename, rtsp_addr, size, fps, codec="libx264", audiofile=None, preset="medium", bitrate=None,
+    def __init__(self, rtsp_addr, size, fps, filename='default.mp4', codec="libx264", audiofile=None, preset="medium",
+                 bitrate=None,
                  withmask=False, logfile=None, threads=None, ffmpeg_params=None):
         super().__init__(filename, size, fps, codec, audiofile, preset, bitrate, withmask, logfile, threads,
                          ffmpeg_params)
@@ -40,8 +42,8 @@ class FFMPEG_VideoStreamer(FFMPEG_VideoWriter):
             '-loglevel', 'error' if logfile == sp.PIPE else 'info',
             '-f', 'rawvideo',
             '-vcodec', 'rawvideo',
-            '-s', '%dx%d' % (size[0], size[1]),
             '-pix_fmt', 'rgba' if withmask else 'rgb24',
+            '-s', '%dx%d' % (size[0], size[1]),
             '-r', '%.02f' % fps,
             '-i', '-', '-an',
             '-f', 'rtsp'
@@ -64,13 +66,13 @@ class FFMPEG_VideoStreamer(FFMPEG_VideoWriter):
 
         if threads is not None:
             cmd.extend(["-threads", str(threads)])
-
-        if ((codec == 'libx264') and
-                (size[0] % 2 == 0) and
-                (size[1] % 2 == 0)):
-            cmd.extend([
-                '-pix_fmt', 'yuv420p'
-            ])
+        #
+        # if ((codec == 'libx264') and
+        #         (size[0] % 2 == 0) and
+        #         (size[1] % 2 == 0)):
+        #     cmd.extend([
+        #         '-pix_fmt', 'yuv420p'
+        #     ])
         # cmd.extend([
         #     filename
         # ])
@@ -151,29 +153,48 @@ class Live(object):
             self.thread_running = False
 
 
-if __name__ == "__main__":
-    ffmpeg_path = "ffmpeg"
+def push_rtsp():
     video_path = "12.mp4"
-    rtsp_url = "rtsp://192.168.0.116/test1"
-
-    # live = Live(ffmpeg_path, video_path, rtsp_url)
-    # live.run()
-
-    video_path = "11.mp4"
-    test_video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/6/22_1080P.mp4'
-
+    test_video_path = '/data/lxd/project/DolphinDetection/data/offline/6x/22_1080P.mp4'
     video_cap = cv2.VideoCapture(test_video_path)
-    rtsp_url = "rtsp://221.226.81.54/test2"
-    # streamer = FFMPEG_VideoStreamer(video_path, rtsp_url, fps=25, codec='mpeg4', size=(1920, 1080))
+    # rtsp_url = "rtsp://221.226.81.54:6006/test1"
+    # rtsp_url = "rtsp://221.226.81.54:6006/test1"
+    rtsp_url = "rtsp://192.168.0.116/test1"
+    # size = (1920, 1080)
+    size = (1920, 1080)
+    streamer = FFMPEG_VideoStreamer(rtsp_url, codec='h264', fps=24, size=size)
     # print('~~~~~~~~~~~~~~')
-    # while True:
-    #     grabbed, frame = video_cap.read()
-    #     if grabbed:
-    #         streamer.write_frame(frame)
-    #     else:
-    #         break
+    while True:
+        try:
+            grabbed, frame = video_cap.read()
+            if grabbed:
+                # time.sleep(0.2)
+                streamer.write_frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            else:
+                break
+        except Exception as e:
+            print(e)
+            video_cap.release()
+    video_cap.release()
 
-    # rtsp_url = "rtsp://192.168.0.116/test2"
 
+video_streamer = FFMPEG_VideoStreamer("rtsp://192.168.0.116/test2", size=(1920, 1072), fps=24, codec='h264', )
+
+
+def push_by_live():
+    ffmpeg_path = "ffmpeg"
+    test_video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/6/22_1080P.mp4'
+    rtsp_url = "rtsp://221.226.81.54:6006/test1"
     live = Live(ffmpeg_path, test_video_path, rtsp_url)
     live.run()
+
+
+if __name__ == "__main__":
+    # push_by_live()
+
+    # video_path = "11.mp4"
+    push_rtsp()
+    # rtsp_url = "rtsp://192.168.0.116/test2"
+
+    # live = Live(ffmpeg_path, test_video_path, rtsp_url)
+    # live.run()

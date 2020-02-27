@@ -12,6 +12,7 @@ def websocket_client(q, vcfg: VideoConfig, scfg: ServerConfig):
     address = (scfg.wc_ip, scfg.wc_port)
     server = None
     history_msg_json = None
+    msg_json = None
     while True:
         if server is None:
             logger.info(f'waiting to connect to server {address}...')
