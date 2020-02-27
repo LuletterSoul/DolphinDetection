@@ -18,6 +18,7 @@ from classfy.base import *
 from config import PROJECT_DIR
 from utils import logger
 from pathlib import Path
+from utils import normalization
 
 """
     =========================== 模型预测与使用 ================================
@@ -41,8 +42,12 @@ class DolphinClassifier(object):
         #     os.environ['CUDA_VISIBLE_DEVICES'] = self.device_id
         if not self.model_path.exists():
             raise Exception(f'Model init failed: model not exist at [{str(self.model_path)}].')
+
+        if self.device_id is not None:
+            os.environ['CUDA_VISIBLE_DEVICES'] = str(self.device_id)
         if torch.cuda.is_available():
-            self.device = torch.device("cuda:" + str(self.device_id))
+            self.device = torch.device("cuda")
+            # self.device = torch.device("cuda:" + str(self.device_id))
             self.model = torch.load(str(self.model_path))
         else:
             self.device = torch.device("cpu")
@@ -58,14 +63,15 @@ class DolphinClassifier(object):
         image_tensor = image_tensor.unsqueeze(0)
         input = image_tensor.to(self.device)
         output = self.model(input)
-        index = output.data.cpu().numpy().argmax()
-        return index
+        output = output.data.cpu().numpy()
+        index = output.argmax()
+        return index, normalization(output)
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # print(device)
-# model = torch.load(os.path.join(PROJECT_DIR, 'model/bc-model.pth'))
-# model.eval()
-# print(model)
+# classify_model = torch.load(os.path.join(PROJECT_DIR, 'classify_model/bc-classify_model.pth'))
+# classify_model.eval()
+# print(classify_model)
 
 
 # def predict(image):
@@ -74,7 +80,7 @@ class DolphinClassifier(object):
 #     image_tensor = image_tensor.unsqueeze(0)
 #     print(image_tensor.size())
 #     input = image_tensor.to(device)
-#     output = model(input)
+#     output = classify_model(input)
 #     index = output.data.cpu().numpy().argmax()
 #     return index
 #

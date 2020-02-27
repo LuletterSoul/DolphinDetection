@@ -11,5 +11,5 @@
 @desc:
 """
 
-from .deep_model import SSDDetector
+from .deep_model import *
 # from .ray_manager import *
