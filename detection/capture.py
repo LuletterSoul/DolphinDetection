@@ -369,6 +369,19 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
         start = time.time()
         logger.info('*******************************Init video capture [{}]********************************'.format(
             self.cfg.index))
+        ssd_detector = None
+        classifier = None
+        server_cfg = args[0]
+        if server_cfg.detect_mode == ModelType.SSD:
+            ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
+            ssd_detector.run()
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
+        elif server_cfg.detect_mode == ModelType.CLASSIFY:
+            classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
+            classifier.run()
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
             s = time.time()
@@ -385,7 +398,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
-            self.pass_frame(frame, args[0])
+            self.pass_frame(frame, args[0], ssd_detector, classifier)
             e = 1 / (time.time() - s)
             logger.debug(
                 'Video capture [{}]: Operation Speed Rate [{}]/FPS'.format(

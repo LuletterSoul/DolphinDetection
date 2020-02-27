@@ -201,7 +201,7 @@ class VideoConfig(Config):
                  online, cap_loop, sample_internal, detect_internal, search_window_size, similarity_thresh, pre_cache,
                  render,
                  save_box, show_box,
-                 rtsp, push_to,
+                 rtsp, push_to, write_timestamp,
                  enable_sample_frame,
                  rtsp_saved_per_frame,
                  future_frames, bbox,
@@ -233,6 +233,7 @@ class VideoConfig(Config):
         self.show_box = show_box
         self.rtsp = rtsp
         self.push_to = push_to
+        self.write_timestamp = write_timestamp
         self.enable_sample_frame = enable_sample_frame
         self.rtsp_saved_per_frame = rtsp_saved_per_frame
         self.future_frames = future_frames

@@ -70,7 +70,8 @@ class DetectionMonitor(object):
         self.shut_down_event = Manager().Event()
         self.shut_down_event.clear()
         if build_pool:
-            self.process_pool = Pool(processes=cpu_count() - 1)
+            pool_size = min(len(cfgs), cpu_count() - 1)
+            self.process_pool = Pool(processes=pool_size)
             self.thread_pool = ThreadPoolExecutor()
         self.clean()
         self.stream_receivers = [
@@ -965,9 +966,9 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         original_frame = self.original_frame_cache[self.pre_cnt]
 
         if self.server_cfg.detect_mode == ModelType.CLASSIFY:
-            self.classify_based(args, original_frame)
+            self.classify_based(args, original_frame.copy())
         elif self.server_cfg.detect_mode == ModelType.SSD:
-            self.ssd_based(args, original_frame)
+            self.ssd_based(args, original_frame.copy())
         self.clear_original_cache()
 
     def ssd_based(self, args, original_frame):
@@ -984,6 +985,9 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         if len(frame_result):
                             rects = [r for r in frame_result if r[4] > 0.7]
                             if len(rects):
+                                if len(rects) >= 3:
+                                    logger.info(f'To many rect candidates: [{len(rects)}].Abandoned..... ')
+                                    return ConstructResult(original_frame, None, None)
                                 detect_results.append(DetectionResult(rects=rects))
                                 detect_flag = True
                                 self.dol_gone = False
@@ -1024,10 +1028,10 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
                 construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results)
                 if self.cfg.push_stream:
-                    self.push_stream_queue.put((original_frame, construct_result))
+                    self.push_stream_queue.put((original_frame, construct_result), timeout=2)
             else:
                 if self.cfg.push_stream:
-                    self.push_stream_queue.put((original_frame, None))
+                    self.push_stream_queue.put((original_frame, None), timeout=2)
         except Exception as e:
             traceback.print_stack()
             logger.info(e)
@@ -1051,14 +1055,14 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     # async_futures.append(detect_based_task.remote(block, d))
                 proc_res: ConstructResult = self.collect_and_reconstruct(async_futures, args[3])
                 if self.cfg.push_stream:
-                    self.push_stream_queue.put((proc_res.frame, proc_res))
+                    self.push_stream_queue.put((proc_res.frame, proc_res), timeout=2)
             except Exception as e:
                 traceback.print_stack()
                 logger.error(e)
         else:
             try:
                 if self.cfg.push_stream:
-                    self.push_stream_queue.put((original_frame, None))
+                    self.push_stream_queue.put((original_frame, None), timeout=2)
             except Exception as e:
                 logger.error(e)
             # r = pool.apply_async(collect_and_reconstruct,
@@ -1134,10 +1138,14 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         cv2.putText(frame, 'Dolphin', p1,
                                     cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
                         cv2.rectangle(frame, p1, p2, color, 2)
+                        # if self.server_cfg.detect_mode == ModelType.SSD:
+                        #     cv2.putText(frame, str(round(r[4], 2)), (p2[0], p2[1]),
+                        #                 cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
                 draw_cnt += 1
-            time_stamp = generate_time_stamp("%Y-%m-%d %H:%M:%S")
-            cv2.putText(frame, time_stamp, (100, 100),
-                        cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
+            if self.cfg.write_timestamp:
+                time_stamp = generate_time_stamp("%Y-%m-%d %H:%M:%S")
+                cv2.putText(frame, time_stamp, (100, 100),
+                            cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
             video_streamer.write_frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
     def start(self, pool: Pool):
