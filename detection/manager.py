@@ -491,9 +491,12 @@ class DetectorController(object):
         logger.info(
             '*******************************Controler [{}]: Init detection frame frame routine********************************'.format(
                 self.cfg.index))
-        current_time = generate_time_stamp()
-        target = self.result_path / (current_time + str(self.result_cnt) + '.png')
-        logger.info('Writing stream frame into: [{}]'.format(str(target)))
+        if not self.cfg.save_box:
+            logger.info(
+                '*******************************Controler [{}]: Frame writing routine disabled********************************'.format(
+                    self.cfg.index))
+            return
+
         while True:
             if self.status.get() == SystemStatus.SHUT_DOWN and self.result_queue.empty():
                 logger.info(
@@ -977,14 +980,10 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 detect_flag = False
                 current_index = self.pre_cnt
                 if len(frames_results):
-                    # logger.info(frames_result)
                     for frame_result in frames_results:
                         if len(frame_result):
                             rects = [r for r in frame_result if r[4] > 0.7]
-                            # rects = frame_result
                             if len(rects):
-                                logger.info(rects)
-                                # logger.info('Detect: TP')
                                 detect_results.append(DetectionResult(rects=rects))
                                 detect_flag = True
                                 self.dol_gone = False

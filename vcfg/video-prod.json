@@ -174,7 +174,7 @@
       "online": "offline",
       "cap_loop": true,
       "sample_internal": 15,
-      "save_box": true,
+      "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
       "push_to": "rtsp://192.168.0.116/test2",
