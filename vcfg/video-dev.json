@@ -27,6 +27,7 @@
         "scale": -1
       },
       "show_window": true,
+      "push_stream": false,
       "window_position": {
         "x": 100,
         "y": 100
@@ -41,10 +42,12 @@
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
       "online": "rtsp",
+      "cap_loop": false,
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtview",
+      "push_to": "rtsp://192.168.0.116/test1",
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 50,
       "future_frames": 72,
@@ -89,6 +92,7 @@
         "scale": -1
       },
       "show_window": true,
+      "push_stream": false,
       "window_position": {
         "x": 100,
         "y": 100
@@ -107,6 +111,8 @@
       "save_box": true,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
+      "cap_loop": false,
+      "push_to": "rtsp://192.168.0.116/test1",
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
@@ -124,7 +130,8 @@
         "mean": 40,
         "area_ratio": 0.05
       }
-    },{
+    },
+    {
       "index": 6,
       "name": "video7_hungred_million",
       "shape": [
@@ -150,6 +157,7 @@
         "scale": -1
       },
       "show_window": true,
+      "push_stream": false,
       "window_position": {
         "x": 100,
         "y": 100
@@ -168,6 +176,8 @@
       "save_box": true,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
+      "cap_loop": true,
+      "push_to": "rtsp://192.168.0.116/test1",
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,

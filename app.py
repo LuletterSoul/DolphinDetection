@@ -14,7 +14,7 @@
 import argparse
 
 from classfy.model import DolphinClassifier
-from detection import SSDDetector
+from detection import SSDDetector, init_ssd
 from detection.component import run_player
 from interface import *
 # from multiprocessing import Process
@@ -29,12 +29,21 @@ class DolphinDetectionServer:
 
     def __init__(self, cfg: ServerConfig, vcfgs: List[VideoConfig], switcher_options, cd_id, dt_id) -> None:
         self.cfg = cfg
+        self.cfg.cd_id = cd_id
+        self.cfg.dt_id = dt_id
         self.vcfgs = [c for c in vcfgs if switcher_options[str(c.index)]]
-        self.classifier = DolphinClassifier(model_path=self.cfg.classify_model_path, device_id=cd_id)
+        # self.classifier = DolphinClassifier(model_path=self.cfg.classify_model_path, device_id=cd_id)
+        self.classifier = None
+        self.ssd_detector = None
+        self.dt_id = dt_id
+        if self.cfg.detect_mode == ModelType.CLASSIFY:
+            self.classifier = DolphinClassifier(model_path=self.cfg.classify_model_path, device_id=cd_id)
+        # if self.cfg.detect_mode == ModelType.SSD:
         # self.ssd_detector = SSDDetector(model_path=self.cfg.detect_model_path, device_id=dt_id)
         self.monitor = detection.EmbeddingControlBasedTaskMonitor(self.vcfgs,
                                                                   self.cfg,
                                                                   self.classifier,
+                                                                  self.ssd_detector,
                                                                   self.cfg.stream_save_path,
                                                                   self.cfg.sample_save_dir,
                                                                   self.cfg.frame_save_dir,
@@ -52,8 +61,11 @@ class DolphinDetectionServer:
             f'*******************************Dolphin Detection System: Running Environment [{self.cfg.env}] at '
             f'[{start_time_str}]********************************')
         self.http_server.run()
-        # self.ssd_detector.run()
-        self.classifier.run()
+        # if self.cfg.detect_mode == ModelType.SSD:
+        #     init_ssd(self.cfg.detect_model_path, device_id=self.dt_id)
+            # self.ssd_detector.run()
+        # elif self.cfg.detect_mode == ModelType.CLASSIFY:
+        #     self.classifier.run()
         run_player(self.vcfgs)
         self.monitor.monitor()
         end_time = time.time()

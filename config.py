@@ -25,6 +25,11 @@ class Environment(object):
     DEV = 'dev'
 
 
+class ModelType(object):
+    SSD = 'ssd'
+    CLASSIFY = 'classify'
+
+
 LOG_LEVER = logging.DEBUG
 
 PROJECT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -66,7 +71,7 @@ WEBSOCKET_SERVER_IP = '118.190.136.20'
 # WEBSOCKET_SERVER_IP = '192.168.1.7'
 WEBSOCKET_SERVER_PORT = 3400
 
-MODEL_PATH = PROJECT_DIR / 'model/bc-model.pth'
+MODEL_PATH = PROJECT_DIR / 'classify_model/bc-classify_model.pth'
 
 from enum import Enum
 
@@ -139,6 +144,7 @@ class ServerConfig(Config):
     """
 
     def __init__(self, env, http_ip, http_port, wc_ip, wc_port, root, classify_model_path, detect_model_path,
+                 detect_mode,
                  stream_save_path,
                  sample_save_dir,
                  frame_save_dir,
@@ -148,6 +154,7 @@ class ServerConfig(Config):
         self.http_port = http_port
         self.wc_ip = wc_ip
         self.wc_port = wc_port
+        self.detect_mode = detect_mode
         self.classify_model_path = Path(os.path.join(PROJECT_DIR, classify_model_path))
         self.detect_model_path = Path(os.path.join(PROJECT_DIR, detect_model_path))
         self.stream_save_path = stream_save_path
@@ -189,10 +196,12 @@ class VideoConfig(Config):
     """
 
     def __init__(self, index, name, shape, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
+                 push_stream,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
-                 online, sample_internal, detect_internal, search_window_size, similarity_thresh, pre_cache, render,
+                 online, cap_loop, sample_internal, detect_internal, search_window_size, similarity_thresh, pre_cache,
+                 render,
                  save_box, show_box,
-                 rtsp,
+                 rtsp, push_to,
                  enable_sample_frame,
                  rtsp_saved_per_frame,
                  future_frames, bbox,
@@ -209,6 +218,7 @@ class VideoConfig(Config):
         self.roi = roi
         self.resize = resize
         self.show_window = show_window
+        self.push_stream = push_stream
         self.window_position = window_position
         self.routine = routine
         self.sample_rate = sample_rate
@@ -217,10 +227,12 @@ class VideoConfig(Config):
         self.filtered_ratio = filtered_ratio
         self.max_streams_cache = max_streams_cache
         self.online = online
+        self.cap_loop = cap_loop
         self.sample_internal = sample_internal
         self.save_box = save_box
         self.show_box = show_box
         self.rtsp = rtsp
+        self.push_to = push_to
         self.enable_sample_frame = enable_sample_frame
         self.rtsp_saved_per_frame = rtsp_saved_per_frame
         self.future_frames = future_frames
