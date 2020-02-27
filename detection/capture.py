@@ -17,11 +17,14 @@ import time
 from multiprocessing import Manager
 from multiprocessing.queues import Queue
 from pathlib import Path
+from .ssd import SSDDetector
+from classfy.model import DolphinClassifier
 
 import cv2
 
 from config import VideoConfig, SystemStatus
 from utils import logger
+from config import ModelType
 
 
 # from .manager import TaskBasedDetectorController
@@ -104,6 +107,19 @@ class VideoCaptureThreading:
         start = time.time()
         logger.info('*******************************Init video capture [{}]********************************'.format(
             self.cfg.index))
+        ssd_detector = None
+        classifier = None
+        server_cfg = args[0]
+        if server_cfg.detect_mode == ModelType.SSD:
+            ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
+            ssd_detector.run()
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
+        elif server_cfg.detect_mode == ModelType.CLASSIFY:
+            classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
+            classifier.run()
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
             grabbed, frame = self.cap.read()
@@ -115,7 +131,7 @@ class VideoCaptureThreading:
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
-            self.pass_frame(frame, args[0])
+            self.pass_frame(frame, args[0], ssd_detector, classifier)
             cnt += 1
             self.post_frame_process(frame)
             self.runtime = time.time() - start
@@ -150,9 +166,6 @@ class VideoCaptureThreading:
             self.cap.release()
 
         self.cap = cv2.VideoCapture(src)
-        res = self.cap.set(cv2.CAP_PROP_FOURCC, 844715353.0)
-        print(res)
-        print(self.decode_fourcc(self.cap.get(cv2.CAP_PROP_FOURCC)))
         return True
 
     def handle_history(self):
@@ -193,10 +206,12 @@ class VideoOfflineCapture(VideoCaptureThreading):
         self.pos = -1
 
     def get_posix(self):
-        self.pos += 1
         if self.pos >= len(self.streams_list):
             logger.info('Load completely for [{}]'.format(str(self.offline_path)))
             return -1
+        if self.cfg.cap_loop:
+            return self.streams_list[0]
+        self.pos += 1
         return self.streams_list[self.pos]
 
     # def load_next_src(self):
@@ -410,4 +425,4 @@ class VideoRtspCallbackCapture(VideoRtspCapture):
 
     def pass_frame(self, *args):
         assert len(args) >= 2
-        self.controller.dispatch_frame(args[0], args[1])
+        self.controller.dispatch_frame(*args)

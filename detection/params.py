@@ -49,12 +49,14 @@ class DispatchBlock(object):
 
 class ConstructResult(object):
 
-    def __init__(self, frame, binary, thresh, last_detection_time=None) -> None:
+    def __init__(self, frame, binary, thresh, last_detection_time=None, detect_flag=False, results=None) -> None:
         super().__init__()
         self.frame = frame
         self.binary = binary
         self.thresh = thresh
         self.last_detection_time = last_detection_time
+        self.detect_flag = detect_flag
+        self.results = results
 
 
 class ConstructParams(object):
