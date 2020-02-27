@@ -1028,10 +1028,10 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
                 construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results)
                 if self.cfg.push_stream:
-                    self.push_stream_queue.put((original_frame, construct_result), timeout=2)
+                    self.push_stream_queue.put((original_frame, construct_result))
             else:
                 if self.cfg.push_stream:
-                    self.push_stream_queue.put((original_frame, None), timeout=2)
+                    self.push_stream_queue.put((original_frame, None))
         except Exception as e:
             traceback.print_stack()
             logger.info(e)
