@@ -340,6 +340,8 @@ class DetectorController(object):
                  msg_queue: Queue) -> None:
         super().__init__()
         self.cfg = cfg
+        self.dol_id = 10000
+        self.dol_gone = True
         self.stream_path = stream_path
         self.frame_path = frame_path
         self.candidate_path = candidate_path
@@ -827,9 +829,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                             #     return ConstructResult(original_frame, constructed_binary, None)
                             logger.info(
                                 f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
-                            json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
-                                                             timestamp=current_index, rects=r.rects)
-                            self.msg_queue.put(json_msg)
+                            self.dol_gone = False
                             push_flag = True
                             logger.info(f'put detect message in msg_queue...')
                             rects.append(rect)
@@ -843,8 +843,13 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                 cv2.putText(render_frame, 'Dolphin', p1,
                                             cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
                                 cv2.rectangle(render_frame, p1, p2, color, 2)
+
                     r.rects = rects
+
                     if push_flag:
+                        json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
+                                                         timestamp=current_index, rects=r.rects, dol_id=self.dol_id)
+                        self.msg_queue.put(json_msg)
                         self.result_queue.put((original_frame, r.frame_index, r.rects))
                         self.render_frame_cache[current_index] = render_frame
                         self.render_rect_cache[current_index] = r.rects
@@ -853,6 +858,15 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                              daemon=True).start()
                         self.last_detection = self.stream_render.detect_index
                         logger.info(self.LOG_PREFIX + f'Last detection frame index [{self.last_detection}]')
+                    else:
+                        if not self.dol_gone:
+                            empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
+                                                                    timestamp=current_index, dol_id=self.dol_id)
+                            self.msg_queue.put(empty_msg)
+                            logger.info(self.LOG_PREFIX + f'Send empty msg: {empty_msg}')
+                            self.dol_id += 1
+                            self.dol_gone = True
+
             if self.cfg.render:
                 threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
             # if not push_flag:
@@ -966,18 +980,16 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     # logger.info(frames_result)
                     for frame_result in frames_results:
                         if len(frame_result):
-                            rects = [r for r in frame_result if r[4] > 0.8]
+                            rects = [r for r in frame_result if r[4] > 0.7]
                             # rects = frame_result
                             if len(rects):
                                 logger.info(rects)
                                 # logger.info('Detect: TP')
                                 detect_results.append(DetectionResult(rects=rects))
                                 detect_flag = True
+                                self.dol_gone = False
                                 logger.info(
                                     f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
-                                json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
-                                                                 timestamp=current_index, rects=rects)
-                                self.msg_queue.put(json_msg)
                                 logger.info(f'put detect message in msg_queue...')
                                 for rect in rects:
                                     p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
@@ -988,15 +1000,27 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                         cv2.putText(render_frame, 'Dolphin', p1,
                                                     cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
                                         cv2.rectangle(render_frame, p1, p2, color, 2)
-                            if detect_flag:
-                                self.result_queue.put((render_frame, current_index, rects))
-                                self.render_frame_cache[current_index] = render_frame
-                                self.render_rect_cache[current_index] = rects
-                                if self.cfg.render:
-                                    threading.Thread(target=self.stream_render.reset, args=(current_index,),
-                                                     daemon=True).start()
-                                self.last_detection = self.stream_render.detect_index
-                                logger.info(self.LOG_PREFIX + f'Last detection frame index [{self.last_detection}]')
+                        if detect_flag:
+                            json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
+                                                             timestamp=current_index, rects=rects,
+                                                             dol_id=self.dol_id)
+                            self.msg_queue.put(json_msg)
+                            self.result_queue.put((render_frame, current_index, rects))
+                            self.render_frame_cache[current_index] = render_frame
+                            self.render_rect_cache[current_index] = rects
+                            if self.cfg.render:
+                                threading.Thread(target=self.stream_render.reset, args=(current_index,),
+                                                 daemon=True).start()
+                            self.last_detection = self.stream_render.detect_index
+                            logger.info(self.LOG_PREFIX + f'Last detection frame index [{self.last_detection}]')
+                        else:
+                            if not self.dol_gone:
+                                empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
+                                                                        channel=self.cfg.index,
+                                                                        timestamp=current_index, dol_id=self.dol_id)
+                                self.dol_id += 1
+                                self.msg_queue.put(empty_msg)
+                                self.dol_gone = True
                 if self.cfg.render:
                     threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
                 construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results)

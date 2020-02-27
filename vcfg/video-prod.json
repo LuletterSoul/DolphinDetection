@@ -185,7 +185,7 @@
       "search_window_size": 24,
       "similarity_thresh": 0.6,
       "pre_cache": 48,
-      "render": true,
+      "render": false,
       "bbox": {
         "w": 224,
         "h": 224
