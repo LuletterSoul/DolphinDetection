@@ -58,6 +58,13 @@ def back(rects, start, shape, original_shape, cfg: VideoConfig):
     return b_rects
 
 
+def cvt_rect(rects):
+    new_rects = []
+    for rect in rects:
+        new_rects.append([rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3]])
+    return new_rects
+
+
 def draw_boundary(frame, info):
     shape = frame.shape
     for i in range(info.x_num - 1):
@@ -129,7 +136,6 @@ def clear_cache_by_len(cache, len_cache):
 
 def generate_time_stamp(fmt='%m%d%H%M'):
     return time.strftime(fmt, time.localtime(time.time()))
-
 
 
 def sec2time(sec, n_msec=1):
