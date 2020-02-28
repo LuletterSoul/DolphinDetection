@@ -71,7 +71,7 @@ class DetectionMonitor(object):
         self.shut_down_event = Manager().Event()
         self.shut_down_event.clear()
         if build_pool:
-            pool_size = min(len(cfgs), cpu_count() - 1)
+            pool_size = min(len(cfgs) * 2, cpu_count() - 1)
             self.process_pool = Pool(processes=pool_size)
             self.thread_pool = ThreadPoolExecutor()
         self.clean()
@@ -164,6 +164,8 @@ class EmbeddingControlMonitor(DetectionMonitor):
         super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path, build_pool)
         self.caps_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
         self.msg_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
+        self.streaming_queues = [Manager().Queue() for c in self.cfgs]
+        self.push_streamers = [PushStreamer(cfg, self.streaming_queues[idx]) for idx, cfg in enumerate(self.cfgs)]
         self.caps = []
         self.controllers = []
 
@@ -260,8 +262,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                         self.frame_path / str(cfg.index),
                                         self.caps_queue[idx],
                                         self.pipes[idx],
-                                        self.msg_queue[idx]
-                                        ) for
+                                        self.msg_queue[idx],
+                                        self.streaming_queues[idx]) for
             idx, cfg in enumerate(self.cfgs)]
         for i, cfg in enumerate(self.cfgs):
             logger.info('Init detector controller [{}]....'.format(cfg.index))
@@ -311,7 +313,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             if self.process_pool is not None:
                 self.task_futures.append(
                     self.process_pool.apply_async(self.caps[i].read, (self.scfg,)))
-                self.task_futures[-1].get()
+                self.task_futures.append(
+                    self.process_pool.apply_async(self.push_streamers[i].push_stream, ()))
 
     def wait(self):
         if self.process_pool is not None:
@@ -371,7 +374,6 @@ class DetectorController(object):
         self.frame_queue = frame_queue
         self.msg_queue = msg_queue
         self.result_queue = Manager().Queue(self.cfg.max_streams_cache)
-        self.push_stream_queue = Manager().Queue()
         self.init_push = False
         self.quit = Manager().Event()
         self.quit.clear()
@@ -697,7 +699,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
 
     def __init__(self, server_cfg: ServerConfig, cfg: VideoConfig, stream_path: Path, candidate_path: Path,
                  frame_path: Path, frame_queue: Queue,
-                 index_pool: Queue, msg_queue: Queue) -> None:
+                 index_pool: Queue, msg_queue: Queue, streaming_queue: Queue) -> None:
         super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool, msg_queue)
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
@@ -707,6 +709,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                                 self.render_rect_cache, self.stream_render, 500, self.cfg)
         # self.pool = ThreadPoolExecutor()
         # self.threads = []
+        self.push_stream_queue = streaming_queue
         self.display_pipe = Manager().Queue(1000)
         self.detect_params = []
         self.detectors = []
@@ -1189,10 +1192,84 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         threading.Thread(target=self.listen, daemon=True).start()
         threading.Thread(target=self.write_frame_work, daemon=True).start()
         # threading.Thread(target=self.display, daemon=True).start()
-        threading.Thread(target=self.push_stream, daemon=True).start()
+        # threading.Thread(target=self.push_stream, daemon=True).start()
         return True
 
 
 class PushStreamer(object):
-    def __init__(self, ) -> None:
+    def __init__(self, cfg: VideoConfig, push_stream_queue) -> None:
+
         super().__init__()
+        self.cfg = cfg
+        self.push_stream_queue = push_stream_queue
+
+    def push_stream(self):
+        logger.info(
+            f'*******************************Controller [{self.cfg.index}]: Init push stream service********************************')
+        draw_cnt = 0
+        tmp_results = []
+        video_streamer = FFMPEG_VideoStreamer(self.cfg.push_to, size=(self.cfg.shape[1], self.cfg.shape[0]), fps=24,
+                                              codec='h264', )
+        video_streamer.write_frame(np.zeros((self.cfg.shape[1], self.cfg.shape[0], 3), dtype=np.uint8))
+        # time.sleep(6)
+        while True:
+            ps = time.time()
+            # if self.status.get() == SystemStatus.SHUT_DOWN:
+            #     video_streamer.close()
+            #     break
+            # se = 1 / (time.time() - ps)
+            # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
+            # gs = time.time()
+            frame, proc_res, frame_index = self.push_stream_queue.get()
+            # end = 1 / (time.time() - gs)
+            # logger.debug(self.LOG_PREFIX + f'Get Frame Speed Rate: [{round(end, 2)}]/FPS')
+            detect_flag = (proc_res is not None and proc_res.detect_flag)
+            # logger.info(f'Draw cnt: [{draw_cnt}]')
+            # if proc_res is not None:
+            #     logger.info(f'Detect flag: [{proc_res.detect_flag}]')
+            # ds = time.time()
+            if detect_flag:
+                # logger.info('Detect flag~~~~~~~~~~')
+                draw_cnt = 0
+                tmp_results = proc_res.results
+            is_draw_over = draw_cnt <= 36
+            if is_draw_over:
+                # logger.info('Draw next frames~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+                for r in tmp_results:
+                    for rect in r.rects:
+                        color = np.random.randint(0, 255, size=(3,))
+                        color = [int(c) for c in color]
+                        p1, p2 = bbox_points(self.cfg, rect, frame.shape)
+                        # p1 = (int(rect[0]), int(rect[1]))
+                        # p2 = (int(rect[2]), int(rect[3]))
+
+                        cv2.putText(frame, 'Dolphin', p1,
+                                    cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
+                        cv2.rectangle(frame, p1, p2, color, 2)
+                        # if self.server_cfg.detect_mode == ModelType.SSD:
+                        #     cv2.putText(frame, str(round(r[4], 2)), (p2[0], p2[1]),
+                        #                 cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
+                draw_cnt += 1
+            if self.cfg.write_timestamp:
+                time_stamp = generate_time_stamp("%Y-%m-%d %H:%M:%S")
+                cv2.putText(frame, time_stamp, (100, 100),
+                            cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # de = 1 / (time.time() - ds)
+            # logger.debug(self.LOG_PREFIX + f'Draw Speed Rate: [{round(de, 2)}]/FPS')
+            # logger.info(f'Frame index [{frame_index}]')
+            # if frame_index % self.cfg.sample_rate == 0:
+            #     for _ in range(2):
+            #         video_streamer.write_frame(frame)
+            # else:
+            #     video_streamer.write_frame(frame)
+            # end = 1 / (time.time() - ps)
+            # ws = time.time()
+            video_streamer.write_frame(frame)
+            # w_end = 1 / (time.time() - ws)
+            end = 1 / (time.time() - ps)
+            # logger.debug(self.LOG_PREFIX + f'Writing Speed Rate: [{round(w_end, 2)}]/FPS')
+            logger.debug(f'Streamer [{self.cfg.index}]: Streaming Speed Rate: [{round(end, 2)}]/FPS')
+        logger.info(
+            '*******************************Controller [{}]:  Push stream service exit********************************'.format(
+                self.cfg.index))
