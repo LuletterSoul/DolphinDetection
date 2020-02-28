@@ -93,7 +93,7 @@
         "scale": -1
       },
       "show_window": false,
-      "push_stream": true,
+      "push_stream": false,
       "window_position": {
         "x": 100,
         "y": 100

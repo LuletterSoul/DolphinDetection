@@ -29,6 +29,7 @@ from .component import stream_pipes
 from .detect_funcs import detect_based_task
 from .detector import *
 from config import ModelType
+import time
 
 
 # from pynput.keyboard import Key, Controller, Listener
@@ -819,9 +820,13 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     for rect in r.rects:
                         if len(r.rects) >= 3:
                             logger.info(f'To many rect candidates: [{len(r.rects)}].Abandoned..... ')
-                            return ConstructResult(original_frame, None, None)
+                            return ConstructResult(original_frame, None, None, frame_index=current_index)
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
+
+                        start = time.time()
                         obj_class, output = _model.predict(candidate)
+                        logger.debug(
+                            self.LOG_PREFIX + f'Model Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
                         if obj_class == 0:
                             # logger.info(f'Predict: [{output}]')
                             # print(output.shape)
@@ -877,7 +882,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             #     video_streamer.write_frame(cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
             self.clear_render_cache()
             # logger.info(f'Construct detect flag: [{push_flag}]')
-            return ConstructResult(render_frame, constructed_binary, None, detect_flag=push_flag, results=results)
+            return ConstructResult(render_frame, constructed_binary, None, detect_flag=push_flag, results=results,
+                                   frame_index=current_index)
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
@@ -913,9 +919,9 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                             r_rgb_patch = crop_by_rect(self.cfg, results[sr_idx].rects[rl_idx],
                                                        original_frame)
                             similarity = cal_rgb_similarity(sr_rgb_patch, r_rgb_patch, 'ssim')
-                            logger.info(
+                            logger.debug(
                                 f'Controller [{self.cfg.index}]: Cosine Distance {round(similarity, 2)}')
-                            logger.info(
+                            logger.debug(
                                 f'Controller [{self.cfg.index}]: Frame [{idx}]: cosine similarity '
                                 f'{round(similarity, 2)}')
                             hit_precision += similarity
@@ -975,7 +981,10 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         ssd_model = args[2]
         try:
             if self.pre_cnt % self.cfg.sample_rate == 0:
+                start = time.time()
                 frames_results = ssd_model([original_frame])
+                logger.debug(
+                    self.LOG_PREFIX + f'Model Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
                 render_frame = original_frame.copy()
                 detect_results = []
                 detect_flag = False
@@ -987,7 +996,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                             if len(rects):
                                 if len(rects) >= 3:
                                     logger.info(f'To many rect candidates: [{len(rects)}].Abandoned..... ')
-                                    return ConstructResult(original_frame, None, None)
+                                    return ConstructResult(original_frame, None, None, frame_index=self.pre_cnt)
                                 detect_results.append(DetectionResult(rects=rects))
                                 detect_flag = True
                                 self.dol_gone = False
@@ -1026,7 +1035,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                 self.dol_gone = True
                 if self.cfg.render:
                     threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
-                construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results)
+                construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results,
+                                                   frame_index=self.pre_cnt)
                 if self.cfg.push_stream:
                     self.push_stream_queue.put((original_frame, construct_result))
             else:
@@ -1055,14 +1065,14 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     # async_futures.append(detect_based_task.remote(block, d))
                 proc_res: ConstructResult = self.collect_and_reconstruct(async_futures, args[3])
                 if self.cfg.push_stream:
-                    self.push_stream_queue.put((proc_res.frame, proc_res), timeout=2)
+                    self.push_stream_queue.put((proc_res.frame, proc_res, proc_res.frame_index))
             except Exception as e:
                 traceback.print_stack()
                 logger.error(e)
         else:
             try:
                 if self.cfg.push_stream:
-                    self.push_stream_queue.put((original_frame, None), timeout=2)
+                    self.push_stream_queue.put((original_frame, None, self.pre_cnt))
             except Exception as e:
                 logger.error(e)
             # r = pool.apply_async(collect_and_reconstruct,
@@ -1109,17 +1119,24 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         video_streamer.write_frame(np.zeros((self.cfg.shape[1], self.cfg.shape[0], 3), dtype=np.uint8))
         time.sleep(6)
         while True:
-            if self.status.get() == SystemStatus.SHUT_DOWN and self.result_queue.empty():
-                logger.info(
-                    '*******************************Controller [{}]:  Push strem service exit********************************'.format(
+            ps = time.time()
+            if self.status.get() == SystemStatus.SHUT_DOWN:
+                logger.debug(
+                    '*******************************Controller [{}]:  Push stream service exit********************************'.format(
                         self.cfg.index))
                 video_streamer.close()
                 break
-            frame, proc_res = self.push_stream_queue.get()
+            se = 1 / (time.time() - ps)
+            # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
+            # gs = time.time()
+            frame, proc_res, frame_index = self.push_stream_queue.get()
+            # end = 1 / (time.time() - gs)
+            # logger.debug(self.LOG_PREFIX + f'Get Frame Speed Rate: [{round(end, 2)}]/FPS')
             detect_flag = (proc_res is not None and proc_res.detect_flag)
             # logger.info(f'Draw cnt: [{draw_cnt}]')
             # if proc_res is not None:
             #     logger.info(f'Detect flag: [{proc_res.detect_flag}]')
+            # ds = time.time()
             if detect_flag:
                 # logger.info('Detect flag~~~~~~~~~~')
                 draw_cnt = 0
@@ -1146,7 +1163,25 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 time_stamp = generate_time_stamp("%Y-%m-%d %H:%M:%S")
                 cv2.putText(frame, time_stamp, (100, 100),
                             cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
-            video_streamer.write_frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # de = 1 / (time.time() - ds)
+            # logger.debug(self.LOG_PREFIX + f'Draw Speed Rate: [{round(de, 2)}]/FPS')
+            # logger.info(f'Frame index [{frame_index}]')
+            # if frame_index % self.cfg.sample_rate == 0:
+            #     for _ in range(2):
+            #         video_streamer.write_frame(frame)
+            # else:
+            #     video_streamer.write_frame(frame)
+            # end = 1 / (time.time() - ps)
+            # ws = time.time()
+            video_streamer.write_frame(frame)
+            # w_end = 1 / (time.time() - ws)
+            end = 1 / (time.time() - ps)
+            # logger.debug(self.LOG_PREFIX + f'Writing Speed Rate: [{round(w_end, 2)}]/FPS')
+            logger.debug(self.LOG_PREFIX + f'Streaming Speed Rate: [{round(end, 2)}]/FPS')
+        logger.info(
+            '*******************************Controller [{}]:  Push stream service exit********************************'.format(
+                self.cfg.index))
 
     def start(self, pool: Pool):
         self.status.set(SystemStatus.RUNNING)
@@ -1159,3 +1194,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         # threading.Thread(target=self.display, daemon=True).start()
         threading.Thread(target=self.push_stream, daemon=True).start()
         return True
+
+
+class PushStreamer(object):
+    def __init__(self, ) -> None:
+        super().__init__()
