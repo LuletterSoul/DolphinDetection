@@ -371,7 +371,7 @@ class DetectorController(object):
         self.frame_queue = frame_queue
         self.msg_queue = msg_queue
         self.result_queue = Manager().Queue(self.cfg.max_streams_cache)
-        self.push_stream_queue = Manager().Queue(1000)
+        self.push_stream_queue = Manager().Queue()
         self.init_push = False
         self.quit = Manager().Event()
         self.quit.clear()
@@ -1038,10 +1038,10 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results,
                                                    frame_index=self.pre_cnt)
                 if self.cfg.push_stream:
-                    self.push_stream_queue.put((original_frame, construct_result))
+                    self.push_stream_queue.put((original_frame, construct_result, self.pre_cnt))
             else:
                 if self.cfg.push_stream:
-                    self.push_stream_queue.put((original_frame, None))
+                    self.push_stream_queue.put((original_frame, None, self.pre_cnt))
         except Exception as e:
             traceback.print_stack()
             logger.info(e)
@@ -1117,16 +1117,13 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         video_streamer = FFMPEG_VideoStreamer(self.cfg.push_to, size=(self.cfg.shape[1], self.cfg.shape[0]), fps=24,
                                               codec='h264', )
         video_streamer.write_frame(np.zeros((self.cfg.shape[1], self.cfg.shape[0], 3), dtype=np.uint8))
-        time.sleep(6)
+        # time.sleep(6)
         while True:
             ps = time.time()
             if self.status.get() == SystemStatus.SHUT_DOWN:
-                logger.debug(
-                    '*******************************Controller [{}]:  Push stream service exit********************************'.format(
-                        self.cfg.index))
                 video_streamer.close()
                 break
-            se = 1 / (time.time() - ps)
+            # se = 1 / (time.time() - ps)
             # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
             # gs = time.time()
             frame, proc_res, frame_index = self.push_stream_queue.get()
