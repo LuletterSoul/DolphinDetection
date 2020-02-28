@@ -122,7 +122,11 @@ class VideoCaptureThreading:
                 f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
+            s = time.time()
             grabbed, frame = self.cap.read()
+            e = 1 / (time.time() - s)
+            logger.debug(f'Video capture [{self.cfg.index}]: Receive Speed Rate [{round(e, 2)}]/FPS')
+            s = time.time()
             if not grabbed:
                 self.update_capture(cnt)
                 end = time.time()
@@ -132,6 +136,8 @@ class VideoCaptureThreading:
                 continue
             # if cnt % self.sample_rate == 0:
             self.pass_frame(frame, args[0], ssd_detector, classifier)
+            e = 1 / (time.time() - s)
+            logger.debug(f'Video capture [{self.cfg.index}]: Operation Speed Rate [{round(e, 2)}]/FPS')
             cnt += 1
             self.post_frame_process(frame)
             self.runtime = time.time() - start
