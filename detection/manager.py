@@ -1112,76 +1112,76 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
     # def call_task(self, frame):
     #     self.dispatch_frame(frame)
 
-    def push_stream(self):
-        logger.info(
-            f'*******************************Controller [{self.cfg.index}]: Init push stream service********************************')
-        draw_cnt = 0
-        tmp_results = []
-        video_streamer = FFMPEG_VideoStreamer(self.cfg.push_to, size=(self.cfg.shape[1], self.cfg.shape[0]), fps=24,
-                                              codec='h264', )
-        video_streamer.write_frame(np.zeros((self.cfg.shape[1], self.cfg.shape[0], 3), dtype=np.uint8))
-        # time.sleep(6)
-        while True:
-            ps = time.time()
-            if self.status.get() == SystemStatus.SHUT_DOWN:
-                video_streamer.close()
-                break
-            # se = 1 / (time.time() - ps)
-            # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
-            # gs = time.time()
-            frame, proc_res, frame_index = self.push_stream_queue.get()
-            # end = 1 / (time.time() - gs)
-            # logger.debug(self.LOG_PREFIX + f'Get Frame Speed Rate: [{round(end, 2)}]/FPS')
-            detect_flag = (proc_res is not None and proc_res.detect_flag)
-            # logger.info(f'Draw cnt: [{draw_cnt}]')
-            # if proc_res is not None:
-            #     logger.info(f'Detect flag: [{proc_res.detect_flag}]')
-            # ds = time.time()
-            if detect_flag:
-                # logger.info('Detect flag~~~~~~~~~~')
-                draw_cnt = 0
-                tmp_results = proc_res.results
-            is_draw_over = draw_cnt <= 36
-            if is_draw_over:
-                # logger.info('Draw next frames~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-                for r in tmp_results:
-                    for rect in r.rects:
-                        color = np.random.randint(0, 255, size=(3,))
-                        color = [int(c) for c in color]
-                        p1, p2 = bbox_points(self.cfg, rect, frame.shape)
-                        # p1 = (int(rect[0]), int(rect[1]))
-                        # p2 = (int(rect[2]), int(rect[3]))
-
-                        cv2.putText(frame, 'Dolphin', p1,
-                                    cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-                        cv2.rectangle(frame, p1, p2, color, 2)
-                        # if self.server_cfg.detect_mode == ModelType.SSD:
-                        #     cv2.putText(frame, str(round(r[4], 2)), (p2[0], p2[1]),
-                        #                 cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-                draw_cnt += 1
-            if self.cfg.write_timestamp:
-                time_stamp = generate_time_stamp("%Y-%m-%d %H:%M:%S")
-                cv2.putText(frame, time_stamp, (100, 100),
-                            cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            # de = 1 / (time.time() - ds)
-            # logger.debug(self.LOG_PREFIX + f'Draw Speed Rate: [{round(de, 2)}]/FPS')
-            # logger.info(f'Frame index [{frame_index}]')
-            # if frame_index % self.cfg.sample_rate == 0:
-            #     for _ in range(2):
-            #         video_streamer.write_frame(frame)
-            # else:
-            #     video_streamer.write_frame(frame)
-            # end = 1 / (time.time() - ps)
-            # ws = time.time()
-            video_streamer.write_frame(frame)
-            # w_end = 1 / (time.time() - ws)
-            end = 1 / (time.time() - ps)
-            # logger.debug(self.LOG_PREFIX + f'Writing Speed Rate: [{round(w_end, 2)}]/FPS')
-            logger.debug(self.LOG_PREFIX + f'Streaming Speed Rate: [{round(end, 2)}]/FPS')
-        logger.info(
-            '*******************************Controller [{}]:  Push stream service exit********************************'.format(
-                self.cfg.index))
+    # def push_stream(self):
+    #     logger.info(
+    #         f'*******************************Controller [{self.cfg.index}]: Init push stream service********************************')
+    #     draw_cnt = 0
+    #     tmp_results = []
+    #     video_streamer = FFMPEG_VideoStreamer(self.cfg.push_to, size=(self.cfg.shape[1], self.cfg.shape[0]), fps=24,
+    #                                           codec='h264', )
+    #     video_streamer.write_frame(np.zeros((self.cfg.shape[1], self.cfg.shape[0], 3), dtype=np.uint8))
+    #     # time.sleep(6)
+    #     while True:
+    #         ps = time.time()
+    #         if self.status.get() == SystemStatus.SHUT_DOWN:
+    #             video_streamer.close()
+    #             break
+    #         # se = 1 / (time.time() - ps)
+    #         # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
+    #         # gs = time.time()
+    #         frame, proc_res, frame_index = self.push_stream_queue.get()
+    #         # end = 1 / (time.time() - gs)
+    #         # logger.debug(self.LOG_PREFIX + f'Get Frame Speed Rate: [{round(end, 2)}]/FPS')
+    #         detect_flag = (proc_res is not None and proc_res.detect_flag)
+    #         # logger.info(f'Draw cnt: [{draw_cnt}]')
+    #         # if proc_res is not None:
+    #         #     logger.info(f'Detect flag: [{proc_res.detect_flag}]')
+    #         # ds = time.time()
+    #         if detect_flag:
+    #             # logger.info('Detect flag~~~~~~~~~~')
+    #             draw_cnt = 0
+    #             tmp_results = proc_res.results
+    #         is_draw_over = draw_cnt <= 36
+    #         if is_draw_over:
+    #             # logger.info('Draw next frames~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+    #             for r in tmp_results:
+    #                 for rect in r.rects:
+    #                     color = np.random.randint(0, 255, size=(3,))
+    #                     color = [int(c) for c in color]
+    #                     p1, p2 = bbox_points(self.cfg, rect, frame.shape)
+    #                     # p1 = (int(rect[0]), int(rect[1]))
+    #                     # p2 = (int(rect[2]), int(rect[3]))
+    #
+    #                     cv2.putText(frame, 'Dolphin', p1,
+    #                                 cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
+    #                     cv2.rectangle(frame, p1, p2, color, 2)
+    #                     # if self.server_cfg.detect_mode == ModelType.SSD:
+    #                     #     cv2.putText(frame, str(round(r[4], 2)), (p2[0], p2[1]),
+    #                     #                 cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
+    #             draw_cnt += 1
+    #         if self.cfg.write_timestamp:
+    #             time_stamp = generate_time_stamp("%Y-%m-%d %H:%M:%S")
+    #             cv2.putText(frame, time_stamp, (100, 100),
+    #                         cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
+    #         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    #         # de = 1 / (time.time() - ds)
+    #         # logger.debug(self.LOG_PREFIX + f'Draw Speed Rate: [{round(de, 2)}]/FPS')
+    #         # logger.info(f'Frame index [{frame_index}]')
+    #         # if frame_index % self.cfg.sample_rate == 0:
+    #         #     for _ in range(2):
+    #         #         video_streamer.write_frame(frame)
+    #         # else:
+    #         #     video_streamer.write_frame(frame)
+    #         # end = 1 / (time.time() - ps)
+    #         # ws = time.time()
+    #         video_streamer.write_frame(frame)
+    #         # w_end = 1 / (time.time() - ws)
+    #         end = 1 / (time.time() - ps)
+    #         # logger.debug(self.LOG_PREFIX + f'Writing Speed Rate: [{round(w_end, 2)}]/FPS')
+    #         logger.debug(self.LOG_PREFIX + f'Streaming Speed Rate: [{round(end, 2)}]/FPS')
+    #     logger.info(
+    #         '*******************************Controller [{}]:  Push stream service exit********************************'.format(
+    #             self.cfg.index))
 
     def start(self, pool: Pool):
         self.status.set(SystemStatus.RUNNING)
