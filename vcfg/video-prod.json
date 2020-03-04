@@ -93,7 +93,7 @@
         "scale": -1
       },
       "show_window": false,
-      "push_stream": true,
+      "push_stream": false,
       "window_position": {
         "x": 100,
         "y": 100
@@ -178,7 +178,7 @@
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
-      "rtsp": "rtsp://222.190.243.243/bp/test1",
+      "rtsp": "rtsp://222.190.243.243/bp/offline_test",
       "push_to": "rtsp://192.168.0.116/test1",
       "write_timestamp": true,
       "enable_sample_frame": false,
