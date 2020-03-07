@@ -12,6 +12,7 @@ def websocket_client(q, vcfg: VideoConfig, scfg: ServerConfig):
     address = (scfg.wc_ip, scfg.wc_port)
     server = None
     history_msg_json = None
+    msg_json = None
     while True:
         if server is None:
             logger.info(f'waiting to connect to server {address}...')
@@ -27,7 +28,7 @@ def websocket_client(q, vcfg: VideoConfig, scfg: ServerConfig):
                 logger.info(f'Controller [{vcfg.index}]: Current message num: {q.qsize()}')
                 msg_json = q.get(1)
                 server.send(msg_json.encode('utf-8'))
-                logger.info(f'client send message to server {address} successfully')
+                logger.info(f'client send message to server {address} successfully: {msg_json}')
                 # time.sleep(10)
         except Exception as e:
             server = None
@@ -66,12 +67,30 @@ def creat_position_json(rects):
     """
     position = []
     for rect in rects:
-        position.append({'lx': rect[0], 'ly': rect[1], 'rx': rect[0] + rect[2], 'ry': rect[1] + rect[3]})
+        position.append({'lx': int(rect[0]), 'ly': int(rect[1]), 'rx': int(rect[2]), 'ry': int(rect[3])})
     position_json = json.dumps(position)
     return position_json
 
 
-def creat_detect_msg_json(video_stream, channel, timestamp, rects):
+def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000):
+    msg = {
+        'cmdType': 'notify',
+        "appId": "10080",
+        'clientId': 'jt001',
+        'data': {
+            'notifyType': 'detectedNotify',
+            'videoStream': video_stream,
+            'jt_id': str(dol_id),
+            'channel': channel,
+            'timestamp': timestamp,
+            'coordinates': [],
+        }
+    }
+    msg_json = json.dumps(msg)
+    return msg_json
+
+
+def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id):
     position_json = creat_position_json(rects)
     msg = {
         'cmdType': 'notify',
@@ -81,6 +100,7 @@ def creat_detect_msg_json(video_stream, channel, timestamp, rects):
             'notifyType': 'detectedNotify',
             'videoStream': video_stream,
             'channel': channel,
+            'jt_id': str(dol_id),
             'timestamp': timestamp,
             'coordinates': position_json,
         }

@@ -10,8 +10,10 @@
 @version 1.0
 @desc:
 """
-from flask import Flask, url_for, request, redirect
 from multiprocessing import Process
+
+from flask import Flask
+
 from config import Environment
 
 app = Flask(__name__)
@@ -37,7 +39,7 @@ class HttpServer(object):
     @staticmethod
     @app.route('/', methods=['GET'])
     def root():
-        return "Hello word!"
+        return "Welcome to dolphin detection system!"
 
     @staticmethod
     def set_root(root):

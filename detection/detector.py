@@ -37,8 +37,10 @@ beta = 15
 
 class DetectionResult(object):
 
-    def __init__(self, frame, original_frame, status, regions, binary, thresh, coordinates, y_index,
-                 x_index, frame_index, rects, down_rects) -> None:
+    def __init__(self, frame=None, original_frame=None, status=None, regions=None, binary=None, thresh=None,
+                 coordinates=None,
+                 y_index=None,
+                 x_index=None, frame_index=None, rects=None, down_rects=None) -> None:
         super().__init__()
         self.frame = frame
         self.original_frame = original_frame
@@ -722,7 +724,7 @@ def detect(video_path: Path, region_save_path: Path, mq: Queue, cfg: VideoConfig
                 saliency.init()
 
             # convert the input frame to grayscale and compute the saliency
-            # map based on the motion model
+            # map based on the motion classify_model
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             (success, saliency_map) = saliency.computeSaliency(gray)
             saliency_map = (saliency_map * 255).astype("uint8")

@@ -5,6 +5,8 @@
   "wc_ip": "118.190.136.20",
   "wc_port": 3400,
   "classify_model_path": "model/bc-model.pth",
+  "detect_model_path": "model/0220-ssd.pth",
+  "detect_mode": "ssd",
   "root": "",
   "stream_save_path": "data/videos",
   "sample_save_dir": "data/samples",

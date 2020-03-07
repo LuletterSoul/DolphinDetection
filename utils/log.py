@@ -53,3 +53,4 @@ def setup_logging(log_dir, logger_name='main', level=logging.DEBUG):
 
 
 logger = setup_logging(LOG_DIR, level=LOG_LEVER)
+# logger.disabled = False
