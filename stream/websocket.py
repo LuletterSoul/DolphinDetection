@@ -1,13 +1,45 @@
 import json
 import socket
 import websockets
+import asyncio
 
 from config import ServerConfig, VideoConfig
 from utils import logger
 import os
 
 
+async def main_logic(q, vcfg: VideoConfig, scfg: ServerConfig):
+    address = f'ws://{scfg.wc_ip}:{scfg.wc_port}'
+    history_msg_json = None
+    msg_json = None
+    while True:
+        logger.info(f'waiting to connect to server {address}...')
+        async with websockets.connect(address) as server:
+            logger.info(f'connect to server {address} successfully')
+            while True:
+                try:
+                    if history_msg_json is not None:
+                        await server.send(history_msg_json.encode('utf-8'))
+                        logger.info(f'client send history message to server {address} successfully')
+                        history_msg_json = None
+                    while not q.empty():
+                        logger.info(f'Controller [{vcfg.index}]: Current message num: {q.qsize()}')
+                        msg_json = q.get(1)
+                        await server.send(msg_json.encode('utf-8'))
+                        logger.info(f'client send message to server {address} successfully: {msg_json}')
+                except Exception as e:
+                    history_msg_json = msg_json
+                    logger.error(e)
+                    break
+
+
 def websocket_client(q, vcfg: VideoConfig, scfg: ServerConfig):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(main_logic(q=q, vcfg=vcfg, scfg=scfg))
+
+
+def socket_client(q, vcfg: VideoConfig, scfg: ServerConfig):
     address = (scfg.wc_ip, scfg.wc_port)
     server = None
     history_msg_json = None
