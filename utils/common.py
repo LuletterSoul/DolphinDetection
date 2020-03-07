@@ -58,6 +58,13 @@ def back(rects, start, shape, original_shape, cfg: VideoConfig):
     return b_rects
 
 
+def cvt_rect(rects):
+    new_rects = []
+    for rect in rects:
+        new_rects.append([rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3]])
+    return new_rects
+
+
 def draw_boundary(frame, info):
     shape = frame.shape
     for i in range(info.x_num - 1):

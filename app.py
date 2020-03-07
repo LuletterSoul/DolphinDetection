@@ -12,28 +12,38 @@
 """
 
 import argparse
-import datetime
 
 from classfy.model import DolphinClassifier
-# from multiprocessing import Process
-from config import *
-import detection
-from stream.http import HttpServer
+from detection import SSDDetector, init_ssd
 from detection.component import run_player
-from utils import logger, sec2time
-from typing import List
 from interface import *
+# from multiprocessing import Process
+from stream.http import HttpServer
+from utils import sec2time
+
+
+# from torch.multiprocessing import Pool, Process, set_start_method
 
 
 class DolphinDetectionServer:
 
-    def __init__(self, cfg: ServerConfig, vcfgs: List[VideoConfig], switcher_options) -> None:
+    def __init__(self, cfg: ServerConfig, vcfgs: List[VideoConfig], switcher_options, cd_id, dt_id) -> None:
         self.cfg = cfg
+        self.cfg.cd_id = cd_id
+        self.cfg.dt_id = dt_id
         self.vcfgs = [c for c in vcfgs if switcher_options[str(c.index)]]
-        self.classification_model = DolphinClassifier(self.cfg.classify_model_path)
+        # self.classifier = DolphinClassifier(model_path=self.cfg.classify_model_path, device_id=cd_id)
+        self.classifier = None
+        self.ssd_detector = None
+        self.dt_id = dt_id
+        if self.cfg.detect_mode == ModelType.CLASSIFY:
+            self.classifier = DolphinClassifier(model_path=self.cfg.classify_model_path, device_id=cd_id)
+        # if self.cfg.detect_mode == ModelType.SSD:
+        # self.ssd_detector = SSDDetector(model_path=self.cfg.detect_model_path, device_id=dt_id)
         self.monitor = detection.EmbeddingControlBasedTaskMonitor(self.vcfgs,
                                                                   self.cfg,
-                                                                  self.classification_model,
+                                                                  self.classifier,
+                                                                  self.ssd_detector,
                                                                   self.cfg.stream_save_path,
                                                                   self.cfg.sample_save_dir,
                                                                   self.cfg.frame_save_dir,
@@ -51,7 +61,11 @@ class DolphinDetectionServer:
             f'*******************************Dolphin Detection System: Running Environment [{self.cfg.env}] at '
             f'[{start_time_str}]********************************')
         self.http_server.run()
-        self.classification_model.run()
+        # if self.cfg.detect_mode == ModelType.SSD:
+        #     init_ssd(self.cfg.detect_model_path, device_id=self.dt_id)
+            # self.ssd_detector.run()
+        # elif self.cfg.detect_mode == ModelType.CLASSIFY:
+        #     self.classifier.run()
         run_player(self.vcfgs)
         self.monitor.monitor()
         end_time = time.time()
@@ -160,9 +174,11 @@ if __name__ == '__main__':
                         help='Dolphin video stream storage relative path.default path is [$PROJECT DIR$/data/candidate].' +
                              'If cdp param is set,stream storage path is redirected as [$root$/$cdp$] ' +
                              'or [$PROJECT DIR$]/$cdp$.')
+    parser.add_argument('--cd_id', type=int, default=1, help='classifier GPU device id')
+    parser.add_argument('--dt_id', type=int, default=2, help='detection GPU device id')
     args = parser.parse_args()
     server_config, video_config, switcher_options = load_cfg(args)
-    server = DolphinDetectionServer(server_config, video_config, switcher_options)
+    server = DolphinDetectionServer(server_config, video_config, switcher_options, args.cd_id, args.dt_id)
     server.run()
 
 # process = Process(target=monitor.monitor)
