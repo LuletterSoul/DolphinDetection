@@ -28,6 +28,7 @@ class Environment(object):
 class ModelType(object):
     SSD = 'ssd'
     CLASSIFY = 'classify'
+    FORWARD = 'fwd'
 
 
 LOG_LEVER = logging.DEBUG
@@ -195,7 +196,7 @@ class VideoConfig(Config):
     Video configuration object
     """
 
-    def __init__(self, index, name, shape, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
+    def __init__(self, index, name, shape, ip, dip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  push_stream,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
                  online, cap_loop, sample_internal, detect_internal, search_window_size, similarity_thresh, pre_cache,
@@ -210,6 +211,7 @@ class VideoConfig(Config):
         self.name = name
         self.shape = shape
         self.ip = ip
+        self.dip = dip
         self.port = port
         self.suffix = suffix
         self.headers = headers

@@ -9,6 +9,7 @@
         3
       ],
       "ip": "222.190.243.176",
+      "dip": "http://221.226.81.54:6006",
       "port": "8081",
       "suffix": "stream_13-",
       "headers": {
@@ -76,6 +77,7 @@
         3
       ],
       "ip": "222.190.243.176",
+      "dip": "http://221.226.81.54:6006",
       "port": "8081",
       "suffix": "",
       "headers": {},
@@ -113,7 +115,7 @@
       "save_box": true,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
-      "push_to": "rtsp://192.168.0.116/test3",
+      "push_to": "rtsp://192.168.0.116/test4",
       "write_timestamp": false,
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,
@@ -142,6 +144,7 @@
         3
       ],
       "ip": "222.190.243.176",
+      "dip": "http://221.226.81.54:6006",
       "port": "8081",
       "suffix": "",
       "headers": {},
@@ -179,7 +182,7 @@
       "save_box": false,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
-      "push_to": "rtsp://192.168.0.116/test2",
+      "push_to": "rtsp://192.168.0.116/test1",
       "write_timestamp": true,
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,

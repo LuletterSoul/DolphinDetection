@@ -843,7 +843,6 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                 f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
                             self.dol_gone = False
                             push_flag = True
-                            logger.info(f'put detect message in msg_queue...')
                             rects.append(rect)
                             p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
                             logger.info(f'Dolphin position: TL:[{p1}],BR:[{p2}]')
@@ -852,7 +851,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                 color = [int(c) for c in color]
                                 # p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
                                 # logger.info(f'Dolphin position: TL:[{p1}],BR:[{p2}]')
-                                cv2.putText(render_frame, 'Dolphin', p1,
+                                cv2.putText(render_frame, 'Asaeorientalis', p1,
                                             cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
                                 cv2.rectangle(render_frame, p1, p2, color, 2)
 
@@ -861,6 +860,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     if push_flag:
                         json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
                                                          timestamp=current_index, rects=r.rects, dol_id=self.dol_id)
+                        logger.info(f'put detect message in msg_queue...')
                         self.msg_queue.put(json_msg)
                         self.result_queue.put((original_frame, r.frame_index, r.rects))
                         self.render_frame_cache[current_index] = render_frame
@@ -978,7 +978,13 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             self.classify_based(args, original_frame.copy())
         elif self.server_cfg.detect_mode == ModelType.SSD:
             self.ssd_based(args, original_frame.copy())
+        elif self.server_cfg.detect_mode == ModelType.FORWARD:
+            self.forward(args, original_frame)
         self.clear_original_cache()
+
+    def forward(self, args, original_frame):
+        if self.cfg.push_stream:
+            self.push_stream_queue.put((original_frame, None, self.pre_cnt))
 
     def ssd_based(self, args, original_frame):
         ssd_model = args[2]
@@ -1012,7 +1018,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                     if self.cfg.render:
                                         color = np.random.randint(0, 255, size=(3,))
                                         color = [int(c) for c in color]
-                                        cv2.putText(render_frame, 'Dolphin', p1,
+                                        cv2.putText(render_frame, 'Asaeorientalis', p1,
                                                     cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
                                         cv2.rectangle(render_frame, p1, p2, color, 2)
                         if detect_flag:
@@ -1208,7 +1214,7 @@ class PushStreamer(object):
             f'*******************************Controller [{self.cfg.index}]: Init push stream service********************************')
         draw_cnt = 0
         tmp_results = []
-        video_streamer = FFMPEG_VideoStreamer(self.cfg.push_to, size=(self.cfg.shape[1], self.cfg.shape[0]), fps=24,
+        video_streamer = FFMPEG_VideoStreamer(self.cfg.push_to, size=(self.cfg.shape[1], self.cfg.shape[0]), fps=25,
                                               codec='h264', )
         video_streamer.write_frame(np.zeros((self.cfg.shape[1], self.cfg.shape[0], 3), dtype=np.uint8))
         # time.sleep(6)
@@ -1221,6 +1227,7 @@ class PushStreamer(object):
             # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
             # gs = time.time()
             frame, proc_res, frame_index = self.push_stream_queue.get()
+            logger.info(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{self.push_stream_queue.qsize()}]')
             # end = 1 / (time.time() - gs)
             # logger.debug(self.LOG_PREFIX + f'Get Frame Speed Rate: [{round(end, 2)}]/FPS')
             detect_flag = (proc_res is not None and proc_res.detect_flag)
@@ -1243,7 +1250,7 @@ class PushStreamer(object):
                         # p1 = (int(rect[0]), int(rect[1]))
                         # p2 = (int(rect[2]), int(rect[3]))
 
-                        cv2.putText(frame, 'Dolphin', p1,
+                        cv2.putText(frame, 'Asaeorientalis', p1,
                                     cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
                         cv2.rectangle(frame, p1, p2, color, 2)
                         # if self.server_cfg.detect_mode == ModelType.SSD:

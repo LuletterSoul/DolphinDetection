@@ -157,7 +157,10 @@ class SSDDetector(nn.Module):
         if self.model_path is not None:
             if not self.model_path.exists():
                 raise Exception(f'Model init failed: classify_model not exist at [{str(self.model_path)}].')
-        self.net.load_state_dict(torch.load(str(self.model_path)))
+        if torch.cuda.is_available():
+            self.net.load_state_dict(torch.load(str(self.model_path)))
+        else:
+            self.net.load_state_dict(torch.load(str(self.model_path), map_location=torch.device('cpu')))
         self.net = self.net.to(self.device)
         self.net.eval()
         print(self.net)
