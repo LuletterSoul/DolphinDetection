@@ -55,6 +55,7 @@ class DolphinDetectionServer:
         """
         System Entry
         """
+        # ray.init()
         start_time = time.time()
         start_time_str = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime(start_time))
         logger.info(

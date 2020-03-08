@@ -30,6 +30,7 @@ from .detect_funcs import detect_based_task
 from .detector import *
 from config import ModelType
 import time
+import ray
 
 
 # from pynput.keyboard import Key, Controller, Listener
@@ -389,6 +390,7 @@ class DetectorController(object):
         self.pre_detect_index = -self.cfg.future_frames
         self.history_write = False
         self.original_frame_cache = Manager().dict()
+        self.original_hash_cache = Manager().list()
         self.render_frame_cache = Manager().dict()
         self.history_frame_deque = Manager().list()
         self.render_rect_cache = Manager().dict()
@@ -962,6 +964,44 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 return True
             return False
 
+    def loop_stack(self):
+        classifier = None
+        ssd_detector = None
+        if self.server_cfg.detect_mode == ModelType.SSD:
+            ssd_detector = SSDDetector(model_path=self.server_cfg.detect_model_path, device_id=self.server_cfg.cd_id)
+            ssd_detector.run()
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
+        elif self.server_cfg.detect_mode == ModelType.CLASSIFY:
+            classifier = DolphinClassifier(model_path=self.server_cfg.classify_model_path,
+                                           device_id=self.server_cfg.dt_id)
+            classifier.run()
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
+        logger.info(
+            '*******************************Controller [{}]: Init Loop Stack********************************'.format(
+                self.cfg.index))
+        pre_index = 0
+        while self.status.get() == SystemStatus.RUNNING:
+            try:
+                s = time.time()
+                if not len(self.frame_stack):
+                    continue
+                frame, current_index = self.frame_stack.pop()
+                if current_index < pre_index:
+                    continue
+                pre_index = current_index
+                e = 1 / (time.time() - s)
+                logger.info(self.LOG_PREFIX + f'Stack Pop Speed: [{round(e, 2)}]/FPS')
+                self.dispatch_frame(frame, None, ssd_detector, classifier, current_index)
+            except Exception as e:
+                logger.error(e)
+                # pass
+                # logger.info(self.LOG_PREFIX + 'Empty Frame Stack')
+        logger.info(
+            '*******************************Controller [{}]: Loop Stack Exit********************************'.format(
+                self.cfg.index))
+
     def dispatch_to_stack(self, *args):
         # if not len(self.args):
         #     self.args.append(args)
@@ -969,13 +1009,14 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             self.frame_stack[:] = []
         frame = args[0]
         self.frame_cnt.set(self.frame_cnt.get() + 1)
-        # s = time.time()
-        # self.original_frame_cache[self.frame_cnt.get()] = frame
-        # e = 1 / (time.time() - s)
-        # logger.info(self.LOG_PREFIX + f'Dict Put Speed: [{round(e, 2)}]/FPS')
-
         s = time.time()
-        self.frame_stack.append((args[0], self.frame_cnt.get()))
+        # ray.put(frame)
+        self.original_frame_cache[self.frame_cnt.get()] = frame
+        # self.original_hash_cache.append(frame)
+        e = 1 / (time.time() - s)
+        logger.debug(self.LOG_PREFIX + f'Dict Put Speed: [{round(e, 2)}]/FPS')
+        s = time.time()
+        self.frame_stack.append((frame, self.frame_cnt.get()))
         e = 1 / (time.time() - s)
         logger.info(self.LOG_PREFIX + f'Stack Put Speed: [{round(e, 2)}]/FPS')
         logger.info(self.LOG_PREFIX + f'Current Stack Size: [{len(self.frame_stack)}]')
@@ -1002,38 +1043,6 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         elif self.server_cfg.detect_mode == ModelType.FORWARD:
             self.forward(args, original_frame)
         self.clear_original_cache()
-
-    def loop_stack(self):
-        classifier = None
-        ssd_detector = None
-        if self.server_cfg.detect_mode == ModelType.SSD:
-            ssd_detector = SSDDetector(model_path=self.server_cfg.detect_model_path, device_id=self.server_cfg.cd_id)
-            ssd_detector.run()
-            logger.info(
-                f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
-        elif self.server_cfg.detect_mode == ModelType.CLASSIFY:
-            classifier = DolphinClassifier(model_path=self.server_cfg.classify_model_path,
-                                           device_id=self.server_cfg.dt_id)
-            classifier.run()
-            logger.info(
-                f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
-        logger.info(
-            '*******************************Controller [{}]: Init Loop Stack********************************'.format(
-                self.cfg.index))
-        while self.status.get() == SystemStatus.RUNNING:
-            try:
-                s = time.time()
-                frame, current_index = self.frame_stack.pop()
-                e = 1 / (time.time() - s)
-                logger.info(self.LOG_PREFIX + f'Stack Pop Speed: [{round(e, 2)}]/FPS')
-                self.dispatch_frame(frame, None, ssd_detector, classifier, current_index)
-            except Exception as e:
-                logger.error(e)
-                # pass
-                # logger.info(self.LOG_PREFIX + 'Empty Frame Stack')
-        logger.info(
-            '*******************************Controller [{}]: Loop Stack Exit********************************'.format(
-                self.cfg.index))
 
     def forward(self, args, original_frame):
         if self.cfg.push_stream:
@@ -1196,7 +1205,7 @@ class PushStreamer(object):
             # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
             # gs = time.time()
             frame, proc_res, frame_index = self.push_stream_queue.get()
-            logger.debug(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{self.push_stream_queue.qsize()}]')
+            logger.info(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{self.push_stream_queue.qsize()}]')
             # end = 1 / (time.time() - gs)
             # logger.debug(self.LOG_PREFIX + f'Get Frame Speed Rate: [{round(end, 2)}]/FPS')
             detect_flag = (proc_res is not None and proc_res.detect_flag)
@@ -1245,7 +1254,7 @@ class PushStreamer(object):
             # w_end = 1 / (time.time() - ws)
             end = 1 / (time.time() - ps)
             # logger.debug(self.LOG_PREFIX + f'Writing Speed Rate: [{round(w_end, 2)}]/FPS')
-            logger.debug(f'Streamer [{self.cfg.index}]: Streaming Speed Rate: [{round(end, 2)}]/FPS')
+            logger.info(f'Streamer [{self.cfg.index}]: Streaming Speed Rate: [{round(end, 2)}]/FPS')
         logger.info(
             '*******************************Controller [{}]:  Push stream service exit********************************'.format(
                 self.cfg.index))

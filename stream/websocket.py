@@ -12,6 +12,9 @@ async def main_logic(q, vcfg: VideoConfig, scfg: ServerConfig):
     address = f'ws://{scfg.wc_ip}:{scfg.wc_port}'
     history_msg_json = None
     msg_json = None
+    if not scfg.send_msg:
+        logger.info(f'Controller [{vcfg.index}]: Skipped message by server config specifing.')
+        return
     while True:
         logger.info(f'waiting to connect to server {address}...')
         async with websockets.connect(address) as server:
@@ -28,9 +31,6 @@ async def main_logic(q, vcfg: VideoConfig, scfg: ServerConfig):
                     while not q.empty():
                         logger.info(f'Controller [{vcfg.index}]: Current message num: {q.qsize()}')
                         msg_json = q.get(1)
-                        if not scfg.send_msg:
-                            logger.info(f'Controller [{vcfg.index}]: Skipped message by server config specifing.')
-                            continue
                         await server.send(msg_json.encode('utf-8'))
                         logger.info(f'client send message to server {address} successfully: {msg_json}')
                         response_str = await server.recv()

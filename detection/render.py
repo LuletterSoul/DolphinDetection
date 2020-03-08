@@ -23,6 +23,7 @@ from config import SystemStatus
 # from .manager import DetectorController
 from stream.websocket import creat_packaged_msg_json
 from utils import logger, bbox_points, generate_time_stamp
+from stream.rtsp import FFMPEG_MP4Writer
 
 
 class DetectionStreamRender(object):
@@ -139,7 +140,7 @@ class DetectionStreamRender(object):
                                 # p2 = (first_rect[0] + int(delta_x * i) + 100, first_rect[1] + int(delta_y * i) + 100)
                                 frame = frame_cache[next_cnt]
                                 p1, p2 = bbox_points(self.cfg, first_rect, frame.shape, int(delta_x), int(delta_y))
-                                cv2.putText(frame, 'Dolphin', p1,
+                                cv2.putText(frame, 'Asaeorientalis', p1,
                                             cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
                                 cv2.rectangle(frame, p1, p2, color, 2)
                             if not draw_flag:
@@ -224,15 +225,16 @@ class DetectionStreamRender(object):
 
     def rect_render_task(self, current_idx, current_time, frame_cache, rect_cache, render_cache):
         start = time.time()
-        raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
+        # raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
         target = self.rect_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
+        # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
+        video_write = FFMPEG_MP4Writer(str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
         next_cnt = current_idx - self.future_frames
         next_cnt = self.write_render_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
-                                                frame_cache)
+                   frame_cache)
         # the future frames count
         # next_frame_cnt = 48
         # wait the futures frames is accessable
@@ -255,25 +257,26 @@ class DetectionStreamRender(object):
         next_cnt = self.write_render_video_work(video_write, next_cnt, end_cnt, render_cache, rect_cache,
                                                 frame_cache)
         video_write.release()
-        self.convert_byfile(str(raw_target), str(target))
+        # self.convert_byfile(str(raw_target), str(target))
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}]: Consume [{time.time() - start}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
         msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
-        if raw_target.exists():
-            raw_target.unlink()
+        # if raw_target.exists():
+        #     raw_target.unlink()
         self.msg_queue.put(msg_json)
         logger.info(f'put packaged message in the msg_queue...')
 
     def original_render_task(self, current_idx, current_time, frame_cache):
         start = time.time()
-        raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
+        # raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
         target = self.original_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info(
             f'Video Render [{self.index}]: Original Render Task [{self.stream_cnt}]: Writing detection stream frame into: [{str(target)}]')
-        video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
-        if not video_write.isOpened():
-            logger.error(f'Video Render [{self.index}]: Error Opened Video Writer')
+        # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
+        video_write = FFMPEG_MP4Writer(str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
+        # if not video_write.isOpened():
+        #     logger.error(f'Video Render [{self.index}]: Error Opened Video Writer')
 
         next_cnt = current_idx - self.future_frames
         next_cnt = self.write_original_video_work(video_write, next_cnt, current_idx, frame_cache)
@@ -295,12 +298,12 @@ class DetectionStreamRender(object):
         end_cnt = next_cnt + self.future_frames
         next_cnt = self.write_original_video_work(video_write, next_cnt, end_cnt, frame_cache)
         video_write.release()
-        self.convert_byfile(str(raw_target), str(target))
+        # self.convert_byfile(str(raw_target), str(target))
         logger.info(
             f'Video Render [{self.index}]: Original Render Task [{self.stream_cnt}]: ' +
             f'Consume [{round(time.time() - start, 2)}] seconds.Done write detection stream frame into: [{str(target)}]')
-        if raw_target.exists():
-            raw_target.unlink()
+        # if raw_target.exists():
+        #     raw_target.unlink()
 
     def convert_avi(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
         ffmpeg = '{ffmpeg} -y -i "{infile}" -c:v libx264 -strict -2 "{outfile}"'.format(ffmpeg=ffmpeg_exec,
@@ -329,4 +332,4 @@ class DetectionStreamRender(object):
         # raw_name, extension = os.path.splitext(file_name)
         # print("Converting ", from_path)
         line = self.convert_avi_to_mp4(from_path, to_path)
-        # logger.info(line)
+        logger.info(line)
