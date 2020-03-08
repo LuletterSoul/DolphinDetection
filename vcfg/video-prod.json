@@ -115,7 +115,7 @@
       "save_box": true,
       "show_box": true,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
-      "push_to": "rtsp://192.168.0.116/test4",
+      "push_to": "rtsp://192.168.0.116/test5",
       "write_timestamp": false,
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,

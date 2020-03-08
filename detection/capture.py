@@ -69,8 +69,9 @@ class VideoCaptureThreading:
         # self.cap = cv2.VideoCapture(src)
         # logger.info('Loading done from: [{}]'.format(src))
         self.status.set(SystemStatus.RUNNING)
-        threading.Thread(target=self.update, args=(*args,), daemon=True).start()
         threading.Thread(target=self.listen, args=(), daemon=True).start()
+        # threading.Thread(target=self.update, args=(*args,), daemon=True).start()
+        self.update(*args)
         # threading.Thread(target=cpu_usage).start()
         return self
 
@@ -110,16 +111,16 @@ class VideoCaptureThreading:
         ssd_detector = None
         classifier = None
         server_cfg = args[0]
-        if server_cfg.detect_mode == ModelType.SSD:
-            ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
-            ssd_detector.run()
-            logger.info(
-                f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
-        elif server_cfg.detect_mode == ModelType.CLASSIFY:
-            classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
-            classifier.run()
-            logger.info(
-                f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
+        # if server_cfg.detect_mode == ModelType.SSD:
+        #     ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
+        #     ssd_detector.run()
+        #     logger.info(
+        #         f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
+        # elif server_cfg.detect_mode == ModelType.CLASSIFY:
+        #     classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
+        #     classifier.run()
+        #     logger.info(
+        #         f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
             s = time.time()
@@ -250,7 +251,8 @@ class VideoOfflineCallbackCapture(VideoOfflineCapture):
 
     def pass_frame(self, *args):
         assert len(args) >= 2
-        self.controller.dispatch_frame(*args)
+        # self.controller.dispatch_frame(*args)
+        self.controller.dispatch_to_stack(*args)
 
     def cancel(self):
         super().cancel()
@@ -444,4 +446,5 @@ class VideoRtspCallbackCapture(VideoRtspCapture):
 
     def pass_frame(self, *args):
         assert len(args) >= 2
-        self.controller.dispatch_frame(*args)
+        # self.controller.dispatch_frame(*args)
+        self.controller.dispatch_to_stack(*args)

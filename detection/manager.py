@@ -71,8 +71,9 @@ class DetectionMonitor(object):
         self.shut_down_event = Manager().Event()
         self.shut_down_event.clear()
         if build_pool:
-            pool_size = min(len(cfgs) * 2, cpu_count() - 1)
-            self.process_pool = Pool(processes=pool_size)
+            # pool_size = min(len(cfgs) * 2, cpu_count() - 1)
+            # self.process_pool = Pool(processes=pool_size)
+            self.process_pool = Pool(processes=cpu_count() - 1)
             self.thread_pool = ThreadPoolExecutor()
         self.clean()
         self.stream_receivers = [
@@ -268,7 +269,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         for i, cfg in enumerate(self.cfgs):
             logger.info('Init detector controller [{}]....'.format(cfg.index))
             # self.task_futures.append(self.controllers[i].start(self.thread_pool))
-            self.controllers[i].start(self.thread_pool)
+            self.process_pool.apply_async(self.controllers[i].start, args=(None,))
+            # self.controllers[i].start(self.process_pool)
             logger.info('Done init detector controller [{}]....'.format(cfg.index))
 
     def init_rtsp_caps(self, c, idx):
@@ -331,6 +333,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                         logger.info(
                             '*******************************Controller [{}]: exit********************************'.format(
                                 self.cfgs[idx].index))
+
                 # results = [r.get() for r in self.task_futures if r is not None]
                 self.process_pool.close()
                 self.process_pool.join()
@@ -713,6 +716,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         self.display_pipe = Manager().Queue(1000)
         self.detect_params = []
         self.detectors = []
+        self.args = Manager().list()
+        self.frame_stack = Manager().list()
 
     def init_detectors(self):
         logger.info(
@@ -956,6 +961,14 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 return True
             return False
 
+    def dispatch_to_stack(self, *args):
+        # if not len(self.args):
+        #     self.args.append(args)
+        if len(self.frame_stack) > 2000:
+            self.frame_stack[:] = []
+        self.frame_stack.append(args[0])
+        logger.info(self.LOG_PREFIX + f'Current Stack Size: [{len(self.frame_stack)}]')
+
     def dispatch_frame(self, *args):
         start = time.time()
         frame = args[0]
@@ -981,6 +994,35 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         elif self.server_cfg.detect_mode == ModelType.FORWARD:
             self.forward(args, original_frame)
         self.clear_original_cache()
+
+    def loop_stack(self):
+        classifier = None
+        ssd_detector = None
+        if self.server_cfg.detect_mode == ModelType.SSD:
+            ssd_detector = SSDDetector(model_path=self.server_cfg.detect_model_path, device_id=self.server_cfg.cd_id)
+            ssd_detector.run()
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
+        elif self.server_cfg.detect_mode == ModelType.CLASSIFY:
+            classifier = DolphinClassifier(model_path=self.server_cfg.classify_model_path,
+                                           device_id=self.server_cfg.dt_id)
+            classifier.run()
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
+        logger.info(
+            '*******************************Controller [{}]: Init Loop Stack********************************'.format(
+                self.cfg.index))
+        while self.status.get() == SystemStatus.RUNNING:
+            try:
+                frame = self.frame_stack.pop()
+                self.dispatch_frame(frame, None, ssd_detector, classifier)
+            except Exception as e:
+                logger.error(e)
+                # pass
+                # logger.info(self.LOG_PREFIX + 'Empty Frame Stack')
+        logger.info(
+            '*******************************Controller [{}]: Loop Stack Exit********************************'.format(
+                self.cfg.index))
 
     def forward(self, args, original_frame):
         if self.cfg.push_stream:
@@ -1198,7 +1240,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         threading.Thread(target=self.listen, daemon=True).start()
         threading.Thread(target=self.write_frame_work, daemon=True).start()
         # threading.Thread(target=self.display, daemon=True).start()
-        # threading.Thread(target=self.push_stream, daemon=True).start()
+        # threading.Thread(target=self.loop_stack, daemon=True).start()
+        self.loop_stack()
         return True
 
 
@@ -1227,7 +1270,7 @@ class PushStreamer(object):
             # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
             # gs = time.time()
             frame, proc_res, frame_index = self.push_stream_queue.get()
-            logger.info(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{self.push_stream_queue.qsize()}]')
+            logger.debug(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{self.push_stream_queue.qsize()}]')
             # end = 1 / (time.time() - gs)
             # logger.debug(self.LOG_PREFIX + f'Get Frame Speed Rate: [{round(end, 2)}]/FPS')
             detect_flag = (proc_res is not None and proc_res.detect_flag)

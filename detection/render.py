@@ -260,7 +260,8 @@ class DetectionStreamRender(object):
             f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}]: Consume [{time.time() - start}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
         msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
-        raw_target.unlink()
+        if raw_target.exists():
+            raw_target.unlink()
         self.msg_queue.put(msg_json)
         logger.info(f'put packaged message in the msg_queue...')
 
@@ -298,7 +299,8 @@ class DetectionStreamRender(object):
         logger.info(
             f'Video Render [{self.index}]: Original Render Task [{self.stream_cnt}]: ' +
             f'Consume [{round(time.time() - start, 2)}] seconds.Done write detection stream frame into: [{str(target)}]')
-        raw_target.unlink()
+        if raw_target.exists():
+            raw_target.unlink()
 
     def convert_avi(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
         ffmpeg = '{ffmpeg} -y -i "{infile}" -c:v libx264 -strict -2 "{outfile}"'.format(ffmpeg=ffmpeg_exec,
