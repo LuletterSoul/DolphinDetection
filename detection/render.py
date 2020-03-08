@@ -17,6 +17,7 @@ from multiprocessing.queues import Queue
 
 import cv2
 import numpy as np
+import os
 
 from config import SystemStatus
 # from .manager import DetectorController
@@ -47,6 +48,8 @@ class DetectionStreamRender(object):
         self.msg_queue = msg_queue
         # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
         self.fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+        # self.fourcc = cv2.VideoWriter_fourcc(*'H264')
+        # self.fourcc = cv2.VideoWriter_fourcc(*'X264')
         self.quit = Manager().Event()
         self.quit.clear()
         self.status = Manager().Value('i', SystemStatus.RUNNING)
@@ -221,11 +224,12 @@ class DetectionStreamRender(object):
 
     def rect_render_task(self, current_idx, current_time, frame_cache, rect_cache, render_cache):
         start = time.time()
+        raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
         target = self.rect_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        video_write = cv2.VideoWriter(str(target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
+        video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
         next_cnt = current_idx - self.future_frames
         next_cnt = self.write_render_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
                                                 frame_cache)
@@ -251,19 +255,25 @@ class DetectionStreamRender(object):
         next_cnt = self.write_render_video_work(video_write, next_cnt, end_cnt, render_cache, rect_cache,
                                                 frame_cache)
         video_write.release()
+        self.convert_byfile(str(raw_target), str(target))
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}]: Consume [{time.time() - start}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
         msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
+        raw_target.unlink()
         self.msg_queue.put(msg_json)
         logger.info(f'put packaged message in the msg_queue...')
 
     def original_render_task(self, current_idx, current_time, frame_cache):
         start = time.time()
+        raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
         target = self.original_stream_path / (current_time + str(self.stream_cnt) + '.mp4')
         logger.info(
             f'Video Render [{self.index}]: Original Render Task [{self.stream_cnt}]: Writing detection stream frame into: [{str(target)}]')
-        video_write = cv2.VideoWriter(str(target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
+        video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
+        if not video_write.isOpened():
+            logger.error(f'Video Render [{self.index}]: Error Opened Video Writer')
+
         next_cnt = current_idx - self.future_frames
         next_cnt = self.write_original_video_work(video_write, next_cnt, current_idx, frame_cache)
         # the future frames count
@@ -284,6 +294,37 @@ class DetectionStreamRender(object):
         end_cnt = next_cnt + self.future_frames
         next_cnt = self.write_original_video_work(video_write, next_cnt, end_cnt, frame_cache)
         video_write.release()
+        self.convert_byfile(str(raw_target), str(target))
         logger.info(
             f'Video Render [{self.index}]: Original Render Task [{self.stream_cnt}]: ' +
             f'Consume [{round(time.time() - start, 2)}] seconds.Done write detection stream frame into: [{str(target)}]')
+        raw_target.unlink()
+
+    def convert_avi(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
+        ffmpeg = '{ffmpeg} -y -i "{infile}" -c:v libx264 -strict -2 "{outfile}"'.format(ffmpeg=ffmpeg_exec,
+                                                                                        infile=input_file,
+                                                                                        outfile=output_file
+                                                                                        )
+        f = os.popen(ffmpeg)
+        return f.readline()
+
+    def convert_avi_to_webm(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
+        return self.convert_avi(input_file, output_file, ffmpeg_exec="ffmpeg")
+
+    def convert_avi_to_mp4(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
+        return self.convert_avi(input_file, output_file, ffmpeg_exec="ffmpeg")
+
+    def convert_to_avcmp4(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
+        email = threading.Thread(target=self.convert_avi, args=(input_file, output_file, ffmpeg_exec,))
+        email.start()
+
+    def convert_byfile(self, from_path, to_path):
+        if not os.path.exists(from_path):
+            logger.info("Sorry, you must create the directory for the output files first")
+        if not os.path.exists(os.path.dirname(to_path)):
+            os.makedirs(os.path.dirname(to_path), exist_ok=True)
+        # directory, file_name = os.path.split(from_path)
+        # raw_name, extension = os.path.splitext(file_name)
+        # print("Converting ", from_path)
+        line = self.convert_avi_to_mp4(from_path, to_path)
+        # logger.info(line)
