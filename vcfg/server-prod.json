@@ -7,7 +7,7 @@
   "send_msg": false,
   "classify_model_path": "model/bc-model-0226.pth",
   "detect_model_path": "model/0220-ssd.pth",
-  "detect_mode": "classify",
+  "detect_mode": "fwd",
   "root": "/data/lxd/project/DolphinDetection",
   "stream_save_path": "data/videos",
   "sample_save_dir": "data/samples",

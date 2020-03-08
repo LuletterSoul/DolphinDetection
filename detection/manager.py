@@ -797,6 +797,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         # sub_frames = [r.frame for r in results]
         results = args[0]
         _model = args[1]
+        original_frame = args[-1]
         sub_binary = [r.binary for r in results]
         # sub_thresh = [r.thresh for r in results]
         # constructed_frame = self.construct_rgb(sub_frames)
@@ -807,15 +808,15 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             self.construct_cnt += 1
             current_index = results[0].frame_index
             try_time = 0
-            while current_index not in self.original_frame_cache:
-                logger.info(
-                    f'Current index: [{current_index}] not in original frame cache.May cache was cleared by timer')
-                time.sleep(0.1)
-                try_time += 1
-                if try_time > 24:
-                    return ConstructResult(None, None, None)
+            # while current_index not in self.original_frame_cache:
+            #     logger.info(
+            #         f'Current index: [{current_index}] not in original frame cache.May cache was cleared by timer')
+            #     time.sleep(0.1)
+            #     try_time += 1
+            #     if try_time > 24:
+            #         return ConstructResult(None, None, None)
             # logger.info(self.original_frame_cache.keys())
-            original_frame = self.original_frame_cache[current_index]
+            # original_frame = self.original_frame_cache[current_index]
             render_frame = original_frame.copy()
             push_flag = False
             for r in results:
@@ -966,26 +967,33 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         #     self.args.append(args)
         if len(self.frame_stack) > 2000:
             self.frame_stack[:] = []
-        self.frame_stack.append(args[0])
+        frame = args[0]
+        self.frame_cnt.set(self.frame_cnt.get() + 1)
+        # s = time.time()
+        # self.original_frame_cache[self.frame_cnt.get()] = frame
+        # e = 1 / (time.time() - s)
+        # logger.info(self.LOG_PREFIX + f'Dict Put Speed: [{round(e, 2)}]/FPS')
+
+        s = time.time()
+        self.frame_stack.append((args[0], self.frame_cnt.get()))
+        e = 1 / (time.time() - s)
+        logger.info(self.LOG_PREFIX + f'Stack Put Speed: [{round(e, 2)}]/FPS')
         logger.info(self.LOG_PREFIX + f'Current Stack Size: [{len(self.frame_stack)}]')
 
     def dispatch_frame(self, *args):
         start = time.time()
-        frame = args[0]
-        self.frame_cnt.set(self.frame_cnt.get() + 1)
-        self.original_frame_cache[self.frame_cnt.get()] = frame
-        # threading.Thread(target=self.send, args=(frame,)).start()
-        # self.render_frame_cache[self.frame_cnt.get()] = frame
-        # logger.info(self.original_frame_cache.keys())
-        if self.frame_cnt.get() <= self.cfg.pre_cache:
-            return
+        original_frame = args[0]
+        self.pre_cnt = args[-1]
+        # self.frame_cnt.set(self.frame_cnt.get() + 1)
+        # self.original_frame_cache[self.frame_cnt.get()] = frame
+        # if self.frame_cnt.get() <= self.cfg.pre_cache:
+        #     return
 
         # if not self.init_push and self.frame_cnt.get() > 240:
         #     threading.Thread(target=self.push_stream, daemon=True).start()
         #     self.init_push = True
 
-        self.pre_cnt += 1
-        original_frame = self.original_frame_cache[self.pre_cnt]
+        # original_frame = self.original_frame_cache[self.pre_cnt]
 
         if self.server_cfg.detect_mode == ModelType.CLASSIFY:
             self.classify_based(args, original_frame.copy())
@@ -1014,8 +1022,11 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 self.cfg.index))
         while self.status.get() == SystemStatus.RUNNING:
             try:
-                frame = self.frame_stack.pop()
-                self.dispatch_frame(frame, None, ssd_detector, classifier)
+                s = time.time()
+                frame, current_index = self.frame_stack.pop()
+                e = 1 / (time.time() - s)
+                logger.info(self.LOG_PREFIX + f'Stack Pop Speed: [{round(e, 2)}]/FPS')
+                self.dispatch_frame(frame, None, ssd_detector, classifier, current_index)
             except Exception as e:
                 logger.error(e)
                 # pass
@@ -1114,7 +1125,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     # async_futures.append(detect_td.start())
                     # async_futures.append(self.pool.submit(detect_based_task, block, d))
                     # async_futures.append(detect_based_task.remote(block, d))
-                proc_res: ConstructResult = self.collect_and_reconstruct(async_futures, args[3])
+                proc_res: ConstructResult = self.collect_and_reconstruct(async_futures, args[3], original_frame)
                 if self.cfg.push_stream:
                     self.push_stream_queue.put((proc_res.frame, proc_res, proc_res.frame_index))
             except Exception as e:
@@ -1126,17 +1137,6 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     self.push_stream_queue.put((original_frame, None, self.pre_cnt))
             except Exception as e:
                 logger.error(e)
-            # r = pool.apply_async(collect_and_reconstruct,
-            #                      (async_futures, self.construct_params, self.block_info, self.cfg,))
-            # r.get()
-            # collect_and_reconstruct.remote(async_futures, self.construct_params, self.block_info, self.cfg)
-        # self.dispatch_cnt += 1
-        # if self.dispatch_cnt % 100 == 0:
-        #     end = time.time() - start
-        #     logger.info(
-        #         'Detection controller [{}]: Operation Speed Rate [{}]s/100fs, unit process rate: [{}]s/f'.format(
-        #             self.cfg.index, round(end, 2), round(end / 100, 2)))
-        #     self.dispatch_cnt = 0
 
     def display(self):
         logger.info(
@@ -1156,80 +1156,6 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             except Exception as e:
                 logger.error(e)
         return True
-
-    # def call_task(self, frame):
-    #     self.dispatch_frame(frame)
-
-    # def push_stream(self):
-    #     logger.info(
-    #         f'*******************************Controller [{self.cfg.index}]: Init push stream service********************************')
-    #     draw_cnt = 0
-    #     tmp_results = []
-    #     video_streamer = FFMPEG_VideoStreamer(self.cfg.push_to, size=(self.cfg.shape[1], self.cfg.shape[0]), fps=24,
-    #                                           codec='h264', )
-    #     video_streamer.write_frame(np.zeros((self.cfg.shape[1], self.cfg.shape[0], 3), dtype=np.uint8))
-    #     # time.sleep(6)
-    #     while True:
-    #         ps = time.time()
-    #         if self.status.get() == SystemStatus.SHUT_DOWN:
-    #             video_streamer.close()
-    #             break
-    #         # se = 1 / (time.time() - ps)
-    #         # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
-    #         # gs = time.time()
-    #         frame, proc_res, frame_index = self.push_stream_queue.get()
-    #         # end = 1 / (time.time() - gs)
-    #         # logger.debug(self.LOG_PREFIX + f'Get Frame Speed Rate: [{round(end, 2)}]/FPS')
-    #         detect_flag = (proc_res is not None and proc_res.detect_flag)
-    #         # logger.info(f'Draw cnt: [{draw_cnt}]')
-    #         # if proc_res is not None:
-    #         #     logger.info(f'Detect flag: [{proc_res.detect_flag}]')
-    #         # ds = time.time()
-    #         if detect_flag:
-    #             # logger.info('Detect flag~~~~~~~~~~')
-    #             draw_cnt = 0
-    #             tmp_results = proc_res.results
-    #         is_draw_over = draw_cnt <= 36
-    #         if is_draw_over:
-    #             # logger.info('Draw next frames~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-    #             for r in tmp_results:
-    #                 for rect in r.rects:
-    #                     color = np.random.randint(0, 255, size=(3,))
-    #                     color = [int(c) for c in color]
-    #                     p1, p2 = bbox_points(self.cfg, rect, frame.shape)
-    #                     # p1 = (int(rect[0]), int(rect[1]))
-    #                     # p2 = (int(rect[2]), int(rect[3]))
-    #
-    #                     cv2.putText(frame, 'Dolphin', p1,
-    #                                 cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-    #                     cv2.rectangle(frame, p1, p2, color, 2)
-    #                     # if self.server_cfg.detect_mode == ModelType.SSD:
-    #                     #     cv2.putText(frame, str(round(r[4], 2)), (p2[0], p2[1]),
-    #                     #                 cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-    #             draw_cnt += 1
-    #         if self.cfg.write_timestamp:
-    #             time_stamp = generate_time_stamp("%Y-%m-%d %H:%M:%S")
-    #             cv2.putText(frame, time_stamp, (100, 100),
-    #                         cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
-    #         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    #         # de = 1 / (time.time() - ds)
-    #         # logger.debug(self.LOG_PREFIX + f'Draw Speed Rate: [{round(de, 2)}]/FPS')
-    #         # logger.info(f'Frame index [{frame_index}]')
-    #         # if frame_index % self.cfg.sample_rate == 0:
-    #         #     for _ in range(2):
-    #         #         video_streamer.write_frame(frame)
-    #         # else:
-    #         #     video_streamer.write_frame(frame)
-    #         # end = 1 / (time.time() - ps)
-    #         # ws = time.time()
-    #         video_streamer.write_frame(frame)
-    #         # w_end = 1 / (time.time() - ws)
-    #         end = 1 / (time.time() - ps)
-    #         # logger.debug(self.LOG_PREFIX + f'Writing Speed Rate: [{round(w_end, 2)}]/FPS')
-    #         logger.debug(self.LOG_PREFIX + f'Streaming Speed Rate: [{round(end, 2)}]/FPS')
-    #     logger.info(
-    #         '*******************************Controller [{}]:  Push stream service exit********************************'.format(
-    #             self.cfg.index))
 
     def start(self, pool: Pool):
         self.status.set(SystemStatus.RUNNING)
