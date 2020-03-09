@@ -49,7 +49,7 @@ class MonitorType(Enum):
 # Monitor will build multiple video stream receivers according the video configuration
 class DetectionMonitor(object):
 
-    def __init__(self, cfgs: Path, stream_path: Path, sample_path: Path, frame_path: Path,
+    def __init__(self, cfgs: List[VideoConfig], stream_path: Path, sample_path: Path, frame_path: Path,
                  region_path: Path,
                  offline_path: Path = None, build_pool=True) -> None:
         super().__init__()
@@ -74,7 +74,7 @@ class DetectionMonitor(object):
         if build_pool:
             # pool_size = min(len(cfgs) * 2, cpu_count() - 1)
             # self.process_pool = Pool(processes=pool_size)
-            self.process_pool = Pool(processes=cpu_count() - 1)
+            self.process_pool = Pool(processes=len(self.cfgs) * 5)
             self.thread_pool = ThreadPoolExecutor()
         self.clean()
         self.stream_receivers = [
@@ -161,13 +161,14 @@ class DetectionMonitor(object):
 # But a controller will manager [row*col] concurrency threads or processes
 # row and col are definied in video configuration
 class EmbeddingControlMonitor(DetectionMonitor):
-    def __init__(self, cfgs: Path, stream_path: Path, sample_path: Path, frame_path: Path, region_path,
+    def __init__(self, cfgs: List[VideoConfig], stream_path: Path, sample_path: Path, frame_path: Path, region_path,
                  offline_path: Path = None, build_pool=True) -> None:
         super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path, build_pool)
-        self.caps_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
-        self.msg_queue = [Manager().Queue(maxsize=500) for c in self.cfgs]
-        self.streaming_queues = [Manager().list() for c in self.cfgs]
-        self.push_streamers = [PushStreamer(cfg, self.streaming_queues[idx]) for idx, cfg in enumerate(self.cfgs)]
+        self.caps_queue = [Manager().Queue() for c in self.cfgs]
+        self.msg_queue = [Manager().Queue() for c in self.cfgs]
+        self.stream_stacks = [Manager().list() for c in self.cfgs]
+        self.push_streamers = [PushStreamer(cfg, self.stream_stacks[idx]) for idx, cfg in enumerate(self.cfgs)]
+
         self.caps = []
         self.controllers = []
 
@@ -244,7 +245,8 @@ class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 
 class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, cfgs, scfg, classify_model, ssd_model, stream_path: Path, sample_path, frame_path,
+    def __init__(self, cfgs: List[VideoConfig], scfg, classify_model, ssd_model, stream_path: Path, sample_path,
+                 frame_path,
                  region_path: Path,
                  offline_path: Path = None) -> None:
         super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path)
@@ -256,16 +258,26 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             c.date = self.time_stamp
             # self.process_pool = None
         # self.thread_pool = None
+        self.stream_renders = None
+        self.render_notify_queues = [Manager().Queue() for c in self.cfgs]
+        self.stream_renders = []
+
+    def init_stream_renders(self):
+        self.stream_renders = [
+            DetectionStreamRender(c, 0, c.future_frames, self.msg_queue[idx], self.controllers[idx].rect_stream_path,
+                                  self.controllers[idx].original_stream_path, self.controllers[idx].render_frame_cache,
+                                  self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
+                                  self.render_notify_queues[idx]) for idx, c
+            in
+            enumerate(self.cfgs)]
 
     def init_controllers(self):
         self.controllers = [
             TaskBasedDetectorController(self.scfg, cfg, self.stream_path / str(cfg.index),
-                                        self.region_path / str(cfg.index),
-                                        self.frame_path / str(cfg.index),
-                                        self.caps_queue[idx],
-                                        self.pipes[idx],
-                                        self.msg_queue[idx],
-                                        self.streaming_queues[idx]) for
+                                        self.region_path / str(cfg.index), self.frame_path / str(cfg.index),
+                                        self.caps_queue[idx], self.pipes[idx], self.msg_queue[idx],
+                                        self.stream_stacks[idx],
+                                        self.render_notify_queues[idx]) for
             idx, cfg in enumerate(self.cfgs)]
         for i, cfg in enumerate(self.cfgs):
             logger.info('Init detector controller [{}]....'.format(cfg.index))
@@ -294,6 +306,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         for idx, cap in enumerate(self.caps):
             cap.quit.set()
             self.controllers[idx].quit.set()
+            self.push_streamers[idx].quit.set()
+            self.stream_renders[idx].quit.set()
 
     def init_websocket_clients(self):
         for idx, cfg in enumerate(self.cfgs):
@@ -307,6 +321,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         # Init detector controller
         self.init_controllers()
         self.init_caps()
+        self.init_stream_renders()
         # Init stream receiver firstly, ensures video index that is arrived before detectors begin detection..
         for i, cfg in enumerate(self.cfgs):
             res = self.init_stream_receiver(i)
@@ -318,6 +333,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                     self.process_pool.apply_async(self.caps[i].read, (self.scfg,)))
                 self.task_futures.append(
                     self.process_pool.apply_async(self.push_streamers[i].push_stream, ()))
+                self.task_futures.append(self.process_pool.apply_async(self.stream_renders[i].loop_render_msg, ()))
 
     def wait(self):
         if self.process_pool is not None:
@@ -390,7 +406,7 @@ class DetectorController(object):
         self.pre_detect_index = -self.cfg.future_frames
         self.history_write = False
         self.original_frame_cache = Manager().dict()
-        self.original_hash_cache = Manager().list()
+        # self.original_hash_cache = Manager().list()
         self.render_frame_cache = Manager().dict()
         self.history_frame_deque = Manager().list()
         self.render_rect_cache = Manager().dict()
@@ -407,7 +423,7 @@ class DetectorController(object):
         self.runtime = time.time()
         # self.clear_point = 0
         # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        self.stream_render = DetectionStreamRender(self.cfg, 0, self.cfg.future_frames, self.msg_queue, self)
+        # self.stream_render = DetectionStreamRender(self.cfg, 0, self.cfg.future_frames, self.msg_queue, self)
         # self.video_streamer = FFMPEG_VideoStreamer(self.cfg.push_to, [self.cfg.shape[1], self.cfg.shape[0]], 24)
         self.LOG_PREFIX = f'Controller [{self.cfg.index}]: '
         self.save_cache = {}
@@ -420,11 +436,6 @@ class DetectorController(object):
     #
     # def __setstate__(self, state):
     #     self.__dict__.update(state)
-
-    def listen(self):
-        if self.quit.wait():
-            self.status.set(SystemStatus.SHUT_DOWN)
-            self.stream_render.quit.set()
 
     def cancel(self):
         pass
@@ -703,15 +714,15 @@ class ThreadBasedDetectorController(DetectorController):
 class TaskBasedDetectorController(ThreadBasedDetectorController):
 
     def __init__(self, server_cfg: ServerConfig, cfg: VideoConfig, stream_path: Path, candidate_path: Path,
-                 frame_path: Path, frame_queue: Queue,
-                 index_pool: Queue, msg_queue: Queue, streaming_queue: List) -> None:
+                 frame_path: Path, frame_queue: Queue, index_pool: Queue, msg_queue: Queue, streaming_queue: List,
+                 render_notify_queue) -> None:
         super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool, msg_queue)
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
         #                     self.render_rect_cache, self.stream_render, 500, self.cfg))
         self.server_cfg = server_cfg
         self.construct_params = ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
-                                                self.render_rect_cache, self.stream_render, 500, self.cfg)
+                                                self.render_rect_cache, None, 500, self.cfg)
         # self.pool = ThreadPoolExecutor()
         # self.threads = []
         self.push_stream_queue = streaming_queue
@@ -720,6 +731,13 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         self.detectors = []
         self.args = Manager().list()
         self.frame_stack = Manager().list()
+        # self.stream_render = stream_render
+        self.render_notify_queue = render_notify_queue
+
+    def listen(self):
+        if self.quit.wait():
+            self.status.set(SystemStatus.SHUT_DOWN)
+            # self.stream_render.quit.set()
 
     def init_detectors(self):
         logger.info(
@@ -874,10 +892,11 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         self.render_frame_cache[current_index] = render_frame
                         self.render_rect_cache[current_index] = r.rects
                         if self.cfg.render:
-                            threading.Thread(target=self.stream_render.reset, args=(current_index,),
-                                             daemon=True).start()
-                        self.last_detection = self.stream_render.detect_index
-                        logger.info(self.LOG_PREFIX + f'Last detection frame index [{self.last_detection}]')
+                            # threading.Thread(target=self.stream_render.reset, args=(current_index,),
+                            #                  daemon=True).start()
+                            self.render_notify_queue.put((current_index, 'reset'))
+                        # self.last_detection = self.stream_render.detect_index
+                        # logger.info(self.LOG_PREFIX + f'Last detection frame index [{self.last_detection}]')
                     else:
                         if not self.dol_gone:
                             empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
@@ -888,7 +907,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                             self.dol_gone = True
 
             if self.cfg.render:
-                threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
+                self.render_notify_queue.put((current_index, 'notify'))
+                # threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
             # if not push_flag:
             #     video_streamer.write_frame(cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
             self.clear_render_cache()
@@ -1181,12 +1201,20 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
 
 
 class PushStreamer(object):
-    def __init__(self, cfg: VideoConfig, push_stream_queue: List) -> None:
+    def __init__(self, cfg: VideoConfig, stream_stack: List) -> None:
 
         super().__init__()
         self.cfg = cfg
-        self.push_stream_queue = push_stream_queue
+        self.stream_stack = stream_stack
         self.LOG_PREFIX = f'Push Streamer [{self.cfg.index}]: '
+        self.quit = Manager().Event()
+        self.quit.clear()
+        self.status = Manager().Value('i', SystemStatus.RUNNING)
+
+    def listen(self):
+        if self.quit.wait():
+            self.status.set(SystemStatus.SHUT_DOWN)
+            # self.stream_render.quit.set()
 
     def push_stream(self):
         logger.info(
@@ -1198,7 +1226,8 @@ class PushStreamer(object):
         video_streamer.write_frame(np.zeros((self.cfg.shape[1], self.cfg.shape[0], 3), dtype=np.uint8))
         # time.sleep(6)
         pre_index = 0
-        while True:
+        threading.Thread(target=self.listen, daemon=True).start()
+        while self.status.get() == SystemStatus.RUNNING:
             try:
                 ps = time.time()
                 # if self.status.get() == SystemStatus.SHUT_DOWN:
@@ -1207,11 +1236,11 @@ class PushStreamer(object):
                 # se = 1 / (time.time() - ps)
                 # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
                 # gs = time.time()
-                frame, proc_res, frame_index = self.push_stream_queue.pop()
-                logger.info(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{len(self.push_stream_queue)}]')
+                frame, proc_res, frame_index = self.stream_stack.pop()
+                logger.info(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{len(self.stream_stack)}]')
 
-                if len(self.push_stream_queue) > 1000:
-                    self.push_stream_queue[:] = []
+                if len(self.stream_stack) > 1000:
+                    self.stream_stack[:] = []
                     logger.info(self.LOG_PREFIX + 'Too much frames blocked in stream queue.Cleared')
                     continue
 

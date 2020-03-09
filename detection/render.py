@@ -28,22 +28,30 @@ from stream.rtsp import FFMPEG_MP4Writer
 
 class DetectionStreamRender(object):
 
-    def __init__(self, cfg, detect_index, future_frames, msg_queue: Queue, controller) -> None:
+    def __init__(self, cfg, detect_index, future_frames, msg_queue: Queue,
+                 rect_stream_path, original_stream_path, render_frame_cache, render_rect_cache, original_frame_cache,
+                 notify_queue) -> None:
         super().__init__()
         self.cfg = cfg
         self.detect_index = detect_index
-        self.rect_stream_path = controller.rect_stream_path
-        self.original_stream_path = controller.original_stream_path
+        # self.rect_stream_path = controller.rect_stream_path
+        # self.original_stream_path = controller.original_stream_path
+        self.rect_stream_path = rect_stream_path
+        self.original_stream_path = original_stream_path
         self.stream_cnt = 0
-        self.index = controller.cfg.index
-        self.is_trigger_write = False
-        self.write_done = False
-        self.controller = controller
+        self.index = cfg.index
+        self.is_trigger_write = True
+        self.write_done = True
+        # self.controller = controller
         self.future_frames = future_frames
-        self.sample_rate = controller.cfg.sample_rate
-        self.render_frame_cache = controller.render_frame_cache
-        self.render_rect_cache = controller.render_rect_cache
-        self.original_frame_cache = controller.original_frame_cache
+        # self.sample_rate = controller.cfg.sample_rate
+        # self.render_frame_cache = controller.render_frame_cache
+        # self.render_rect_cache = controller.render_rect_cache
+        # self.original_frame_cache = controller.original_frame_cache
+        self.sample_rate = cfg.sample_rate
+        self.render_frame_cache = render_frame_cache
+        self.render_rect_cache = render_rect_cache
+        self.original_frame_cache = original_frame_cache
         self.next_prepare_event = Manager().Event()
         self.next_prepare_event.set()
         self.msg_queue = msg_queue
@@ -54,7 +62,8 @@ class DetectionStreamRender(object):
         self.quit = Manager().Event()
         self.quit.clear()
         self.status = Manager().Value('i', SystemStatus.RUNNING)
-        threading.Thread(target=self.listen, daemon=True).start()
+        self.notify_queue = notify_queue
+        self.LOG_PREFIX = f'Video Stream Render [{self.cfg.index}]: '
 
     def listen(self):
         if self.quit.wait():
@@ -77,6 +86,21 @@ class DetectionStreamRender(object):
             self.write_done = False
             self.next_prepare_event.set()
             logger.info('Reset stream render')
+
+    def loop_render_msg(self):
+        logger.info(
+            f'*******************************{self.LOG_PREFIX}: Init Stream Render Notify Service********************************')
+        threading.Thread(target=self.listen, daemon=True).start()
+        while self.status.get() == SystemStatus.RUNNING:
+            logger.info(self.LOG_PREFIX + f'Wait Render Notify')
+            index, type = self.notify_queue.get()
+            logger.info(self.LOG_PREFIX + f'Index: [{index}], Type: [{type}]')
+            if type == 'notify':
+                self.notify(index)
+            if type == 'reset':
+                self.reset(index)
+        logger.info(
+            f'*******************************{self.LOG_PREFIX}: Exit Stream Render Notify Service********************************')
 
     def notify(self, current_index):
         # next_detect_stream_occurred = current_index - self.detect_index >= self.future_frames \
@@ -234,7 +258,7 @@ class DetectionStreamRender(object):
         video_write = FFMPEG_MP4Writer(str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
         next_cnt = current_idx - self.future_frames
         next_cnt = self.write_render_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
-                   frame_cache)
+                                                frame_cache)
         # the future frames count
         # next_frame_cnt = 48
         # wait the futures frames is accessable
@@ -245,7 +269,7 @@ class DetectionStreamRender(object):
             # wait the future frames prepared,if ocurring time out, give up waits
             self.next_prepare_event.wait(30)
             logger.info(
-                f"Video Render [{self.controller.cfg.index}]: Rect Render Task " +
+                f"Video Render [{self.cfg.index}]: Rect Render Task " +
                 f"[{self.stream_cnt}] wait [{round(time.time() - start, 2)}] seconds")
             logger.info(f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}] frames accessible...')
 
@@ -289,7 +313,7 @@ class DetectionStreamRender(object):
             # wait the future frames prepared,if ocurring time out, give up waits
             self.next_prepare_event.wait(30)
             logger.info(
-                f"Video Render [{self.controller.cfg.index}]: Original Render Task [{self.stream_cnt}] wait [{time.time() - start}] seconds")
+                f"Video Render [{self.cfg.index}]: Original Render Task [{self.stream_cnt}] wait [{time.time() - start}] seconds")
             logger.info(f'Video Render [{self.index}]: Original Render Task [{self.stream_cnt}] frames accessible....')
         # logger.info('Render task Begin with frame [{}]'.format(next_cnt))
         # logger.info('After :[{}]'.format(render_cache.keys()))
@@ -304,32 +328,32 @@ class DetectionStreamRender(object):
             f'Consume [{round(time.time() - start, 2)}] seconds.Done write detection stream frame into: [{str(target)}]')
         # if raw_target.exists():
         #     raw_target.unlink()
-
-    def convert_avi(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
-        ffmpeg = '{ffmpeg} -y -i "{infile}" -c:v libx264 -strict -2 "{outfile}"'.format(ffmpeg=ffmpeg_exec,
-                                                                                        infile=input_file,
-                                                                                        outfile=output_file
-                                                                                        )
-        f = os.popen(ffmpeg)
-        return f.readline()
-
-    def convert_avi_to_webm(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
-        return self.convert_avi(input_file, output_file, ffmpeg_exec="ffmpeg")
-
-    def convert_avi_to_mp4(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
-        return self.convert_avi(input_file, output_file, ffmpeg_exec="ffmpeg")
-
-    def convert_to_avcmp4(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
-        email = threading.Thread(target=self.convert_avi, args=(input_file, output_file, ffmpeg_exec,))
-        email.start()
-
-    def convert_byfile(self, from_path, to_path):
-        if not os.path.exists(from_path):
-            logger.info("Sorry, you must create the directory for the output files first")
-        if not os.path.exists(os.path.dirname(to_path)):
-            os.makedirs(os.path.dirname(to_path), exist_ok=True)
-        # directory, file_name = os.path.split(from_path)
-        # raw_name, extension = os.path.splitext(file_name)
-        # print("Converting ", from_path)
-        line = self.convert_avi_to_mp4(from_path, to_path)
-        logger.info(line)
+    #
+    # def convert_avi(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
+    #     ffmpeg = '{ffmpeg} -y -i "{infile}" -c:v libx264 -strict -2 "{outfile}"'.format(ffmpeg=ffmpeg_exec,
+    #                                                                                     infile=input_file,
+    #                                                                                     outfile=output_file
+    #                                                                                     )
+    #     f = os.popen(ffmpeg)
+    #     return f.readline()
+    #
+    # def convert_avi_to_webm(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
+    #     return self.convert_avi(input_file, output_file, ffmpeg_exec="ffmpeg")
+    #
+    # def convert_avi_to_mp4(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
+    #     return self.convert_avi(input_file, output_file, ffmpeg_exec="ffmpeg")
+    #
+    # def convert_to_avcmp4(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
+    #     email = threading.Thread(target=self.convert_avi, args=(input_file, output_file, ffmpeg_exec,))
+    #     email.start()
+    #
+    # def convert_byfile(self, from_path, to_path):
+    #     if not os.path.exists(from_path):
+    #         logger.info("Sorry, you must create the directory for the output files first")
+    #     if not os.path.exists(os.path.dirname(to_path)):
+    #         os.makedirs(os.path.dirname(to_path), exist_ok=True)
+    #     # directory, file_name = os.path.split(from_path)
+    #     # raw_name, extension = os.path.splitext(file_name)
+    #     # print("Converting ", from_path)
+    #     line = self.convert_avi_to_mp4(from_path, to_path)
+    #     logger.info(line)
