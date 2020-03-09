@@ -144,7 +144,8 @@ class ServerConfig(Config):
     Server configuration definitions
     """
 
-    def __init__(self, env, http_ip, http_port, wc_ip, wc_port, send_msg, root, classify_model_path, detect_model_path,
+    def __init__(self, env, http_ip, http_port, wc_ip, wc_port, send_msg, cron, root, classify_model_path,
+                 detect_model_path,
                  detect_mode,
                  stream_save_path,
                  sample_save_dir,
@@ -155,6 +156,7 @@ class ServerConfig(Config):
         self.http_port = http_port
         self.wc_ip = wc_ip
         self.send_msg = send_msg
+        self.cron = cron
         self.wc_port = wc_port
         self.detect_mode = detect_mode
         self.classify_model_path = Path(os.path.join(PROJECT_DIR, classify_model_path))

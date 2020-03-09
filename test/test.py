@@ -78,7 +78,7 @@ def test_detect():
 
 
 def test_detect_monitor():
-    monitor = DetectionMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR, None, CANDIDATE_SAVE_DIR, )
+    monitor = DetectionMonitor(VIDEO_CONFIG_DIR / 'video.json', None, STREAM_SAVE_DIR, None, CANDIDATE_SAVE_DIR, )
     monitor.monitor()
 
 
@@ -103,10 +103,8 @@ def test_task_monitor():
 
 
 def build_task_monitor():
-    return EmbeddingControlBasedTaskMonitor(VIDEO_CONFIG_DIR / 'video.json', STREAM_SAVE_DIR,
-                                            SAMPLE_SAVE_DIR,
-                                            FRAME_SAVE_DIR,
-                                            CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
+    return EmbeddingControlBasedTaskMonitor(VIDEO_CONFIG_DIR / 'video.json', None, STREAM_SAVE_DIR, SAMPLE_SAVE_DIR,
+                                            FRAME_SAVE_DIR, CANDIDATE_SAVE_DIR, OFFLINE_STREAM_SAVE_DIR)
 
 
 def GMG_substractor():

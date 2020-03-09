@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from multiprocessing import cpu_count
 from typing import List
+from apscheduler.schedulers.background import BackgroundScheduler
 
 import stream
 from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
@@ -48,14 +49,15 @@ class MonitorType(Enum):
 # Monitor will build multiple video stream receivers according the video configuration
 class DetectionMonitor(object):
 
-    def __init__(self, cfgs: List[VideoConfig], stream_path: Path, sample_path: Path, frame_path: Path,
-                 region_path: Path,
-                 offline_path: Path = None, build_pool=True) -> None:
+    def __init__(self, cfgs: List[VideoConfig], scfg: ServerConfig, stream_path: Path, sample_path: Path,
+                 frame_path: Path,
+                 region_path: Path, offline_path: Path = None, build_pool=True) -> None:
         super().__init__()
         # self.cfgs = I.load_video_config(cfgs)[-1:]
         # self.cfgs = I.load_video_config(cfgs)
         # self.cfgs = [c for c in self.cfgs if c.enable]
         # self.cfgs = [c for c in cfgs if enable_options[c.index]]
+        self.scfg = scfg
         self.cfgs = cfgs
         self.quit = False
         # Communication Pipe between detector and stream receiver
@@ -70,6 +72,7 @@ class DetectionMonitor(object):
         self.thread_pool = None
         self.shut_down_event = Manager().Event()
         self.shut_down_event.clear()
+        self.scheduler = BackgroundScheduler()
         if build_pool:
             # pool_size = min(len(cfgs) * 2, cpu_count() - 1)
             # self.process_pool = Pool(processes=pool_size)
@@ -111,6 +114,12 @@ class DetectionMonitor(object):
     def listen(self):
         # Listener(on_press=self.shut_down_from_keyboard).start()
         threading.Thread(target=self.shut_down_from_keyboard, daemon=True).start()
+        self.scheduler.add_job(self.notify_shut_down, 'cron',
+                               month=self.scfg.cron['month'],
+                               day=self.scfg.cron['day'],
+                               hour=self.scfg.cron['hour'],
+                               minute=self.scfg.cron['minute'])
+        self.scheduler.start()
         logger.info('*******************************Monitor: Listening exit event********************************')
         # if self.runtime != -1:
         #     time.sleep(self.runtime)
@@ -160,9 +169,9 @@ class DetectionMonitor(object):
 # But a controller will manager [row*col] concurrency threads or processes
 # row and col are definied in video configuration
 class EmbeddingControlMonitor(DetectionMonitor):
-    def __init__(self, cfgs: List[VideoConfig], stream_path: Path, sample_path: Path, frame_path: Path, region_path,
-                 offline_path: Path = None, build_pool=True) -> None:
-        super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path, build_pool)
+    def __init__(self, cfgs: List[VideoConfig], scfg, stream_path: Path, sample_path: Path, frame_path: Path,
+                 region_path, offline_path: Path = None, build_pool=True) -> None:
+        super().__init__(cfgs, scfg, stream_path, sample_path, frame_path, region_path, offline_path, build_pool)
         self.caps_queue = [Manager().Queue() for c in self.cfgs]
         self.msg_queue = [Manager().Queue() for c in self.cfgs]
         self.stream_stacks = [Manager().list() for c in self.cfgs]
@@ -223,9 +232,9 @@ class EmbeddingControlMonitor(DetectionMonitor):
 
 class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, cfgs: Path, stream_path: Path, sample_path, frame_path, region_path: Path,
+    def __init__(self, cfgs: Path, scfg, stream_path: Path, sample_path, frame_path, region_path: Path,
                  offline_path: Path = None) -> None:
-        super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path)
+        super().__init__(cfgs, scfg, stream_path, sample_path, frame_path, region_path, offline_path)
 
     def init_controllers(self):
         self.controllers = [
@@ -244,12 +253,10 @@ class EmbeddingControlBasedProcessMonitor(EmbeddingControlMonitor):
 
 class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
 
-    def __init__(self, cfgs: List[VideoConfig], scfg, classify_model, ssd_model, stream_path: Path, sample_path,
-                 frame_path,
-                 region_path: Path,
-                 offline_path: Path = None) -> None:
-        super().__init__(cfgs, stream_path, sample_path, frame_path, region_path, offline_path)
-        self.classify_model = classify_model
+    def __init__(self, cfgs: List[VideoConfig], scfg, stream_path, sample_path, frame_path, region_path: Path,
+                 offline_path=None, build_pool=True) -> None:
+        super().__init__(cfgs, scfg, stream_path, sample_path, frame_path, region_path, offline_path)
+        # self.classify_model = classify_model
         # HandlerSSD.SSD_MODEL = ssd_model
         self.scfg = scfg
         self.task_futures = []
@@ -388,7 +395,7 @@ class DetectorController(object):
 
         # self.send_pipes = [Manager().Queue() for i in range(self.x_num * self.y_num)]
         # self.receive_pipes = [Manager().Queue() for i in range(self.x_num * self.y_num)]
-        self.pipe = stream_pipes[self.cfg.index]
+        # self.pipe = stream_pipes[self.cfg.index]
         self.index_pool = index_pool
         self.frame_queue = frame_queue
         self.msg_queue = msg_queue
@@ -782,7 +789,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 frame = draw_boundary(frame, self.block_info)
                 # logger.info('Done constructing of sub-frames into a original frame....')
             if self.cfg.show_window:
-                self.pipe[0].send(construct_result)
+                pass
             # if self.cfg.show_window:
             #     frame = imutils.resize(frame, width=800)
             #     self.display_pipe.put(frame)

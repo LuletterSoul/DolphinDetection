@@ -14,8 +14,6 @@
 import argparse
 
 from classfy.model import DolphinClassifier
-from detection import SSDDetector, init_ssd
-from detection.component import run_player
 from interface import *
 # from multiprocessing import Process
 from stream.http import HttpServer
@@ -40,13 +38,9 @@ class DolphinDetectionServer:
             self.classifier = DolphinClassifier(model_path=self.cfg.classify_model_path, device_id=cd_id)
         # if self.cfg.detect_mode == ModelType.SSD:
         # self.ssd_detector = SSDDetector(model_path=self.cfg.detect_model_path, device_id=dt_id)
-        self.monitor = detection.EmbeddingControlBasedTaskMonitor(self.vcfgs,
-                                                                  self.cfg,
-                                                                  self.classifier,
-                                                                  self.ssd_detector,
+        self.monitor = detection.EmbeddingControlBasedTaskMonitor(self.vcfgs, self.cfg,
                                                                   self.cfg.stream_save_path,
-                                                                  self.cfg.sample_save_dir,
-                                                                  self.cfg.frame_save_dir,
+                                                                  self.cfg.sample_save_dir, self.cfg.frame_save_dir,
                                                                   self.cfg.candidate_save_dir,
                                                                   self.cfg.offline_stream_save_dir)
         self.http_server = HttpServer(self.cfg.http_ip, self.cfg.http_port, self.cfg.env, self.cfg.candidate_save_dir)
@@ -64,10 +58,10 @@ class DolphinDetectionServer:
         self.http_server.run()
         # if self.cfg.detect_mode == ModelType.SSD:
         #     init_ssd(self.cfg.detect_model_path, device_id=self.dt_id)
-            # self.ssd_detector.run()
+        # self.ssd_detector.run()
         # elif self.cfg.detect_mode == ModelType.CLASSIFY:
         #     self.classifier.run()
-        run_player(self.vcfgs)
+        # run_player(self.vcfgs)
         self.monitor.monitor()
         end_time = time.time()
         end_time_str = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime(end_time))
