@@ -30,7 +30,6 @@ from .detect_funcs import detect_based_task
 from .detector import *
 from config import ModelType
 import time
-import ray
 
 
 # from pynput.keyboard import Key, Controller, Listener
