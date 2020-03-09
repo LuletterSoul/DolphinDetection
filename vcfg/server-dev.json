@@ -6,10 +6,18 @@
   "wc_port": 3400,
   "send_msg": false,
   "cron": {
-    "month": "",
-    "day": "",
-    "hours": "",
-    "minute": ""
+    "start": {
+      "month": "*",
+      "day": "*",
+      "hour": "8",
+      "minute": "30"
+    },
+    "end": {
+      "month": "*",
+      "day": "*",
+      "hour": "17",
+      "minute": "30"
+    }
   },
   "classify_model_path": "model/bc-model-0226.pth",
   "detect_model_path": "model/0220-ssd.pth",

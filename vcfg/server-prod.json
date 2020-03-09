@@ -4,12 +4,20 @@
   "http_port": 6006,
   "wc_ip": "118.190.136.20",
   "wc_port": 3400,
-  "send_msg": false,
+  "send_msg": true,
   "cron": {
-    "month": "*",
-    "day": "*",
-    "hour": "23",
-    "minute": "35"
+    "start": {
+      "month": "*",
+      "day": "*",
+      "hour": "8",
+      "minute": "30"
+    },
+    "end": {
+      "month": "*",
+      "day": "*",
+      "hour": "17",
+      "minute": "30"
+    }
   },
   "classify_model_path": "model/bc-model-0226.pth",
   "detect_model_path": "model/0220-ssd.pth",

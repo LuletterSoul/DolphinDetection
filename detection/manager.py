@@ -83,6 +83,13 @@ class DetectionMonitor(object):
             stream.StreamReceiver(self.stream_path / str(c.index), offline_path, c, self.pipes[idx]) for idx, c in
             enumerate(self.cfgs)]
 
+        self.scheduler.add_job(self.notify_shut_down, 'cron',
+                               month=self.scfg.cron['end']['month'],
+                               day=self.scfg.cron['end']['day'],
+                               hour=self.scfg.cron['end']['hour'],
+                               minute=self.scfg.cron['end']['minute'])
+        self.scheduler.start()
+
     def monitor(self):
         self.call()
         self.wait()
@@ -114,12 +121,7 @@ class DetectionMonitor(object):
     def listen(self):
         # Listener(on_press=self.shut_down_from_keyboard).start()
         threading.Thread(target=self.shut_down_from_keyboard, daemon=True).start()
-        self.scheduler.add_job(self.notify_shut_down, 'cron',
-                               month=self.scfg.cron['month'],
-                               day=self.scfg.cron['day'],
-                               hour=self.scfg.cron['hour'],
-                               minute=self.scfg.cron['minute'])
-        self.scheduler.start()
+
         logger.info('*******************************Monitor: Listening exit event********************************')
         # if self.runtime != -1:
         #     time.sleep(self.runtime)
