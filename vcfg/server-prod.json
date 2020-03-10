@@ -5,7 +5,7 @@
   "wc_ip": "118.190.136.20",
   "wc_port": 3400,
   "send_msg": false,
-  "run_direct": true,
+  "run_direct": false,
   "cron": {
     "start": {
       "month": "*",

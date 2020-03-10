@@ -132,13 +132,14 @@ class DetectionStreamRender(object):
                     return next_cnt
                 # if next_cnt in render_cache:
                 frame = frame_cache[next_cnt % self.cache_size]
-                if rect_cache[next_cnt % self.cache_size] is not None:
+                render_frame = rect_cache[next_cnt % self.cache_size]
+                if render_frame is not None:
                     next_cnt = self.process_nearest_neighbor_render_frames(next_cnt, end_cnt, frame, rect_cache,
                                                                            render_cache,
                                                                            video_write)
                     # elif next_cnt in frame_cache:
                 elif frame is not None:
-                    video_write.write(frame_cache[next_cnt % self.cache_size])
+                    video_write.write(frame)
                     next_cnt += 1
                     # frame_cache[next_cnt % self.cache_size] = None
                 else:
@@ -173,11 +174,15 @@ class DetectionStreamRender(object):
             forward_cnt -= 1
         # current forward pointer
         if forward_cnt - next_cnt <= 1:
-            video_write.write(render_cache[next_cnt % self.cache_size])
-            render_cache[next_cnt % self.cache_size] = None
+            # logger.info('Enter singal')
+            render_frame = render_cache[next_cnt % self.cache_size]
+            if render_frame is not None:
+                video_write.write(render_frame)
+                render_cache[next_cnt % self.cache_size] = None
             next_cnt += 1
             return next_cnt
         elif forward_cnt - next_cnt > 1:
+            # logger.info('Enter internal')
             return self.render_internal_frames(forward_cnt, next_cnt, frame, video_write)
 
     def render_internal_frames(self, forward_cnt, next_cnt, frame, video_write):
@@ -208,7 +213,6 @@ class DetectionStreamRender(object):
                     next_cnt += 1
                 except Exception as e:
                     next_cnt += 1
-
         return next_cnt
 
     def write_original_video_work(self, video_write, next_cnt, end_cnt, frame_cache):
