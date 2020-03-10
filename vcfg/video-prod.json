@@ -131,7 +131,7 @@
       },
       "alg": {
         "type": "thresh",
-        "mean": 40,
+        "mean": 60,
         "area_ratio": 0.05
       }
     },

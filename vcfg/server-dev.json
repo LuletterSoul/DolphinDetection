@@ -4,7 +4,8 @@
   "http_port": 6006,
   "wc_ip": "118.190.136.20",
   "wc_port": 3400,
-  "send_msg": false,
+  "send_msg": true,
+  "run_direct": true,
   "cron": {
     "start": {
       "month": "*",

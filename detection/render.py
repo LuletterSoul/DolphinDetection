@@ -24,6 +24,7 @@ from config import SystemStatus
 from stream.websocket import creat_packaged_msg_json
 from utils import logger, bbox_points, generate_time_stamp
 from stream.rtsp import FFMPEG_MP4Writer
+import traceback
 
 
 class DetectionStreamRender(object):
@@ -43,6 +44,7 @@ class DetectionStreamRender(object):
         self.is_trigger_write = True
         self.write_done = True
         # self.controller = controller
+        self.cache_size = 5000
         self.future_frames = future_frames
         # self.sample_rate = controller.cfg.sample_rate
         # self.render_frame_cache = controller.render_frame_cache
@@ -92,9 +94,7 @@ class DetectionStreamRender(object):
             f'*******************************{self.LOG_PREFIX}: Init Stream Render Notify Service********************************')
         threading.Thread(target=self.listen, daemon=True).start()
         while self.status.get() == SystemStatus.RUNNING:
-            logger.info(self.LOG_PREFIX + f'Wait Render Notify')
             index, type = self.notify_queue.get()
-            logger.info(self.LOG_PREFIX + f'Index: [{index}], Type: [{type}]')
             if type == 'notify':
                 self.notify(index)
             if type == 'reset':
@@ -130,50 +130,17 @@ class DetectionStreamRender(object):
                     logger.info(
                         f'Video Render [{self.index}]: render task interruped by exit signal')
                     return next_cnt
-                if next_cnt in render_cache:
-                    forward_cnt = next_cnt + self.sample_rate
-                    if forward_cnt > end_cnt:
-                        forward_cnt = end_cnt
-                    while forward_cnt > next_cnt:
-                        if forward_cnt in render_cache:
-                            break
-                        forward_cnt -= 1
-                    if forward_cnt - next_cnt <= 1:
-                        video_write.write(render_cache[next_cnt])
-                        next_cnt += 1
-                    elif forward_cnt - next_cnt > 1:
-                        step = forward_cnt - next_cnt
-                        first_rects = rect_cache[next_cnt]
-                        last_rects = rect_cache[forward_cnt]
-                        if len(last_rects) != len(first_rects):
-                            next_cnt += 1
-                            continue
-                        for i in range(step):
-                            draw_flag = True
-                            for j in range(min(len(first_rects), len(last_rects))):
-                                first_rect = first_rects[j]
-                                last_rect = last_rects[j]
-                                delta_x = (last_rect[0] - first_rect[0]) / step
-                                delta_y = (last_rect[1] - first_rect[1]) / step
-                                if abs(delta_x) > 100 / step or abs(delta_y) > 100 / step:
-                                    draw_flag = False
-                                    break
-                                color = np.random.randint(0, 255, size=(3,))
-                                color = [int(c) for c in color]
-                                # p1 = (first_rect[0] + int(delta_x * i) - 80, first_rect[1] + int(delta_y * i) - 80)
-                                # p2 = (first_rect[0] + int(delta_x * i) + 100, first_rect[1] + int(delta_y * i) + 100)
-                                frame = frame_cache[next_cnt]
-                                p1, p2 = bbox_points(self.cfg, first_rect, frame.shape, int(delta_x), int(delta_y))
-                                cv2.putText(frame, 'Asaeorientalis', p1,
-                                            cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-                                cv2.rectangle(frame, p1, p2, color, 2)
-                            if not draw_flag:
-                                frame = frame_cache[next_cnt]
-                            video_write.write(frame)
-                            next_cnt += 1
-                elif next_cnt in frame_cache:
-                    video_write.write(frame_cache[next_cnt])
+                # if next_cnt in render_cache:
+                frame = frame_cache[next_cnt % self.cache_size]
+                if rect_cache[next_cnt % self.cache_size] is not None:
+                    next_cnt = self.process_nearest_neighbor_render_frames(next_cnt, end_cnt, frame, rect_cache,
+                                                                           render_cache,
+                                                                           video_write)
+                    # elif next_cnt in frame_cache:
+                elif frame is not None:
+                    video_write.write(frame_cache[next_cnt % self.cache_size])
                     next_cnt += 1
+                    # frame_cache[next_cnt % self.cache_size] = None
                 else:
                     try_times += 1
                     time.sleep(0.5)
@@ -182,16 +149,66 @@ class DetectionStreamRender(object):
                         logger.info(f'Try time overflow.round to the next cnt: [{try_times}]')
                         next_cnt += 1
                     logger.info(f'Lost frame index: [{next_cnt}]')
-
                 end = time.time()
                 if end - start > 30:
                     logger.info('Task time overflow, complete previous render task.')
                     break
             except Exception as e:
+                end = time.time()
                 if end - start > 30:
                     logger.info('Task time overflow, complete previous render task.')
                     break
                 logger.error(e)
+                traceback.print_stack()
+        return next_cnt
+
+    def process_nearest_neighbor_render_frames(self, next_cnt, end_cnt, frame, rect_cache, render_cache, video_write):
+        forward_cnt = next_cnt + self.sample_rate
+        if forward_cnt > end_cnt:
+            forward_cnt = end_cnt
+        while forward_cnt > next_cnt:
+            # if forward_cnt in render_cache:
+            if rect_cache[forward_cnt % self.cache_size] is not None:
+                break
+            forward_cnt -= 1
+        # current forward pointer
+        if forward_cnt - next_cnt <= 1:
+            video_write.write(render_cache[next_cnt % self.cache_size])
+            render_cache[next_cnt % self.cache_size] = None
+            next_cnt += 1
+            return next_cnt
+        elif forward_cnt - next_cnt > 1:
+            return self.render_internal_frames(forward_cnt, next_cnt, frame, video_write)
+
+    def render_internal_frames(self, forward_cnt, next_cnt, frame, video_write):
+        step = forward_cnt - next_cnt
+        first_rects = self.render_rect_cache[next_cnt % self.cache_size]
+        last_rects = self.render_rect_cache[forward_cnt % self.cache_size]
+        self.render_rect_cache[next_cnt % self.cache_size] = None
+        self.render_rect_cache[forward_cnt % self.cache_size] = None
+        len_is_equal = len(last_rects) != len(first_rects)
+        if frame is not None and len_is_equal:
+            for i in range(step):
+                try:
+                    frame = self.original_frame_cache[next_cnt].copy()
+                    for j in range(min(len(first_rects), len(last_rects))):
+                        first_rect = first_rects[j]
+                        last_rect = last_rects[j]
+                        delta_x = (last_rect[0] - first_rect[0]) / step
+                        delta_y = (last_rect[1] - first_rect[1]) / step
+                        if abs(delta_x) > 100 / step or abs(delta_y) > 100 / step:
+                            break
+                        color = np.random.randint(0, 255, size=(3,))
+                        color = [int(c) for c in color]
+                        p1, p2 = bbox_points(self.cfg, first_rect, frame.shape, int(delta_x), int(delta_y))
+                        cv2.putText(frame, 'Asaeorientalis', p1,
+                                    cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
+                        cv2.rectangle(frame, p1, p2, color, 2)
+                    video_write.write(frame)
+                    next_cnt += 1
+                except Exception as e:
+                    next_cnt += 1
+
         return next_cnt
 
     def write_original_video_work(self, video_write, next_cnt, end_cnt, frame_cache):
@@ -205,8 +222,11 @@ class DetectionStreamRender(object):
                     logger.info(
                         f'Video Render [{self.index}]: original task interruped by exit signal')
                     return False
-                if next_cnt in frame_cache:
-                    video_write.write(frame_cache[next_cnt])
+                # if next_cnt in frame_cache:
+                frame = frame_cache[next_cnt % self.cache_size]
+                if frame is not None:
+                    video_write.write(frame)
+                    # frame_cache[next_cnt % self.cache_size] = None
                     next_cnt += 1
                 else:
                     try_times += 1
@@ -222,6 +242,7 @@ class DetectionStreamRender(object):
                     logger.info('Task time overflow, complete previous render task.')
                     break
             except Exception as e:
+                end = time.time()
                 if end - start > 30:
                     logger.info('Task time overflow, complete previous render task.')
                     break
@@ -283,7 +304,7 @@ class DetectionStreamRender(object):
         video_write.release()
         # self.convert_byfile(str(raw_target), str(target))
         logger.info(
-            f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}]: Consume [{time.time() - start}] ' +
+            f'Video Render [{self.index}]: Rect Render Task [{self.stream_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
         msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
         # if raw_target.exists():

@@ -55,11 +55,12 @@ class DolphinDetectionServer:
                                                                   self.cfg.offline_stream_save_dir)
         self.scheduler = ClosableBlockingScheduler(stop_event=self.monitor.shut_down_event)
         self.http_server = HttpServer(self.cfg.http_ip, self.cfg.http_port, self.cfg.env, self.cfg.candidate_save_dir)
-        self.scheduler.add_job(self.monitor.monitor, 'cron',
-                               month=self.cfg.cron['start']['month'],
-                               day=self.cfg.cron['start']['day'],
-                               hour=self.cfg.cron['start']['hour'],
-                               minute=self.cfg.cron['start']['minute'])
+        if not self.cfg.run_direct:
+            self.scheduler.add_job(self.monitor.monitor, 'cron',
+                                   month=self.cfg.cron['start']['month'],
+                                   day=self.cfg.cron['start']['day'],
+                                   hour=self.cfg.cron['start']['hour'],
+                                   minute=self.cfg.cron['start']['minute'])
 
     def run(self):
         """
@@ -72,7 +73,10 @@ class DolphinDetectionServer:
             f'*******************************Dolphin Detection System: Running Environment [{self.cfg.env}] at '
             f'[{start_time_str}]********************************')
         self.http_server.run()
-        self.scheduler.start()
+        if self.cfg.run_direct:
+            self.monitor.monitor()
+        else:
+            self.scheduler.start()
         end_time = time.time()
         end_time_str = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime(end_time))
         run_time = sec2time(end_time - start_time)

@@ -413,12 +413,22 @@ class DetectorController(object):
         self.next_prepare_event.clear()
         self.pre_detect_index = -self.cfg.future_frames
         self.history_write = False
-        self.original_frame_cache = Manager().dict()
+        # self.original_frame_cache = Manager().dict()
+        self.original_frame_cache = Manager().list()
+        self.cache_size = 5000
+        self.original_frame_cache[:] = [None] * self.cache_size
+
         # self.original_hash_cache = Manager().list()
-        self.render_frame_cache = Manager().dict()
+        # self.render_frame_cache = Manager().dict()
+        self.render_frame_cache = Manager().list()
+        self.render_frame_cache[:] = [None] * self.cache_size
+
         self.history_frame_deque = Manager().list()
-        self.render_rect_cache = Manager().dict()
-        self.detect_index = Manager().dict()
+
+        self.render_rect_cache = Manager().list()
+        self.render_rect_cache[:] = [None] * self.cache_size
+        # self.render_rect_cache = Manager().dict()
+        # self.detect_index = Manager().dict()
         self.record_cnt = 48
         self.render_task_cnt = 0
         self.construct_cnt = 0
@@ -448,33 +458,33 @@ class DetectorController(object):
     def cancel(self):
         pass
 
-    def clear_original_cache(self):
-        len_cache = len(self.original_frame_cache)
-        if len_cache > 1000:
-            # original_head = self.original_frame_cache.keys()[0]
-            thread = threading.Thread(
-                target=clear_cache,
-                args=(self.original_frame_cache,), daemon=True)
-            # self.clear_cache(self.original_frame_cache)
-            thread.start()
-            logger.info(
-                'Clear half original frame caches.')
-
-    def clear_render_cache(self):
-        # last_detect_internal = time.time() - self.last_detection
-        # time_thresh = self.cfg.future_frames * 1.5 * 3
-        # if last_detect_internal > time_thresh and len(self.render_frame_cache) > 500:
-        if len(self.render_frame_cache) > 500:
-            thread = threading.Thread(
-                target=clear_cache,
-                args=(self.render_frame_cache,), daemon=True)
-            thread.start()
-            logger.info('Clear half render frame caches')
-        if len(self.render_rect_cache) > 500:
-            thread = threading.Thread(
-                target=clear_cache,
-                args=(self.render_rect_cache,), daemon=True)
-            thread.start()
+    # def clear_original_cache(self):
+    #     len_cache = len(self.original_frame_cache)
+    #     if len_cache > 1000:
+    #         # original_head = self.original_frame_cache.keys()[0]
+    #         thread = threading.Thread(
+    #             target=clear_cache,
+    #             args=(self.original_frame_cache,), daemon=True)
+    #         # self.clear_cache(self.original_frame_cache)
+    #         thread.start()
+    #         logger.info(
+    #             'Clear half original frame caches.')
+    #
+    # def clear_render_cache(self):
+    #     # last_detect_internal = time.time() - self.last_detection
+    #     # time_thresh = self.cfg.future_frames * 1.5 * 3
+    #     # if last_detect_internal > time_thresh and len(self.render_frame_cache) > 500:
+    #     if len(self.render_frame_cache) > 500:
+    #         thread = threading.Thread(
+    #             target=clear_cache,
+    #             args=(self.render_frame_cache,), daemon=True)
+    #         thread.start()
+    #         logger.info('Clear half render frame caches')
+    #     if len(self.render_rect_cache) > 500:
+    #         thread = threading.Thread(
+    #             target=clear_cache,
+    #             args=(self.render_rect_cache,), daemon=True)
+    #         thread.start()
 
     def init_control_range(self):
         # read a frame, record frame size before running detectors
@@ -589,7 +599,7 @@ class DetectorController(object):
                 break
             frame = self.frame_queue.get()
             self.frame_cnt.set(self.frame_cnt.get() + 1)
-            self.original_frame_cache[self.frame_cnt.get()] = frame
+            self.original_frame_cache[self.frame_cnt.get() % self.cache_size] = frame
             # self.render_frame_cache[self.frame_cnt.get()] = frame
             # logger.info(self.original_frame_cache.keys())
             frame, original_frame = preprocess(frame, self.cfg)
@@ -599,7 +609,7 @@ class DetectorController(object):
                     sp.put(DispatchBlock(crop_by_se(frame, self.detectors[idx].start, self.detectors[idx].end),
                                          self.frame_cnt.get(), original_frame.shape))
 
-            self.clear_original_cache()
+            # self.clear_original_cache()
             # internal = (time.time() - start) / 60
             # if int(internal) == self.cfg.sample_internal:
             #     cv2.imwrite(str(self.frame_path / ))
@@ -849,9 +859,12 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             push_flag = False
             for r in results:
                 if len(r.rects):
-                    if r.frame_index not in self.original_frame_cache:
-                        logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
-                        continue
+                    # if r.frame_index not in self.original_frame_cache:
+                    #     logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
+                    #     continue
+                    # if self.original_frame_cache[r.frame_index % ]
+                    #     logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
+                    #     continue
                     rects = []
                     r.rects = cvt_rect(r.rects)
                     for rect in r.rects:
@@ -897,8 +910,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         logger.info(f'put detect message in msg_queue...')
                         self.msg_queue.put(json_msg)
                         self.result_queue.put((original_frame, r.frame_index, r.rects))
-                        self.render_frame_cache[current_index] = render_frame
-                        self.render_rect_cache[current_index] = r.rects
+                        self.render_frame_cache[current_index % self.cache_size] = render_frame
+                        self.render_rect_cache[current_index % self.cache_size] = r.rects
                         if self.cfg.render:
                             # threading.Thread(target=self.stream_render.reset, args=(current_index,),
                             #                  daemon=True).start()
@@ -919,7 +932,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 # threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
             # if not push_flag:
             #     video_streamer.write_frame(cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
-            self.clear_render_cache()
+            # self.clear_render_cache()
             # logger.info(f'Construct detect flag: [{push_flag}]')
             return ConstructResult(render_frame, constructed_binary, None, detect_flag=push_flag, results=results,
                                    frame_index=current_index)
@@ -948,28 +961,28 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             hit_cnt = 0
             start = time.time()
             for idx in range(current_index + 1, current_index + self.cfg.search_window_size):
-                if idx in self.original_frame_cache:
-                    history_frame = self.original_frame_cache[idx]
-                    sub_results = self.post_detect(history_frame, idx)
-                    for sr_idx, sr in enumerate(sub_results):
-                        rl = min(len_rect, len(sr.rects))
-                        for rl_idx in range(rl):
-                            sr_rgb_patch = crop_by_rect(self.cfg, sr.rects[rl_idx], history_frame)
-                            r_rgb_patch = crop_by_rect(self.cfg, results[sr_idx].rects[rl_idx],
-                                                       original_frame)
-                            similarity = cal_rgb_similarity(sr_rgb_patch, r_rgb_patch, 'ssim')
-                            logger.debug(
-                                f'Controller [{self.cfg.index}]: Cosine Distance {round(similarity, 2)}')
-                            logger.debug(
-                                f'Controller [{self.cfg.index}]: Frame [{idx}]: cosine similarity '
-                                f'{round(similarity, 2)}')
-                            hit_precision += similarity
-                            similarity_seq.append(similarity)
-                            # cv2.imwrite('data/test/0208/' + str(current_index) + '_r_' + str(
-                            #     hit_cnt) + '.png', r_patch)
-                            # cv2.imwrite('data/test/0208/' + str(current_index) + '_sr_' + str(
-                            #     hit_cnt) + '.png', sr_patch)
-                            hit_cnt += 1
+                # if idx in self.original_frame_cache:
+                history_frame = self.original_frame_cache[idx % self.cache_size]
+                sub_results = self.post_detect(history_frame, idx)
+                for sr_idx, sr in enumerate(sub_results):
+                    rl = min(len_rect, len(sr.rects))
+                    for rl_idx in range(rl):
+                        sr_rgb_patch = crop_by_rect(self.cfg, sr.rects[rl_idx], history_frame)
+                        r_rgb_patch = crop_by_rect(self.cfg, results[sr_idx].rects[rl_idx],
+                                                   original_frame)
+                        similarity = cal_rgb_similarity(sr_rgb_patch, r_rgb_patch, 'ssim')
+                        logger.debug(
+                            f'Controller [{self.cfg.index}]: Cosine Distance {round(similarity, 2)}')
+                        logger.debug(
+                            f'Controller [{self.cfg.index}]: Frame [{idx}]: cosine similarity '
+                            f'{round(similarity, 2)}')
+                        hit_precision += similarity
+                        similarity_seq.append(similarity)
+                        # cv2.imwrite('data/test/0208/' + str(current_index) + '_r_' + str(
+                        #     hit_cnt) + '.png', r_patch)
+                        # cv2.imwrite('data/test/0208/' + str(current_index) + '_sr_' + str(
+                        #     hit_cnt) + '.png', sr_patch)
+                        hit_cnt += 1
             if hit_cnt:
                 hit_precision /= hit_cnt
                 logger.info(
@@ -1020,7 +1033,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     continue
                 pre_index = current_index
                 e = 1 / (time.time() - s)
-                logger.info(self.LOG_PREFIX + f'Stack Pop Speed: [{round(e, 2)}]/FPS')
+                logger.debug(self.LOG_PREFIX + f'Stack Pop Speed: [{round(e, 2)}]/FPS')
                 self.dispatch_frame(frame, None, ssd_detector, classifier, current_index)
             except Exception as e:
                 logger.error(e)
@@ -1039,15 +1052,15 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         self.frame_cnt.set(self.frame_cnt.get() + 1)
         s = time.time()
         # ray.put(frame)
-        self.original_frame_cache[self.frame_cnt.get()] = frame
+        self.original_frame_cache[self.frame_cnt.get() % self.cache_size] = frame
         # self.original_hash_cache.append(frame)
         e = 1 / (time.time() - s)
         logger.debug(self.LOG_PREFIX + f'Dict Put Speed: [{round(e, 2)}]/FPS')
         s = time.time()
         self.frame_stack.append((frame, self.frame_cnt.get()))
         e = 1 / (time.time() - s)
-        logger.info(self.LOG_PREFIX + f'Stack Put Speed: [{round(e, 2)}]/FPS')
-        logger.info(self.LOG_PREFIX + f'Current Stack Size: [{len(self.frame_stack)}]')
+        logger.debug(self.LOG_PREFIX + f'Stack Put Speed: [{round(e, 2)}]/FPS')
+        # logger.debug(self.LOG_PREFIX + f'Current Stack Size: [{len(self.frame_stack)}]')
 
     def dispatch_frame(self, *args):
         start = time.time()
@@ -1070,7 +1083,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             self.ssd_based(args, original_frame.copy())
         elif self.server_cfg.detect_mode == ModelType.FORWARD:
             self.forward(args, original_frame)
-        self.clear_original_cache()
+        # self.clear_original_cache()
 
     def forward(self, args, original_frame):
         if self.cfg.push_stream:
@@ -1117,8 +1130,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                                              dol_id=self.dol_id)
                             self.msg_queue.put(json_msg)
                             self.result_queue.put((render_frame, current_index, rects))
-                            self.render_frame_cache[current_index] = render_frame
-                            self.render_rect_cache[current_index] = rects
+                            self.render_frame_cache[current_index % self.cache_size] = render_frame
+                            self.render_rect_cache[current_index % self.cache_size] = rects
                             if self.cfg.render:
                                 threading.Thread(target=self.stream_render.reset, args=(current_index,),
                                                  daemon=True).start()
@@ -1245,7 +1258,7 @@ class PushStreamer(object):
                 # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
                 # gs = time.time()
                 frame, proc_res, frame_index = self.stream_stack.pop()
-                logger.info(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{len(self.stream_stack)}]')
+                logger.debug(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{len(self.stream_stack)}]')
 
                 if len(self.stream_stack) > 1000:
                     self.stream_stack[:] = []
@@ -1305,7 +1318,7 @@ class PushStreamer(object):
                 # w_end = 1 / (time.time() - ws)
                 end = 1 / (time.time() - ps)
                 # logger.debug(self.LOG_PREFIX + f'Writing Speed Rate: [{round(w_end, 2)}]/FPS')
-                logger.info(f'Streamer [{self.cfg.index}]: Streaming Speed Rate: [{round(end, 2)}]/FPS')
+                logger.debug(f'Streamer [{self.cfg.index}]: Streaming Speed Rate: [{round(end, 2)}]/FPS')
             except Exception as e:
                 pass
                 # logger.warning(e)

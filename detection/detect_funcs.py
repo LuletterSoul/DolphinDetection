@@ -45,7 +45,7 @@ def less_ratio(area, shape, cfg: VideoConfig):
 
 def greater_ratio(area, shape, cfg: VideoConfig):
     total = shape[0] * shape[1]
-    return ratio(area, total) < (cfg.alg['area_ratio'] * 1.5)
+    return ratio(area, total) < (cfg.alg['area_ratio'] * 3.5)
 
 
 # @ray.remote
