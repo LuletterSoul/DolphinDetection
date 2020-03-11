@@ -52,6 +52,7 @@ class DolphinClassifier(object):
         else:
             self.device = torch.device("cpu")
             self.model = torch.load(str(self.model_path), map_location="cpu")
+        self.model.avgpool = torch.nn.AvgPool2d(kernel_size=7, stride=1, padding=0)
         self.model = self.model.to(self.device)
         self.model.eval()
         print(self.model)

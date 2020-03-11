@@ -43,6 +43,11 @@ def less_ratio(area, shape, cfg: VideoConfig):
     return ratio(area, total) >= cfg.alg['area_ratio']
 
 
+def greater_ratio(area, shape, cfg: VideoConfig):
+    total = shape[0] * shape[1]
+    return ratio(area, total) < (cfg.alg['area_ratio'] * 3.5)
+
+
 # @ray.remote
 def detect_based_task(block, params: DetectorParams) -> DetectionResult:
     frame = block.frame
@@ -131,7 +136,8 @@ def detect_thresh_task(frame, block, params: DetectorParams):
         rect = cv2.boundingRect(c)
         area = cv2.contourArea(c)
         # self.is_in_ratio(area, self.shape[0] * self.shape[1])
-        if less_ratio(area, frame.shape, params.cfg) and rect[2] / rect[3] < 10:
+        if less_ratio(area, frame.shape, params.cfg) and greater_ratio(area, frame.shape, params.cfg) and rect[2] / \
+                rect[3] < 10:
             rects.append(rect)
             filtered_contours.append(c)
     cv2.drawContours(binary, filtered_contours, -1, 255, -1)

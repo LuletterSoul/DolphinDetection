@@ -12,25 +12,33 @@ async def main_logic(q, vcfg: VideoConfig, scfg: ServerConfig):
     address = f'ws://{scfg.wc_ip}:{scfg.wc_port}'
     history_msg_json = None
     msg_json = None
+    if not scfg.send_msg:
+        logger.info(f'Controller [{vcfg.index}]: Skipped message by server config specifing.')
+        return
     while True:
         logger.info(f'waiting to connect to server {address}...')
         async with websockets.connect(address) as server:
             logger.info(f'connect to server {address} successfully')
-            while True:
+            flag = True
+            while flag:
                 try:
                     if history_msg_json is not None:
                         await server.send(history_msg_json.encode('utf-8'))
                         logger.info(f'client send history message to server {address} successfully')
                         history_msg_json = None
+                        response_str = await server.recv()
+                        logger.info(f'response from server: {response_str}')
                     while not q.empty():
                         logger.info(f'Controller [{vcfg.index}]: Current message num: {q.qsize()}')
                         msg_json = q.get(1)
                         await server.send(msg_json.encode('utf-8'))
                         logger.info(f'client send message to server {address} successfully: {msg_json}')
+                        response_str = await server.recv()
+                        logger.info(f'response from server: {response_str}')
                 except Exception as e:
                     history_msg_json = msg_json
                     logger.error(e)
-                    break
+                    flag = False
 
 
 def websocket_client(q, vcfg: VideoConfig, scfg: ServerConfig):
@@ -141,7 +149,7 @@ def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id):
 
 
 def creat_packaged_msg_json(filename, path, cfg: VideoConfig):
-    url = os.path.join('video', cfg.date, str(cfg.index), filename)
+    url = os.path.join(cfg.dip, 'video', cfg.date, str(cfg.index), filename)
     msg = {
         'cmdType': 'notify',
         'clientId': 'jt001',

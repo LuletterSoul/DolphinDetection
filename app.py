@@ -14,12 +14,18 @@
 import argparse
 
 from classfy.model import DolphinClassifier
-from detection import SSDDetector, init_ssd
-from detection.component import run_player
 from interface import *
 # from multiprocessing import Process
 from stream.http import HttpServer
 from utils import sec2time
+# from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.blocking import BlockingScheduler
+from utils.scheduler import ClosableBlockingScheduler
+import os
+
+
+# from apscheduler.schedulers.blocking import BlockingScheduler
+# from apscheduler.schedulers import blocking
 
 
 # from torch.multiprocessing import Pool, Process, set_start_method
@@ -36,38 +42,41 @@ class DolphinDetectionServer:
         self.classifier = None
         self.ssd_detector = None
         self.dt_id = dt_id
+        # self.scheduler = BackgroundScheduler()
+        # self.scheduler = BlockingScheduler()
         if self.cfg.detect_mode == ModelType.CLASSIFY:
             self.classifier = DolphinClassifier(model_path=self.cfg.classify_model_path, device_id=cd_id)
         # if self.cfg.detect_mode == ModelType.SSD:
         # self.ssd_detector = SSDDetector(model_path=self.cfg.detect_model_path, device_id=dt_id)
-        self.monitor = detection.EmbeddingControlBasedTaskMonitor(self.vcfgs,
-                                                                  self.cfg,
-                                                                  self.classifier,
-                                                                  self.ssd_detector,
+        self.monitor = detection.EmbeddingControlBasedTaskMonitor(self.vcfgs, self.cfg,
                                                                   self.cfg.stream_save_path,
-                                                                  self.cfg.sample_save_dir,
-                                                                  self.cfg.frame_save_dir,
+                                                                  self.cfg.sample_save_dir, self.cfg.frame_save_dir,
                                                                   self.cfg.candidate_save_dir,
                                                                   self.cfg.offline_stream_save_dir)
+        self.scheduler = ClosableBlockingScheduler(stop_event=self.monitor.shut_down_event)
         self.http_server = HttpServer(self.cfg.http_ip, self.cfg.http_port, self.cfg.env, self.cfg.candidate_save_dir)
+        if not self.cfg.run_direct:
+            self.scheduler.add_job(self.monitor.monitor, 'cron',
+                                   month=self.cfg.cron['start']['month'],
+                                   day=self.cfg.cron['start']['day'],
+                                   hour=self.cfg.cron['start']['hour'],
+                                   minute=self.cfg.cron['start']['minute'])
 
     def run(self):
         """
         System Entry
         """
+        # ray.init()
         start_time = time.time()
         start_time_str = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime(start_time))
         logger.info(
             f'*******************************Dolphin Detection System: Running Environment [{self.cfg.env}] at '
             f'[{start_time_str}]********************************')
         self.http_server.run()
-        # if self.cfg.detect_mode == ModelType.SSD:
-        #     init_ssd(self.cfg.detect_model_path, device_id=self.dt_id)
-            # self.ssd_detector.run()
-        # elif self.cfg.detect_mode == ModelType.CLASSIFY:
-        #     self.classifier.run()
-        run_player(self.vcfgs)
-        self.monitor.monitor()
+        if self.cfg.run_direct:
+            self.monitor.monitor()
+        else:
+            self.scheduler.start()
         end_time = time.time()
         end_time_str = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime(end_time))
         run_time = sec2time(end_time - start_time)

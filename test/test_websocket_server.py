@@ -4,7 +4,7 @@ import threading
 
 class WebsocketServer(threading.Thread):
     def __init__(self, port):
-        self.host = '127.0.0.1'
+        self.host = '192.168.1.7'
         self.port = port
         super(WebsocketServer, self).__init__()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

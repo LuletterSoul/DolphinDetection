@@ -28,6 +28,7 @@ class Environment(object):
 class ModelType(object):
     SSD = 'ssd'
     CLASSIFY = 'classify'
+    FORWARD = 'fwd'
 
 
 LOG_LEVER = logging.DEBUG
@@ -143,7 +144,8 @@ class ServerConfig(Config):
     Server configuration definitions
     """
 
-    def __init__(self, env, http_ip, http_port, wc_ip, wc_port, root, classify_model_path, detect_model_path,
+    def __init__(self, env, http_ip, http_port, wc_ip, wc_port, send_msg, run_direct, cron, root, classify_model_path,
+                 detect_model_path,
                  detect_mode,
                  stream_save_path,
                  sample_save_dir,
@@ -153,6 +155,9 @@ class ServerConfig(Config):
         self.http_ip = http_ip
         self.http_port = http_port
         self.wc_ip = wc_ip
+        self.send_msg = send_msg
+        self.run_direct = run_direct
+        self.cron = cron
         self.wc_port = wc_port
         self.detect_mode = detect_mode
         self.classify_model_path = Path(os.path.join(PROJECT_DIR, classify_model_path))
@@ -195,7 +200,7 @@ class VideoConfig(Config):
     Video configuration object
     """
 
-    def __init__(self, index, name, shape, ip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
+    def __init__(self, index, name, shape, ip, dip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  push_stream,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
                  online, cap_loop, sample_internal, detect_internal, search_window_size, similarity_thresh, pre_cache,
@@ -210,6 +215,7 @@ class VideoConfig(Config):
         self.name = name
         self.shape = shape
         self.ip = ip
+        self.dip = dip
         self.port = port
         self.suffix = suffix
         self.headers = headers

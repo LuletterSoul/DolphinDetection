@@ -21,7 +21,7 @@ class Detect(Function):
         if nms_thresh <= 0:
             raise ValueError('nms_threshold must be non negative.')
         self.conf_thresh = conf_thresh
-        self.variance = torch.Tensor(np.array([0.1, 0.2])).cuda(device)  # cfg['variance']
+        self.variance = torch.Tensor(np.array([0.1, 0.2])).to(device)  # cfg['variance']
 
     def forward(self, loc_data, conf_data, prior_data):
         """
