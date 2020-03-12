@@ -192,9 +192,11 @@ def detect(frame):
     if frame is None:
         logger.info('Detector: [{},{}] empty frame')
         return None
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-    adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, C=40)
+    # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+    adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=21, C=40)
+    cv2.imshow('CV', adaptive_thresh)
+    cv2.waitKey(0)
     dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                          iterations=1)
     img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)

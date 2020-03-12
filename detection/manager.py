@@ -1033,7 +1033,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     continue
                 pre_index = current_index
                 e = 1 / (time.time() - s)
-                logger.debug(self.LOG_PREFIX + f'Stack Pop Speed: [{round(e, 2)}]/FPS')
+                logger.info(self.LOG_PREFIX + f'Stack Pop Speed: [{round(e, 2)}]/FPS')
                 self.dispatch_frame(frame, None, ssd_detector, classifier, current_index)
             except Exception as e:
                 logger.error(e)

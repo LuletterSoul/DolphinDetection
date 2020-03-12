@@ -126,7 +126,8 @@ def bbox_points_float(cfg: VideoConfig, rect, shape, delta_x=0, delta_y=0):
 
 
 def _bbox_points(w, h, rect, shape, delta_x=0, delta_y=0):
-    center_x, center_y = round(rect[0] + rect[2] / 2), round(rect[1] + rect[3] / 2)
+    center_x, center_y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+    # center_x, center_y = round(rect[0] + rect[2] / 2), round(rect[1] + rect[3] / 2)
     start_x, start_y = round(center_x - w / 2 - delta_x), round(
         center_y - h / 2 - delta_y)
     end_x = start_x + w + delta_x

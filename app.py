@@ -112,6 +112,8 @@ def load_cfg(args):
         server_config.set_root(args.root)
     if args.cdp is not None:
         server_config.set_candidate_save_dir(args.cdp)
+    if args.run_direct is not None:
+        server_config.run_direct = args.run_direct
     return server_config, video_config, switcher_options
 
 
@@ -185,6 +187,7 @@ if __name__ == '__main__':
                              'or [$PROJECT DIR$]/$cdp$.')
     parser.add_argument('--cd_id', type=int, default=1, help='classifier GPU device id')
     parser.add_argument('--dt_id', type=int, default=2, help='detection GPU device id')
+    parser.add_argument('--run_direct', action='store_true', default=False, help='timing start or run directly.')
     args = parser.parse_args()
     server_config, video_config, switcher_options = load_cfg(args)
     server = DolphinDetectionServer(server_config, video_config, switcher_options, args.cd_id, args.dt_id)
