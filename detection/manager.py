@@ -31,6 +31,7 @@ from .detect_funcs import detect_based_task
 from .detector import *
 from config import ModelType
 import time
+import imutils
 
 
 # from pynput.keyboard import Key, Controller, Listener
@@ -342,6 +343,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                 self.task_futures.append(
                     self.process_pool.apply_async(self.push_streamers[i].push_stream, ()))
                 self.task_futures.append(self.process_pool.apply_async(self.stream_renders[i].loop_render_msg, ()))
+                # self.task_futures[-1].get()
 
     def wait(self):
         if self.process_pool is not None:
@@ -1055,15 +1057,17 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         frame = args[0]
         self.frame_cnt.set(self.frame_cnt.get() + 1)
         s = time.time()
+        # if frame.shape[1] > 1920:
+        #     frame = imutils.resize(frame, width=1920)
         # ray.put(frame)
         self.original_frame_cache[self.frame_cnt.get() % self.cache_size] = frame
         # self.original_hash_cache.append(frame)
         e = 1 / (time.time() - s)
-        logger.debug(self.LOG_PREFIX + f'Dict Put Speed: [{round(e, 2)}]/FPS')
+        logger.info(self.LOG_PREFIX + f'Dict Put Speed: [{round(e, 2)}]/FPS')
         s = time.time()
         self.frame_stack.append((frame, self.frame_cnt.get()))
         e = 1 / (time.time() - s)
-        logger.debug(self.LOG_PREFIX + f'Stack Put Speed: [{round(e, 2)}]/FPS')
+        logger.info(self.LOG_PREFIX + f'Stack Put Speed: [{round(e, 2)}]/FPS')
         # logger.debug(self.LOG_PREFIX + f'Current Stack Size: [{len(self.frame_stack)}]')
 
     def dispatch_frame(self, *args):
@@ -1322,7 +1326,7 @@ class PushStreamer(object):
                 # w_end = 1 / (time.time() - ws)
                 end = 1 / (time.time() - ps)
                 # logger.debug(self.LOG_PREFIX + f'Writing Speed Rate: [{round(w_end, 2)}]/FPS')
-                logger.debug(f'Streamer [{self.cfg.index}]: Streaming Speed Rate: [{round(end, 2)}]/FPS')
+                logger.info(f'Streamer [{self.cfg.index}]: Streaming Speed Rate: [{round(end, 2)}]/FPS')
             except Exception as e:
                 pass
                 # logger.warning(e)
