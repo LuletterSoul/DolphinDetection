@@ -874,10 +874,14 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         candidate = crop_by_rect(self.cfg, rect, render_frame)
 
                         start = time.time()
-                        obj_class, output = _model.predict(candidate)
-                        logger.debug(
-                            self.LOG_PREFIX + f'Model Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
-                        if obj_class == 0:
+                        # obj_class, output = _model.predict(candidate)
+                        model_result = True
+                        if not self.cfg.cv_only:
+                            obj_class, output = _model.predict(candidate)
+                            model_result = (obj_class == 0)
+                            logger.debug(
+                                self.LOG_PREFIX + f'Model Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
+                        if model_result == 0:
                             # logger.info(f'Predict: [{output}]')
                             # print(output.shape)
                             # if True:

@@ -380,16 +380,16 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
         ssd_detector = None
         classifier = None
         server_cfg = args[0]
-        if server_cfg.detect_mode == ModelType.SSD:
-            ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
-            ssd_detector.run()
-            logger.info(
-                f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
-        elif server_cfg.detect_mode == ModelType.CLASSIFY:
-            classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
-            classifier.run()
-            logger.info(
-                f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
+        # if server_cfg.detect_mode == ModelType.SSD:
+        #     ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
+        #     ssd_detector.run()
+        #     logger.info(
+        #         f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
+        # elif server_cfg.detect_mode == ModelType.CLASSIFY:
+        #     classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
+        #     classifier.run()
+        #     logger.info(
+        #         f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
             s = time.time()
@@ -397,7 +397,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             e = 1 / (time.time() - s)
             # logger.info(self.cap.get(cv2.CAP_PROP_POS_MSEC))
             # logger.info(self.cap.getRTPTimeStampTs())
-            logger.debug(
+            logger.info(
                 'Video capture [{}]: Receive Rate [{}]/FPS'.format(
                     self.cfg.index, round(e, 2)))
             s = time.time()

@@ -205,7 +205,7 @@ class VideoConfig(Config):
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
                  online, cap_loop, sample_internal, detect_internal, search_window_size, similarity_thresh, pre_cache,
                  render,
-                 save_box, show_box,
+                 save_box, show_box, cv_only,
                  rtsp, push_to, write_timestamp,
                  enable_sample_frame,
                  rtsp_saved_per_frame,
@@ -237,6 +237,7 @@ class VideoConfig(Config):
         self.sample_internal = sample_internal
         self.save_box = save_box
         self.show_box = show_box
+        self.cv_only = cv_only
         self.rtsp = rtsp
         self.push_to = push_to
         self.write_timestamp = write_timestamp
