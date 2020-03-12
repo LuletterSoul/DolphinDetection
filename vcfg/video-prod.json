@@ -266,7 +266,7 @@
       "alg": {
         "type": "thresh",
         "mean": 40,
-        "area_ratio": 0.00
+        "area_ratio": -1
       }
     }
   ]
