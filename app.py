@@ -116,6 +116,8 @@ def load_cfg(args):
         server_config.set_candidate_save_dir(args.cdp)
     if args.run_direct is not None:
         server_config.run_direct = args.run_direct
+    if args.send_msg is not None:
+        server_config.send_msg = args.send_msg
     if args.enable is not None:
         enables = args.enable.split(",")
         for e in enables:
@@ -200,6 +202,7 @@ if __name__ == '__main__':
     parser.add_argument('--run_direct', action='store_true', default=False, help='timing start or run directly.')
     parser.add_argument('--enable', type=str, default="5", help='Enable video index')
     parser.add_argument('--disable', type=str, default=None, help='Disable video index')
+    parser.add_argument('--send_msg', action='store_true', default=False, help='timing start or run directly.')
     args = parser.parse_args()
     server_config, video_config, switcher_options = load_cfg(args)
     server = DolphinDetectionServer(server_config, video_config, switcher_options, args.cd_id, args.dt_id)
