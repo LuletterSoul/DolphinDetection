@@ -126,6 +126,17 @@ def load_cfg(args):
         disables = args.disable.split(",")
         for e in disables:
             switcher_options[e] = False
+
+    if args.use_sm is not None:
+        enables = args.use_sm.split(",")
+        for e in enables:
+            video_config[e].use_sm = True
+
+    if args.push_stream is not None:
+        enables = args.use_sm.split(",")
+        for e in enables:
+            video_config[e].push_stream = True
+
     return server_config, video_config, switcher_options
 
 
@@ -203,6 +214,8 @@ if __name__ == '__main__':
     parser.add_argument('--enable', type=str, default="5", help='Enable video index')
     parser.add_argument('--disable', type=str, default=None, help='Disable video index')
     parser.add_argument('--send_msg', action='store_true', default=False, help='timing start or run directly.')
+    parser.add_argument('--use_sm', default=None, help='use share memory to cache frames')
+    parser.add_argument('--push_stream', default=None, help='use share memory to cache frames')
     args = parser.parse_args()
     server_config, video_config, switcher_options = load_cfg(args)
     server = DolphinDetectionServer(server_config, video_config, switcher_options, args.cd_id, args.dt_id)

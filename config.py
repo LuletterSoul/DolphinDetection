@@ -203,7 +203,8 @@ class VideoConfig(Config):
     def __init__(self, index, name, shape, ip, dip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
                  push_stream,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
-                 online, cap_loop, sample_internal, detect_internal, search_window_size, cache_size, similarity_thresh,
+                 online, cap_loop, sample_internal, detect_internal, search_window_size, use_sm, cache_size,
+                 similarity_thresh,
                  pre_cache,
                  render,
                  save_box, show_box, cv_only,
@@ -226,6 +227,7 @@ class VideoConfig(Config):
         self.resize = resize
         self.show_window = show_window
         self.push_stream = push_stream
+        self.use_sm = use_sm
         self.cache_size = cache_size
         self.window_position = window_position
         self.routine = routine

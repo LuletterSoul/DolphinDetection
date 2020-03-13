@@ -183,11 +183,16 @@ class EmbeddingControlMonitor(DetectionMonitor):
         self.msg_queue = [Manager().Queue() for c in self.cfgs]
         self.stream_stacks = [Manager().list() for c in self.cfgs]
         self.push_streamers = [PushStreamer(cfg, self.stream_stacks[idx]) for idx, cfg in enumerate(self.cfgs)]
-        self.frame_caches = [FrameCache(self.frame_cache_manager, cfg.cache_size,
-                                        np.zeros((cfg.shape[1], cfg.shape[0], 3), dtype=np.uint8).nbytes,
-                                        shape=cfg.shape) for
-                             idx, cfg in
-                             enumerate(self.cfgs)]
+        self.frame_caches = []
+        for idx, cfg in enumerate(self.cfgs):
+            if cfg.use_sm:
+                frame_cache = FrameCache(self.frame_cache_manager, cfg.cache_size,
+                                         np.zeros((cfg.shape[1], cfg.shape[0], 3), dtype=np.uint8).nbytes,
+                                         shape=cfg.shape)
+                self.frame_caches.append(frame_cache)
+            else:
+                list_cache = Manager().list([None] * cfg.cache_size)
+                self.frame_caches.append(list_cache)
         self.caps = []
         self.controllers = []
 
@@ -1045,7 +1050,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 if not len(self.frame_stack):
                     continue
                 _, current_index = self.frame_stack.pop()
-                frame = self.original_frame_cache[current_index]
+                frame = self.original_frame_cache[current_index % self.cache_size]
                 if current_index < pre_index:
                     continue
                 pre_index = current_index
