@@ -18,12 +18,12 @@ from enum import Enum
 from multiprocessing import cpu_count
 from typing import List
 from apscheduler.schedulers.background import BackgroundScheduler
-
+from multiprocessing import Pool
 import stream
 from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
 from detection.render import DetectionStreamRender
 from stream.websocket import *
-from utils import NoDaemonPool as Pool
+# from utils import NoDaemonPool as Pool
 from .capture import *
 from stream.rtsp import FFMPEG_VideoStreamer
 from .component import stream_pipes
@@ -1057,8 +1057,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         frame = args[0]
         self.frame_cnt.set(self.frame_cnt.get() + 1)
         s = time.time()
-        # if frame.shape[1] > 1920:
-        #     frame = imutils.resize(frame, width=1920)
+        if frame.shape[1] > 1920:
+            frame = imutils.resize(frame, width=1920)
         # ray.put(frame)
         self.original_frame_cache[self.frame_cnt.get() % self.cache_size] = frame
         # self.original_hash_cache.append(frame)
