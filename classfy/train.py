@@ -122,7 +122,7 @@ for epoch in range(epochs):
             running_loss = 0
             model.train()
 
-torch.save(model, os.path.join(PROJECT_DIR, "classify_model/bc-classify_model-0226.pth"))
+torch.save(model, os.path.join(PROJECT_DIR, "model/bc-model-0314.pth"))
 plt.plot(train_losses, label="Training loss")
 plt.plot(test_losses, label='Validation loss')
 plt.legend(frameon=False)

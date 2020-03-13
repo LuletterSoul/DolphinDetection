@@ -12,13 +12,13 @@
 """
 from multiprocessing.managers import SharedMemoryManager
 from multiprocessing import Pool, Manager, cpu_count, Queue
-from utils.cache import FrameCache
+from utils.cache import SharedMemoryFrameCache
 import cv2
 import time
 import imutils
 
 
-def blur(cache: FrameCache, type):
+def blur(cache: SharedMemoryFrameCache, type):
     index = 0
     while True:
         frame = cache[index]
@@ -30,7 +30,7 @@ def blur(cache: FrameCache, type):
         index += 1
 
 
-def receive(cache: FrameCache, type):
+def receive(cache: SharedMemoryFrameCache, type):
     index = 0
     while True:
         start = time.time()
@@ -47,7 +47,7 @@ def test_share_memory_rw():
     frame = cv2.imread("/Users/luvletteru/Documents/GitHub/DolphinDetection/data/test/0312/1.jpg")
     print(frame.dtype)
     cache_size = 300
-    s1 = FrameCache(smm, cache_size, frame.nbytes, frame.shape)
+    s1 = SharedMemoryFrameCache(smm, cache_size, frame.nbytes, frame.shape)
     q1 = Manager().list([None] * cache_size)
     for i in range(cache_size):
         start = time.time()

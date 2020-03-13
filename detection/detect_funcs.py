@@ -37,23 +37,29 @@ def is_in_ratio(area, total, cfg: VideoConfig):
     return ratio(area, total) <= cfg.filtered_ratio
 
 
-def less_ratio(area, shape, cfg: VideoConfig):
-    if area == -1:
+def is_greater_ratio(area, shape, cfg: VideoConfig):
+    if cfg.alg['area_ratio'] == -1:
         return True
     total = shape[0] * shape[1]
     # logger.info('Area ration: [{}]'.format(ratio(area, total)))
     return ratio(area, total) >= cfg.alg['area_ratio']
 
 
-def greater_ratio(area, shape, cfg: VideoConfig):
+def is_less_ratio(area, shape, cfg: VideoConfig):
     if cfg.alg['area_ratio'] == -1:
         return True
     total = shape[0] * shape[1]
-    return ratio(area, total) < (cfg.alg['area_ratio'] * 3.5)
+    return ratio(area, total) < (cfg.alg['area_ratio'] * 3)
 
 
 # @ray.remote
 def detect_based_task(block, params: DetectorParams) -> DetectionResult:
+    """
+    coarser detection by traditional patter recognition method
+    :param block:
+    :param params:
+    :return:
+    """
     frame = block.frame
     # if args.cfg.alg['type'] == 'saliency':
     #     res = detect_saliency()
@@ -97,7 +103,7 @@ def detect_based_mog2(frame, block, params: DetectorParams):
         rect = cv2.boundingRect(c)
         area = cv2.contourArea(c)
         # self.is_in_ratio(area, self.shape[0] * self.shape[1])
-        if less_ratio(area, frame.shape, params.cfg) and rect[2] / rect[3] < 10:
+        if is_greater_ratio(area, frame.shape, params.cfg) and rect[2] / rect[3] < 10:
             logger.info("~~~~~~~~~~~~~~~~~~~~~~~Area:[{}]".format(area))
             rects.append(rect)
     cv2.drawContours(img_con, contours, -1, 255, -1)
@@ -140,8 +146,16 @@ def detect_thresh_task(frame, block, params: DetectorParams):
         rect = cv2.boundingRect(c)
         area = cv2.contourArea(c)
         # self.is_in_ratio(area, self.shape[0] * self.shape[1])
-        if less_ratio(area, frame.shape, params.cfg) and greater_ratio(area, frame.shape, params.cfg) and rect[2] / \
-                rect[3] < 10:
+        greater_ratio = is_greater_ratio(area, frame.shape, params.cfg)
+        less_ratio = is_less_ratio(area, frame.shape, params.cfg)
+        rect_regular = (rect[2] / rect[3]) < 10
+        # if greater_ratio:
+        #     logger.info(f'Greater ratio')
+        # if less_ratio:
+        #     logger.info(f'Less ratio')
+        # if rect_regular:
+        #     logger.info(f'Rect regular')
+        if greater_ratio and less_ratio and rect_regular:
             rects.append(rect)
             filtered_contours.append(c)
     cv2.drawContours(binary, filtered_contours, -1, 255, -1)

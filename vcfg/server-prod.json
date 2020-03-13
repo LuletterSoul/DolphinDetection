@@ -20,7 +20,7 @@
       "minute": "30"
     }
   },
-  "classify_model_path": "model/bc-model-0226.pth",
+  "classify_model_path": "model/bc-model-0314.pth",
   "detect_model_path": "model/0220-ssd.pth",
   "detect_mode": "classify",
   "root": "",

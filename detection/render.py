@@ -44,7 +44,7 @@ class DetectionStreamRender(object):
         self.is_trigger_write = True
         self.write_done = True
         # self.controller = controller
-        self.cache_size = 5000
+        self.cache_size = cfg.cache_size
         self.future_frames = future_frames
         # self.sample_rate = controller.cfg.sample_rate
         # self.render_frame_cache = controller.render_frame_cache
@@ -314,7 +314,7 @@ class DetectionStreamRender(object):
         # if raw_target.exists():
         #     raw_target.unlink()
         self.msg_queue.put(msg_json)
-        logger.info(f'put packaged message in the msg_queue...')
+        logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
     def original_render_task(self, current_idx, current_time, frame_cache):
         start = time.time()

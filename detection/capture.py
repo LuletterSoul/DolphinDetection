@@ -71,6 +71,7 @@ class VideoCaptureThreading:
         self.status.set(SystemStatus.RUNNING)
         threading.Thread(target=self.listen, args=(), daemon=True).start()
         # threading.Thread(target=self.update, args=(*args,), daemon=True).start()
+        time.sleep(5)
         self.update(*args)
         # threading.Thread(target=cpu_usage).start()
         return self

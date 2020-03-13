@@ -21,7 +21,7 @@ from detection.detect_funcs import detect
 from utils import *
 from skimage.measure import compare_ssim
 import cv2
-import redis
+# import redis
 import base64
 import imutils
 
@@ -147,15 +147,24 @@ def crop_from_frame():
     cfg = {}
     for idx, f in enumerate(frame_names):
         original_frame = cv2.imread(str(f))
+        roi = {
+            "x": 0,
+            "y": 60,
+            "width": -1,
+            "height": -1
+        }
+        # frame = crop_by_roi(original_frame, roi)
+        # cv2.imshow('Cropped', frame)
+        # cv2.waitKey(0)
         frame = imutils.resize(original_frame, width=1000)
         ratio = original_frame.shape[1] / 1000
         original_frame = original_frame[200:, :]
-        cv2.imshow('ORIGIANL',original_frame)
+        cv2.imshow('ORIGIANL', original_frame)
         cv2.waitKey(0)
         if frame is None:
             continue
         rects = detect(frame)
-        rects = cvt_rect(rects)
+        # rects = cvt_rect(rects)
         print(f)
         if len(rects):
             for rect_idx, rect in enumerate(rects):

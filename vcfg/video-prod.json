@@ -88,7 +88,7 @@
       "url": "",
       "roi": {
         "x": 0,
-        "y": 0,
+        "y": 60,
         "width": -1,
         "height": -1
       },
@@ -118,7 +118,7 @@
       "save_box": true,
       "show_box": true,
       "cv_only": false,
-      "rtsp": "rtsp://192.168.0.116:554/detect2",
+      "rtsp": "rtsp://222.190.243.243/bp/jtdome",
       "push_to": "rtsp://192.168.0.116/yz",
       "write_timestamp": false,
       "enable_sample_frame": false,
@@ -127,7 +127,7 @@
       "detect_internal": 72,
       "search_window_size": 24,
       "use_sm": false,
-      "cache_size": 500,
+      "cache_size": 1000,
       "similarity_thresh": 0.05,
       "pre_cache": 48,
       "render": true,
@@ -138,7 +138,7 @@
       "alg": {
         "type": "thresh",
         "mean": 60,
-        "area_ratio": 0.05
+        "area_ratio": 0.03
       }
     },
     {
@@ -177,7 +177,7 @@
         "row": 1,
         "col": 1
       },
-      "sample_rate": 5,
+      "sample_rate": 1,
       "draw_boundary": false,
       "enable": true,
       "filtered_ratio": 0.5,
@@ -185,11 +185,11 @@
       "online": "offline",
       "cap_loop": true,
       "sample_internal": 15,
-      "save_box": false,
+      "save_box": true,
       "show_box": true,
       "cv_only": false,
-      "rtsp": "rtsp://192.168.0.116:554/detect2",
-      "push_to": "rtsp://192.168.0.116/yz",
+      "rtsp": "rtsp://222.190.243.243/bp/jtdome",
+      "push_to": "rtsp://192.168.0.116/yz_test",
       "write_timestamp": true,
       "enable_sample_frame": false,
       "rtsp_saved_per_frame": 240,
@@ -197,7 +197,7 @@
       "detect_internal": 72,
       "search_window_size": 24,
       "use_sm": false,
-      "cache_size": 500,
+      "cache_size": 1000,
       "similarity_thresh": 0.6,
       "pre_cache": 48,
       "render": true,
@@ -208,7 +208,7 @@
       "alg": {
         "type": "thresh",
         "mean": 40,
-        "area_ratio": 0.05
+        "area_ratio": 0.03
       }
     },
     {
@@ -267,7 +267,7 @@
       "detect_internal": 72,
       "search_window_size": 24,
       "use_sm": false,
-      "cache_size": 300,
+      "cache_size": 500,
       "similarity_thresh": 0.6,
       "pre_cache": 48,
       "render": true,
