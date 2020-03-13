@@ -129,7 +129,7 @@ def detect_thresh_task(frame, block, params: DetectorParams):
     # adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
     dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                          iterations=2)
-    img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     binary = np.zeros(dilated.shape, dtype=np.uint8)
     rects = []
     regions = []

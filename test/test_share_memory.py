@@ -43,10 +43,7 @@ def receive(cache: FrameCache, type):
         index += 1
 
 
-if __name__ == '__main__':
-    smm = SharedMemoryManager()
-    manager = Manager()
-    smm.start()
+def test_share_memory_rw():
     frame = cv2.imread("/Users/luvletteru/Documents/GitHub/DolphinDetection/data/test/0312/1.jpg")
     print(frame.dtype)
     cache_size = 300
@@ -67,3 +64,28 @@ if __name__ == '__main__':
         # r4 = pool.apply_async(receive, args=(q1, 'List',))
         # r3.get()
         # r4.get()
+
+
+# def test_share_list():
+
+
+if __name__ == '__main__':
+    smm = SharedMemoryManager()
+    manager = Manager()
+    smm.start()
+    share_list = smm.ShareableList([1, 2, 3, 4])
+    one, two, three, four = share_list[0:3]
+    print(one)
+    print(two)
+    print(three)
+    print(four)
+    one = 4
+    two = 3
+    three = 2
+    four = 1
+    share_list[:] = [one, two, three, four]
+    print(one)
+    print(two)
+    print(three)
+    print(four)
+# test_share_memory_rw()

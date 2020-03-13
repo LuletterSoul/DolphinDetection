@@ -181,18 +181,22 @@ class EmbeddingControlMonitor(DetectionMonitor):
         super().__init__(cfgs, scfg, stream_path, sample_path, frame_path, region_path, offline_path, build_pool)
         self.caps_queue = [Manager().Queue() for c in self.cfgs]
         self.msg_queue = [Manager().Queue() for c in self.cfgs]
-        self.stream_stacks = [Manager().list() for c in self.cfgs]
         self.push_streamers = [PushStreamer(cfg, self.stream_stacks[idx]) for idx, cfg in enumerate(self.cfgs)]
         self.frame_caches = []
+        # self.stream_stacks = [Manager().list() for c in self.cfgs]
+        self.stream_stacks = []
         for idx, cfg in enumerate(self.cfgs):
             if cfg.use_sm:
                 frame_cache = FrameCache(self.frame_cache_manager, cfg.cache_size,
                                          np.zeros((cfg.shape[1], cfg.shape[0], 3), dtype=np.uint8).nbytes,
                                          shape=cfg.shape)
+                stream_cache = self.frame_cache_manager.ShareableList()
                 self.frame_caches.append(frame_cache)
+                self.stream_stacks.append(stream_cache)
             else:
-                list_cache = Manager().list([None] * cfg.cache_size)
-                self.frame_caches.append(list_cache)
+                self.frame_caches.append(Manager().list([None] * cfg.cache_size))
+                self.stream_stacks.append(Manager().list())
+
         self.caps = []
         self.controllers = []
 
@@ -1174,14 +1178,22 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                     threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
                 construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results,
                                                    frame_index=self.pre_cnt)
-                if self.cfg.push_stream:
-                    self.push_stream_queue.append((original_frame, construct_result, self.pre_cnt))
+                self.push_stream(construct_result, original_frame)
+
             else:
-                if self.cfg.push_stream:
-                    self.push_stream_queue.append((original_frame, None, self.pre_cnt))
+                # if self.cfg.push_stream:
+                #     self.push_stream_queue.append((original_frame, None, self.pre_cnt))
+                self.push_stream(None, original_frame)
         except Exception as e:
             traceback.print_stack()
             logger.info(e)
+
+    def push_stream(self, construct_result, original_frame):
+        if self.cfg.push_stream:
+            if self.cfg.use_sm:
+                self.push_stream_queue[:] = [original_frame, construct_result, self.pre_cnt]
+            else:
+                self.push_stream_queue.append((original_frame, construct_result, self.pre_cnt))
 
     def classify_based(self, args, original_frame):
         if self.pre_cnt % self.cfg.sample_rate == 0:
@@ -1282,6 +1294,9 @@ class PushStreamer(object):
                 # se = 1 / (time.time() - ps)
                 # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
                 # gs = time.time()
+                if self.cfg.use_sm:
+                    frame, proc_res, frame_index = self.stream_stack[:]
+
                 frame, proc_res, frame_index = self.stream_stack.pop()
                 logger.debug(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{len(self.stream_stack)}]')
 

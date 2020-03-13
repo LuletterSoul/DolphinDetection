@@ -129,13 +129,17 @@ def load_cfg(args):
 
     if args.use_sm is not None:
         enables = args.use_sm.split(",")
-        for e in enables:
-            video_config[e].use_sm = True
+        enables = [int(e) for e in enables]
+        for cfg in video_config:
+            if cfg.index in enables:
+                cfg.use_sm = True
 
     if args.push_stream is not None:
-        enables = args.use_sm.split(",")
-        for e in enables:
-            video_config[e].push_stream = True
+        enables = args.push_stream.split(",")
+        enables = [int(e) for e in enables]
+        for cfg in video_config:
+            if cfg.index in enables:
+                cfg.push_stream = True
 
     return server_config, video_config, switcher_options
 
