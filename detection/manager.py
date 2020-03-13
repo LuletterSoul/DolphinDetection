@@ -23,6 +23,8 @@ import stream
 from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
 from detection.render import DetectionStreamRender
 from stream.websocket import *
+from multiprocessing.managers import SharedMemoryManager
+from utils.cache import FrameCache
 # from utils import NoDaemonPool as Pool
 from .capture import *
 from stream.rtsp import FFMPEG_VideoStreamer
@@ -90,6 +92,8 @@ class DetectionMonitor(object):
                                hour=self.scfg.cron['end']['hour'],
                                minute=self.scfg.cron['end']['minute'])
         self.scheduler.start()
+        self.frame_cache_manager = SharedMemoryManager()
+        self.frame_cache_manager.start()
 
     def monitor(self):
         self.call()
@@ -179,7 +183,11 @@ class EmbeddingControlMonitor(DetectionMonitor):
         self.msg_queue = [Manager().Queue() for c in self.cfgs]
         self.stream_stacks = [Manager().list() for c in self.cfgs]
         self.push_streamers = [PushStreamer(cfg, self.stream_stacks[idx]) for idx, cfg in enumerate(self.cfgs)]
-
+        self.frame_caches = [FrameCache(self.frame_cache_manager, cfg.cache_size,
+                                        np.zeros((cfg.shape[1], cfg.shape[0], 3), dtype=np.uint8).nbytes,
+                                        shape=cfg.shape) for
+                             idx, cfg in
+                             enumerate(self.cfgs)]
         self.caps = []
         self.controllers = []
 
@@ -286,7 +294,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                         self.region_path / str(cfg.index), self.frame_path / str(cfg.index),
                                         self.caps_queue[idx], self.pipes[idx], self.msg_queue[idx],
                                         self.stream_stacks[idx],
-                                        self.render_notify_queues[idx]) for
+                                        self.render_notify_queues[idx], self.frame_caches[idx]) for
             idx, cfg in enumerate(self.cfgs)]
         for i, cfg in enumerate(self.cfgs):
             logger.info('Init detector controller [{}]....'.format(cfg.index))
@@ -362,6 +370,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                 self.cfgs[idx].index))
 
                 # results = [r.get() for r in self.task_futures if r is not None]
+                self.frame_cache_manager.shutdown()
                 self.process_pool.close()
                 self.process_pool.join()
             except:
@@ -372,7 +381,7 @@ class DetectorController(object):
     def __init__(self, cfg: VideoConfig, stream_path: Path, candidate_path: Path, frame_path: Path,
                  frame_queue: Queue,
                  index_pool: Queue,
-                 msg_queue: Queue) -> None:
+                 msg_queue: Queue, frame_cache: FrameCache) -> None:
         super().__init__()
         self.cfg = cfg
         self.dol_id = 10000
@@ -417,8 +426,9 @@ class DetectorController(object):
         self.history_write = False
         # self.original_frame_cache = Manager().dict()
         self.original_frame_cache = Manager().list()
-        self.cache_size = 5000
-        self.original_frame_cache[:] = [None] * self.cache_size
+        self.cache_size = self.cfg.cache_size
+        # self.original_frame_cache[:] = [None] * self.cache_size
+        self.original_frame_cache = frame_cache
 
         # self.original_hash_cache = Manager().list()
         # self.render_frame_cache = Manager().dict()
@@ -735,8 +745,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
 
     def __init__(self, server_cfg: ServerConfig, cfg: VideoConfig, stream_path: Path, candidate_path: Path,
                  frame_path: Path, frame_queue: Queue, index_pool: Queue, msg_queue: Queue, streaming_queue: List,
-                 render_notify_queue) -> None:
-        super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool, msg_queue)
+                 render_notify_queue, frame_cache: FrameCache) -> None:
+        super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool, msg_queue, frame_cache)
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
         #                     self.render_rect_cache, self.stream_render, 500, self.cfg))
@@ -1034,7 +1044,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 s = time.time()
                 if not len(self.frame_stack):
                     continue
-                frame, current_index = self.frame_stack.pop()
+                _, current_index = self.frame_stack.pop()
+                frame = self.original_frame_cache[current_index]
                 if current_index < pre_index:
                     continue
                 pre_index = current_index
@@ -1057,15 +1068,16 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         frame = args[0]
         self.frame_cnt.set(self.frame_cnt.get() + 1)
         s = time.time()
-        if frame.shape[1] > 1920:
-            frame = imutils.resize(frame, width=1920)
+        # if frame.shape[1] > 1920:
+        #     frame = imutils.resize(frame, width=1920)
         # ray.put(frame)
         self.original_frame_cache[self.frame_cnt.get() % self.cache_size] = frame
         # self.original_hash_cache.append(frame)
         e = 1 / (time.time() - s)
         logger.info(self.LOG_PREFIX + f'Dict Put Speed: [{round(e, 2)}]/FPS')
         s = time.time()
-        self.frame_stack.append((frame, self.frame_cnt.get()))
+        # self.frame_stack.append((frame, self.frame_cnt.get()))
+        self.frame_stack.append((None, self.frame_cnt.get()))
         e = 1 / (time.time() - s)
         logger.info(self.LOG_PREFIX + f'Stack Put Speed: [{round(e, 2)}]/FPS')
         # logger.debug(self.LOG_PREFIX + f'Current Stack Size: [{len(self.frame_stack)}]')
