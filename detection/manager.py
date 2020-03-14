@@ -578,21 +578,22 @@ class DetectorController(object):
             try:
                 # r = self.get_result_from_queue()
                 if not self.result_queue.empty():
-                    result_queue = self.result_queue.get(timeout=1)
-                    r, rects = result_queue[0], result_queue[2]
+                    # result_queue = self.result_queue.get(timeout=1)
+                    frame_index, rects = self.result_queue.get(timeout=1)
+                    frame = self.original_frame_cache[frame_index]
                     self.result_cnt += 1
                     current_time = generate_time_stamp() + '_'
                     img_name = current_time + str(self.result_cnt) + '.png'
                     target = self.result_path / img_name
-                    cv2.imwrite(str(target), r)
-                    self.label_crop(r, img_name, rects)
+                    cv2.imwrite(str(target), frame)
+                    self.label_crop(frame, img_name, rects)
                     self.save_bbox(img_name, rects)
             except Exception as e:
                 logger.error(e)
         return True
 
-    def get_result_from_queue(self):
-        return self.result_queue.get(timeout=2)
+    # def get_result_from_queue(self):
+    #     return self.result_queue.get(timeout=2)
 
     #
     # def collect_and_reconstruct(self, args, pool):
@@ -915,11 +916,13 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             push_flag = False
             for r in results:
                 if len(r.rects):
+                    self.result_queue.put((r.frame_index, r.rects))
+                    # self.result_queue.put((original_frame, r.frame_index, r.rects))
                     rects = []
                     # r.rects = cvt_rect(r.rects)
-                    # if len(r.rects) >= 3:
-                    #     logger.info(f'To many rect candidates: [{len(r.rects)}].Abandoned..... ')
-                    #     return ConstructResult(original_frame, None, None, frame_index=current_index)
+                    if len(r.rects) >= 3:
+                        logger.info(f'To many rect candidates: [{len(r.rects)}].Abandoned..... ')
+                        return ConstructResult(original_frame, None, None, frame_index=current_index)
                     for rect in r.rects:
                         start = time.time()
                         # obj_class, output = _model.predict(candidate)
@@ -952,7 +955,6 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                                          timestamp=current_index, rects=r.rects, dol_id=self.dol_id)
                         logger.info(f'put detect message in msg_queue...')
                         self.msg_queue.put(json_msg)
-                        self.result_queue.put((original_frame, r.frame_index, r.rects))
                         self.render_frame_cache[current_index % self.cache_size] = render_frame
                         self.render_rect_cache[current_index % self.cache_size] = r.rects
                         if self.cfg.render:
@@ -1169,6 +1171,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                         if len(frame_result):
                             rects = [r for r in frame_result if r[4] > 0.7]
                             if len(rects):
+                                self.result_queue.put((current_index, rects))
                                 if len(rects) >= 3:
                                     logger.info(f'To many rect candidates: [{len(rects)}].Abandoned..... ')
                                     return ConstructResult(original_frame, None, None, frame_index=self.pre_cnt)
@@ -1192,12 +1195,12 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                                              timestamp=current_index, rects=rects,
                                                              dol_id=self.dol_id)
                             self.msg_queue.put(json_msg)
-                            self.result_queue.put((render_frame, current_index, rects))
                             self.render_frame_cache[current_index % self.cache_size] = render_frame
                             self.render_rect_cache[current_index % self.cache_size] = rects
                             if self.cfg.render:
-                                threading.Thread(target=self.stream_render.reset, args=(current_index,),
-                                                 daemon=True).start()
+                                # threading.Thread(target=self.stream_render.reset, args=(current_index,),
+                                #                  daemon=True).start()
+                                self.render_notify_queue.put(current_index, 'reset')
                             self.last_detection = self.stream_render.detect_index
                             logger.info(self.LOG_PREFIX + f'Last detection frame index [{self.last_detection}]')
                         else:
@@ -1209,7 +1212,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                                 self.msg_queue.put(empty_msg)
                                 self.dol_gone = True
                 if self.cfg.render:
-                    threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
+                    self.render_notify_queue.put(current_index, 'notify')
+                # threading.Thread(target=self.str.notify, args=(current_index,), daemon=True).start()
                 construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results,
                                                    frame_index=self.pre_cnt)
                 self.post_stream_req(construct_result, original_frame)
