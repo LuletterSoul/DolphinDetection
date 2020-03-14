@@ -845,12 +845,11 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         :param args: (List[DetectResult],Detection Model Ref,Original Frame)
         :return:
         """
-        collect_start = time.time()
         # results = self.collect(args)
-        # results = args[0]
-        logger.debug(
-            'Controller [{}]: Collect consume [{}] seconds'.format(self.cfg.index, time.time() - collect_start))
+        s = time.time()
         construct_result: ConstructResult = self.construct(*args)
+        e = 1 / (time.time() - s)
+        # logger.debug(self.LOG_PREFIX + f'Construct Speed: [{round(e, 2)}]/FPS')
         if construct_result is not None:
             frame = construct_result.frame
             if self.cfg.draw_boundary:
@@ -893,12 +892,12 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         results = args[0]
         _model = args[1]
         original_frame = args[-1]
-        sub_binary = [r.binary for r in results]
+        # sub_binary = [r.binary for r in results]
         # sub_thresh = [r.thresh for r in results]
         # constructed_frame = self.construct_rgb(sub_frames)
-        constructed_binary = self.construct_gray(sub_binary)
+        # constructed_binary = self.construct_gray(sub_binary)
         # constructed_thresh = self.construct_gray(sub_thresh)
-        logger.debug(f'Controller [{self.cfg.index}]: Construct frames into a original frame....')
+        # logger.debug(f'Controller [{self.cfg.index}]: Construct frames into a original frame....')
         try:
             self.construct_cnt += 1
             current_index = results[0].frame_index
@@ -979,7 +978,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             #     video_streamer.write_frame(cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
             # self.clear_render_cache()
             # logger.info(f'Construct detect flag: [{push_flag}]')
-            return ConstructResult(render_frame, constructed_binary, None, detect_flag=push_flag, results=results,
+            return ConstructResult(render_frame, None, None, detect_flag=push_flag, results=results,
                                    frame_index=current_index)
         except Exception as e:
             traceback.print_exc()
@@ -1086,7 +1085,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 # always obtain the newest reach frame when detection is slower than video stream receiver
                 _, current_index = self.frame_stack.pop()
                 frame = self.original_frame_cache[current_index]
-                # but sometimes detection prcess could faster than stream receiving
+                # but sometimes detection prcoess could faster than stream receiving
                 # so always keep the newest frame index and don't rollback
                 # otherwise it will flicker terribly to push stream
                 if current_index < pre_index:
@@ -1095,7 +1094,10 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 e = 1 / (time.time() - s)
                 logger.info(self.LOG_PREFIX + f'Stack Pop Speed: [{round(e, 2)}]/FPS')
                 # post to detector logic
+                s = time.time()
                 self.dispatch_frame(frame, None, ssd_detector, classifier, current_index)
+                e = 1 / (time.time() - s)
+                logger.info(self.LOG_PREFIX + f'Detection Process Speed: [{round(e, 2)}]/FPS')
             except Exception as e:
                 logger.error(e)
                 # pass
@@ -1242,15 +1244,18 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         :return:
         """
         if self.pre_cnt % self.cfg.sample_rate == 0:
-            logger.debug('Controller [{}]: Dispatch frame to all detectors....'.format(self.cfg.index))
+            # logger.debug('Controller [{}]: Dispatch frame to all detectors....'.format(self.cfg.index))
             async_futures = []
             try:
                 frame, original_frame = preprocess(original_frame, self.cfg)
+                s = time.time()
                 for d in self.detect_params:
                     block = DispatchBlock(crop_by_se(frame, d.start, d.end),
                                           self.pre_cnt, original_frame.shape)
                     async_futures.append(detect_based_task(block, d))
                     # TODO Perform detection acceleration by dispatching frame block to multiple processes
+                e = 1 / (time.time() - s)
+                # logger.debug(self.LOG_PREFIX + f'Coarser Detection Speed: [{round(e, 2)}]/FPS')
                 proc_res: ConstructResult = self.collect_and_reconstruct(async_futures, args[3], original_frame)
                 frame = proc_res.frame
                 proc_res.frame = None
