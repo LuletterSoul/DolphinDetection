@@ -95,7 +95,7 @@
         "scale": -1
       },
       "show_window": false,
-      "push_stream": true,
+      "push_stream": false,
       "window_position": {
         "x": 100,
         "y": 100
@@ -109,7 +109,7 @@
       "enable": true,
       "filtered_ratio": 0.5,
       "max_streams_cache": 5000,
-      "online": "rtsp",
+      "online": "offline",
       "cap_loop": false,
       "sample_internal": 15,
       "save_box": true,
