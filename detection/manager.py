@@ -783,8 +783,9 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         self.detect_params = []
         self.detectors = []
         self.args = Manager().list()
-        self.frame_stack = Manager().list()
+        # self.frame_stack = Manager().list()
         # self.stream_render = stream_render
+        self.global_index = Manager().Value('i', 0)
         self.render_notify_queue = render_notify_queue
 
     def listen(self):
@@ -1079,20 +1080,21 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         pre_index = 0
         while self.status.get() == SystemStatus.RUNNING:
             try:
-                s = time.time()
-                if not len(self.frame_stack):
-                    continue
+                # s = time.time()
+                # if not len(self.frame_stack):
+                #     continue
+                # _, current_index = self.frame_stack.pop()
                 # always obtain the newest reach frame when detection is slower than video stream receiver
-                _, current_index = self.frame_stack.pop()
+                current_index = self.global_index.get()
                 frame = self.original_frame_cache[current_index]
                 # but sometimes detection prcoess could faster than stream receiving
                 # so always keep the newest frame index and don't rollback
                 # otherwise it will flicker terribly to push stream
-                if current_index < pre_index:
+                if current_index <= pre_index:
                     continue
                 pre_index = current_index
-                e = 1 / (time.time() - s)
-                logger.info(self.LOG_PREFIX + f'Stack Pop Speed: [{round(e, 2)}]/FPS')
+                # e = 1 / (time.time() - s)
+                # logger.info(self.LOG_PREFIX + f'Stack Pop Speed: [{round(e, 2)}]/FPS')
                 # post to detector logic
                 s = time.time()
                 self.dispatch_frame(frame, None, ssd_detector, classifier, current_index)
@@ -1109,18 +1111,18 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
     def dispatch_to_stack(self, *args):
         # if not len(self.args):
         #     self.args.append(args)
-        if len(self.frame_stack) > 2000:
-            self.frame_stack[:] = []
+        # if len(self.frame_stack) > 1:
+        #     logger.error('Empty Frame Index Stack')
+        #     self.frame_stack[:] = []
+        # self.global_index.set(self.frame_cnt.get() + 1)
         frame = args[0]
-        self.frame_cnt.set(self.frame_cnt.get() + 1)
+        # self.frame_cnt.set(self.frame_cnt.get() + 1)
         s = time.time()
-        # if frame.shape[1] > 1920:
-        #     frame = imutils.resize(frame, width=1920)
-        # ray.put(frame)
-        self.original_frame_cache[self.frame_cnt.get()] = frame
+        self.original_frame_cache[self.global_index.get()] = frame
+        self.global_index.set(self.global_index.get() + 1)
         e = 1 / (time.time() - s)
         logger.info(self.LOG_PREFIX + f'Global Cache Writing Speed: [{round(e, 2)}]/FPS')
-        self.frame_stack.append((None, self.frame_cnt.get()))
+        # self.frame_stack.append((None, self.frame_cnt.get()))
         # logger.info(self.LOG_PREFIX + f'Stack Put Speed: [{round(e, 2)}]/FPS')
 
     def dispatch_frame(self, *args):
