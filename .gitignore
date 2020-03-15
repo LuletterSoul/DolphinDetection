@@ -139,5 +139,6 @@ dmypy.json
 /images
 /data
 /model
+/test_data
 
 
