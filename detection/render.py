@@ -35,7 +35,7 @@ class DetectionStreamRender(object):
 
     def __init__(self, cfg, detect_index, future_frames, msg_queue: Queue,
                  rect_stream_path, original_stream_path, render_frame_cache, render_rect_cache, original_frame_cache,
-                 notify_queue) -> None:
+                 notify_queue, region_path) -> None:
         super().__init__()
         self.cfg = cfg
         self.detect_index = detect_index
@@ -70,7 +70,7 @@ class DetectionStreamRender(object):
         self.status = Manager().Value('i', SystemStatus.RUNNING)
         self.notify_queue = notify_queue
         self.LOG_PREFIX = f'Video Stream Render [{self.cfg.index}]: '
-        self.post_filter = PostFilter(self.cfg)
+        self.post_filter = PostFilter(self.cfg, region_path)
 
     def listen(self):
         if self.quit.wait():
@@ -393,8 +393,10 @@ class DetectionStreamRender(object):
 
 
 class PostFilter(object):
-    def __init__(self, cfg: VideoConfig):
+    def __init__(self, cfg: VideoConfig, region_path):
         self.cfg = cfg
+        self.region_path = region_path
+        self.block_path = region_path / 'blocks'
         self.detect_params = self.set_detect_params()
         self.speed_thresh_x = 20
         self.speed_thresh_y = 20
@@ -408,8 +410,7 @@ class PostFilter(object):
         detect_params = []
         for i in range(x_num):
             for j in range(y_num):
-                region_detector_path = Path('/data/lxd/jsy/DolphinDetection/data/candidates/test/5/blocks') / (
-                        str(i) + '-' + str(j))
+                region_detector_path = self.block_path / (str(i) + '-' + str(j))
                 detect_params.append(
                     DetectorParams(x_step, y_step, i, j, self.cfg, region_detector_path))
         return detect_params

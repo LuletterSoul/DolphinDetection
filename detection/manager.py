@@ -275,7 +275,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             DetectionStreamRender(c, 0, c.future_frames, self.msg_queue[idx], self.controllers[idx].rect_stream_path,
                                   self.controllers[idx].original_stream_path, self.controllers[idx].render_frame_cache,
                                   self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
-                                  self.render_notify_queues[idx]) for idx, c
+                                  self.render_notify_queues[idx], self.region_path / c.index) for idx, c
             in
             enumerate(self.cfgs)]
 
