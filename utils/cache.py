@@ -49,6 +49,9 @@ class SharedMemoryFrameCache(object):
         buf_frame = np.ndarray(self.shape, dtype=np.uint8, buffer=buf)
         buf_frame[:, :, :] = frame[:, :, :]
 
+    def is_closed(self):
+        return self.cache_block.close()
+
     def get_buf(self, index):
         """
         decode bottom buffer into numpy object and r/w buffer via numpy slices operation

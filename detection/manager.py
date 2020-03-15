@@ -939,23 +939,23 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                             self.dol_gone = False
                             push_flag = True
                             rects.append(rect)
-                            p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
-                            logger.info(f'Dolphin position: TL:[{p1}],BR:[{p2}]')
-                            if self.cfg.render:
-                                color = np.random.randint(0, 255, size=(3,))
-                                color = [int(c) for c in color]
-                                # p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
-                                # logger.info(f'Dolphin position: TL:[{p1}],BR:[{p2}]')
-                                cv2.putText(render_frame, 'Asaeorientalis', p1,
-                                            cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-                                cv2.rectangle(render_frame, p1, p2, color, 2)
+                            # p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
+                            # logger.info(f'Dolphin position: TL:[{p1}],BR:[{p2}]')
+                            # if self.cfg.render:
+                            #     color = np.random.randint(0, 255, size=(3,))
+                            #     color = [int(c) for c in color]
+                            #     # p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
+                            #     # logger.info(f'Dolphin position: TL:[{p1}],BR:[{p2}]')
+                            #     cv2.putText(render_frame, 'Asaeorientalis', p1,
+                            #                 cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
+                            #     cv2.rectangle(render_frame, p1, p2, color, 2)
                     r.rects = rects
                     if push_flag:
                         json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
                                                          timestamp=current_index, rects=r.rects, dol_id=self.dol_id)
                         logger.info(f'put detect message in msg_queue...')
                         self.msg_queue.put(json_msg)
-                        self.render_frame_cache[current_index % self.cache_size] = render_frame
+                        # self.render_frame_cache[current_index % self.cache_size] = render_frame
                         self.render_rect_cache[current_index % self.cache_size] = r.rects
                         if self.cfg.render:
                             # threading.Thread(target=self.stream_render.reset, args=(current_index,),
@@ -1118,8 +1118,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         frame = args[0]
         # self.frame_cnt.set(self.frame_cnt.get() + 1)
         s = time.time()
-        self.original_frame_cache[self.global_index.get()] = frame
         self.global_index.set(self.global_index.get() + 1)
+        self.original_frame_cache[self.global_index.get()] = frame
         e = 1 / (time.time() - s)
         logger.info(self.LOG_PREFIX + f'Global Cache Writing Speed: [{round(e, 2)}]/FPS')
         # self.frame_stack.append((None, self.frame_cnt.get()))
