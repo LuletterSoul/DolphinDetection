@@ -80,7 +80,7 @@
         3
       ],
       "ip": "222.190.243.176",
-      "dip": "http://221.226.81.54:1211",
+      "dip": "http://10.196.122.94:8080",
       "port": "8081",
       "suffix": "",
       "headers": {},
@@ -115,7 +115,7 @@
       "online": "rtsp",
       "cap_loop": false,
       "sample_internal": 15,
-      "save_box": true,
+      "save_box": false,
       "show_box": true,
       "cv_only": false,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
@@ -220,7 +220,7 @@
         3
       ],
       "ip": "222.190.243.176",
-      "dip": "http://221.226.81.54:1211",
+      "dip": "http://10.196.122.94:8080",
       "port": "8081",
       "suffix": "",
       "headers": {},

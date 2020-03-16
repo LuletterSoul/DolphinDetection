@@ -557,7 +557,7 @@ class DetectorController(object):
 
     def write_frame_work(self):
         """
-        Write Key frame into disk when detection event occurs
+        Write Key frame into disk if detection event occurs
         :return:
         """
         logger.info(
@@ -1119,6 +1119,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         # self.frame_cnt.set(self.frame_cnt.get() + 1)
         s = time.time()
         self.global_index.set(self.global_index.get() + 1)
+        if frame.shape[1] > self.cfg.shape[1]:
+            frame = imutils.resize(frame, width=self.cfg.shape[1])
         self.original_frame_cache[self.global_index.get()] = frame
         e = 1 / (time.time() - s)
         logger.info(self.LOG_PREFIX + f'Global Cache Writing Speed: [{round(e, 2)}]/FPS')
