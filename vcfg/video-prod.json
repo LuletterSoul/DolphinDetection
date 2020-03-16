@@ -72,7 +72,8 @@
         "speed_x_thresh": 15,
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
-        "disappear_frames_thresh": 3
+        "disappear_frames_thresh": 3,
+        "track_confidence": 0.95
       }
     },
     {
@@ -142,7 +143,12 @@
       "alg": {
         "type": "thresh",
         "mean": 60,
-        "area_ratio": 0.03
+        "area_ratio": 0.03,
+        "speed_x_thresh": 15,
+        "speed_y_thresh": 15,
+        "continuous_time_thresh": 36,
+        "disappear_frames_thresh": 3,
+        "track_confidence": 0.95
       }
     },
     {
@@ -216,7 +222,8 @@
         "speed_x_thresh": 15,
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
-        "disappear_frames_thresh": 3
+        "disappear_frames_thresh": 3,
+        "track_confidence": 0.95
       }
     },
     {
@@ -290,7 +297,8 @@
         "speed_x_thresh": 15,
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
-        "disappear_frames_thresh": 3
+        "disappear_frames_thresh": 3,
+        "track_confidence": 0.95
       }
     }
   ]

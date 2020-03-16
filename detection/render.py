@@ -497,8 +497,9 @@ class PostFilter(object):
         Dolphins'appear time is mostly in 1s~2s, their motion speeds are usually less 15 pixels/s(tested in 1080P monitor),
         but floats thing are much longer, birds or insect are much fast than dolphins
         :param result_set: is set of bbox rects from a batch of video frames ,
-        [[[x1,y1,x2,y2],[x2,y2,x3,y3],...],].Rects in a frame are multiple and complicated according
-        candidates extraction algorithm.The result set could be produced by object tracker or detection algorithm.
+        [[(frame_idx1,[x1,y1,x2,y2]),(frame_idx2,[x2,y2,x3,y3]),...],].Rects in a frame are multiple and complicated according to
+        diversity of candidates extraction algorithm.The result set could be produced by object
+        tracker or detection algorithm.
         :param task_cnt: logger need it.
         :param video_path: None otherwise input a video file.
         :return: True/False indicates current result is reliable or not.
