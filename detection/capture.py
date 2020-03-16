@@ -398,7 +398,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
             e = 1 / (time.time() - s)
             # logger.info(self.cap.get(cv2.CAP_PROP_POS_MSEC))
             # logger.info(self.cap.getRTPTimeStampTs())
-            logger.info(
+            logger.debug(
                 'Video capture [{}]: Receive Rate [{}]/FPS'.format(
                     self.cfg.index, round(e, 2)))
             s = time.time()

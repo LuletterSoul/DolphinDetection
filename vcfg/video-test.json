@@ -4,7 +4,7 @@
       "index": 8,
       "name": "video7_hungred_million",
       "shape": [
-        1080,
+        1072,
         1920,
         3
       ],
@@ -67,7 +67,11 @@
       "alg": {
         "type": "thresh",
         "mean": 40,
-        "area_ratio": 0.03
+        "area_ratio": 0.03,
+        "speed_x_thresh": 15,
+        "speed_y_thresh": 15,
+        "continuous_time_thresh": 36,
+        "disappear_frames_thresh": 3
       }
     }
   ]

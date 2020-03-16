@@ -4,7 +4,7 @@
 @author: Shanda Lau 刘祥德
 @license: (C) Copyright 2019-now, Node Supply Chain Manager Corporation Limited.
 @contact: shandalaulv@gmail.com
-@software: 
+@software:
 @file: common.py
 @time: 2019/12/13 16:05
 @version 1.0
@@ -12,6 +12,11 @@
 """
 import threading
 import traceback
+
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
+
 from config import VideoConfig
 
 import cv2
@@ -235,3 +240,19 @@ def standardization(data):
     mu = np.mean(data, axis=0)
     sigma = np.std(data, axis=0)
     return (data - mu) / sigma
+
+
+def paint_chinese_opencv(im, text, pos, color=None):
+    if color is None:
+        color = np.random.randint(0, 255, size=(3,))
+        color = [int(c) for c in color]
+    img_PIL = Image.fromarray(cv2.cvtColor(im, cv2.COLOR_BGR2RGB))
+    font = ImageFont.truetype('NotoSansCJK-Bold.ttc', 50)
+    fillColor = (color[0], color[1], color[2])  # (255,0,0)
+    position = pos  # (100,100)
+    if not isinstance(text, np.unicode):
+        text = text.decode('utf-8')
+    draw = ImageDraw.Draw(img_PIL)
+    draw.text((position[0], position[1] - 60), text, font=font, fill=fillColor)
+    img = cv2.cvtColor(np.asarray(img_PIL), cv2.COLOR_RGB2BGR)
+    return img

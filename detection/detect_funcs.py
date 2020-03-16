@@ -72,12 +72,12 @@ def detect_based_task(block, params: DetectorParams) -> DetectionResult:
         # logger.info(shape)
         # logger.info(params.start)
         # logger.info(params.end)
-        res = detect_thresh_task(frame, block, params)
+        res = adaptive_thresh_with_rules(frame, block, params)
     elif params.cfg.alg['type'] == 'thresh_mask':
         shape = frame.shape
         mask = np.zeros((shape[0], shape[1])).astype(np.uint8)
         mask[60:420, :] = 255
-        res = detect_mask_task(frame, mask, block, params)
+        res = adaptive_thresh_mask_no_rules(frame, mask, block, params)
     return res
 
 
@@ -122,7 +122,14 @@ def detect_based_mog2(frame, block, params: DetectorParams):
     return res
 
 
-def detect_thresh_task(frame, block, params: DetectorParams):
+def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
+    """
+    perform adaptive binary thresh with filter rules
+    :param frame:
+    :param block:
+    :param params:
+    :return:
+    """
     start = time.time()
     if frame is None:
         logger.info('Detector: [{},{}] empty frame')
@@ -175,7 +182,15 @@ def detect_thresh_task(frame, block, params: DetectorParams):
     return res
 
 
-def detect_mask_task(frame, mask, block, params: DetectorParams):
+def adaptive_thresh_mask_no_rules(frame, mask, block, params: DetectorParams):
+    """
+    perform adaptive binary thresh without filtering rule, use a mask to exclude timestamp region when thresh
+    :param frame:
+    :param mask:
+    :param block:
+    :param params:
+    :return:
+    """
     start = time.time()
     if frame is None:
         logger.debug('Detector: [{},{}] empty frame')
@@ -185,8 +200,11 @@ def detect_mask_task(frame, mask, block, params: DetectorParams):
     adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, C=params.cfg.alg['mean'])
     dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                          iterations=1)
+    # exclude region mask
     dilated = cv2.bitwise_and(dilated, mask)
-    img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    # return value number of findContours will be different opencv version will be different
+    contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    # imcon,contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE) three return values
     rects = []
     regions = []
     status = None
@@ -194,7 +212,7 @@ def detect_mask_task(frame, mask, block, params: DetectorParams):
     for c in contours:
         rect = cv2.boundingRect(c)
         rects.append(rect)
-    cv2.drawContours(img_con, contours, -1, 255, -1)
+    # cv2.drawContours(img_con, contours, -1, 255, -1)
     # if self.cfg.show_window:
     #     cv2.imshow("Contours", img_con)
     #     cv2.waitKey(1)
@@ -311,6 +329,3 @@ def construct(results: List[DetectionResult], params: ConstructParams):
     except Exception as e:
         traceback.print_exc()
         logger.error(e)
-
-
-import cv2

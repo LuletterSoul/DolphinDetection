@@ -27,15 +27,16 @@ from stream.rtsp import FFMPEG_MP4Writer
 import traceback
 from config import VideoConfig
 from detection.params import DispatchBlock, DetectorParams
-from detection.detect_funcs import detect_based_task, detect_mask_task
+from detection.detect_funcs import detect_based_task, adaptive_thresh_mask_no_rules, adaptive_thresh_with_rules
 from pathlib import Path
+from utils import preprocess, paint_chinese_opencv
 
 
 class DetectionStreamRender(object):
 
     def __init__(self, cfg, detect_index, future_frames, msg_queue: Queue,
                  rect_stream_path, original_stream_path, render_frame_cache, render_rect_cache, original_frame_cache,
-                 notify_queue, region_path) -> None:
+                 notify_queue, region_path, detect_params=None) -> None:
         super().__init__()
         self.cfg = cfg
         self.detect_index = detect_index
@@ -70,7 +71,7 @@ class DetectionStreamRender(object):
         self.status = Manager().Value('i', SystemStatus.RUNNING)
         self.notify_queue = notify_queue
         self.LOG_PREFIX = f'Video Stream Render [{self.cfg.index}]: '
-        self.post_filter = PostFilter(self.cfg, region_path)
+        self.post_filter = PostFilter(self.cfg, region_path, detect_params)
 
     def listen(self):
         if self.quit.wait():
@@ -132,7 +133,7 @@ class DetectionStreamRender(object):
         rects = []
         for index in range(next_cnt, end_cnt + 1):
             # if next_cnt in render_cache:
-            logger.info(f'Video Render Processing {index}.....')
+            # logger.info(f'Video Render Processing {index}.....')
             frame = frame_cache[index]
             if frame is None:
                 continue
@@ -147,52 +148,14 @@ class DetectionStreamRender(object):
                     color = np.random.randint(0, 255, size=(3,))
                     color = [int(c) for c in color]
                     p1, p2 = bbox_points(self.cfg, rect, frame.shape)
-                    cv2.putText(frame, 'Asaeorientalis', p1,
-                                cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
+                    # cv2.putText(frame, 'Asaeorientalis', p1,
+                    #             cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
+                    frame = paint_chinese_opencv(frame, '江豚', p1)
                     cv2.rectangle(frame, p1, p2, color, 2)
                 render_cnt += 1
             next_cnt += 1
             video_write.write(frame)
         return next_cnt
-
-        # while next_cnt < end_cnt:
-        #     try:
-        #         if self.status.get() == SystemStatus.SHUT_DOWN:
-        #             logger.info(
-        #                 f'Video Render [{self.index}]: render task interruped by exit signal')
-        #             return next_cnt
-        #         # if next_cnt in render_cache:
-        #         frame = frame_cache[next_cnt % self.cache_size]
-        #         render_frame = self.render_rect_cache[next_cnt % self.cache_size]
-        #         if render_frame is not None:
-        #             next_cnt = self.process_nearest_neighbor_render_frames(next_cnt, end_cnt, frame, rect_cache,
-        #                                                                    render_cache,
-        #                                                                    video_write)
-        #             # elif next_cnt in frame_cache:
-        #         elif frame is not None:
-        #             video_write.write(frame)
-        #             next_cnt += 1
-        #             # frame_cache[next_cnt % self.cache_size] = None
-        #         else:
-        #             try_times += 1
-        #             time.sleep(0.5)
-        #             if try_times > 100:
-        #                 try_times = 0
-        #                 logger.info(f'Try time overflow.round to the next cnt: [{try_times}]')
-        #                 next_cnt += 1
-        #             logger.info(f'Lost frame index: [{next_cnt}]')
-        #         end = time.time()
-        #         if end - start > 30:
-        #             logger.info('Task time overflow, complete previous render task.')
-        #             break
-        #     except Exception as e:
-        #         end = time.time()
-        #         if end - start > 30:
-        #             logger.info('Task time overflow, complete previous render task.')
-        #             break
-        #         logger.error(e)
-        #         traceback.print_stack()
-        # return next_cnt
 
     def process_nearest_neighbor_render_frames(self, next_cnt, end_cnt, frame, rect_cache, render_cache, video_write):
         forward_cnt = next_cnt + self.sample_rate
@@ -344,17 +307,10 @@ class DetectionStreamRender(object):
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
-        if not self.post_filter.post_filter(str(target), task_cnt):
+        if not self.post_filter.post_filter_video(str(target), task_cnt):
             msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
-            # if raw_target.exists():
-            #     raw_target.unlink()
             self.msg_queue.put(msg_json)
-            logger.info(f'put packaged message in the msg_queue...')
-        msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
-        # if raw_target.exists():
-        #     raw_target.unlink()
-        self.msg_queue.put(msg_json)
-        logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+            logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
     def original_render_task(self, current_idx, current_time, frame_cache):
         start = time.time()
@@ -426,13 +382,16 @@ class DetectionStreamRender(object):
 
 
 class PostFilter(object):
-    def __init__(self, cfg: VideoConfig, region_path):
+    def __init__(self, cfg: VideoConfig, region_path, detect_params=None):
         self.cfg = cfg
         self.region_path = region_path
         self.block_path = region_path / 'blocks'
-        self.detect_params = self.set_detect_params()
-        self.speed_thresh_x = 20
-        self.speed_thresh_y = 20
+        # self.detect_params = self.set_detect_params()
+        self.detect_params = detect_params
+        self.speed_thresh_x = self.cfg.alg['speed_x_thresh']
+        self.speed_thresh_y = self.cfg.alg['speed_y_thresh']
+        self.continuous_time_thresh = self.cfg.alg['continuous_time_thresh']
+        self.disappear_frames_thresh = self.cfg.alg['disappear_frames_thresh']
 
     def set_detect_params(self):
         x_num = 1
@@ -448,29 +407,47 @@ class PostFilter(object):
                     DetectorParams(x_step, y_step, i, j, self.cfg, region_detector_path))
         return detect_params
 
-    def detect_frame(self, frame, idx):
-        frame = cv2.GaussianBlur(frame, ksize=(3, 3), sigmaX=0)
+    def detect_frame(self, frame, idx, video_path=None):
+        # frame = cv2.GaussianBlur(frame, ksize=(3, 3), sigmaX=0)
         rects = []
+        sub_results = []
+        frame, original_frame = preprocess(frame, self.cfg)
         for d in self.detect_params:
             block = DispatchBlock(crop_by_se(frame, d.start, d.end),
-                                  idx, frame.shape)
-            shape = block.frame.shape
-            mask = np.zeros((shape[0], shape[1])).astype(np.uint8)
-            mask[100:900, :] = 255
-            sub_result = detect_mask_task(block.frame, mask, block, d)
+                                  idx, original_frame.shape)
+            sub_result = adaptive_thresh_with_rules(block.frame, block, d)
+            sub_results.append(sub_result)
+            # shape = sub_result.binary.shape
+            # mask = np.zeros((shape[0], shape[1])).astype(np.uint8)
+            # mask[100:900, :] = 255
+            # sub_result = adaptive_thresh_mask_no_filter(block.frame, mask, block, d)
+
             # sub_result = detect_based_task(block, d)
             for rect in sub_result.rects:
                 rects.append(rect)
-        return rects
+        return rects, sub_results
 
     def detect_video(self, video_path):
         result_set = []
         video_capture = cv2.VideoCapture(video_path)
         ret, frame = video_capture.read()
+        init = False
         idx = 0
+        video_writer = None
         while ret:
             temp = []
-            rects = self.detect_frame(frame, idx)
+            rects, sub_results = self.detect_frame(frame, idx, video_path)
+            sub_results = sub_results[0]
+            if not init:
+                dirname = os.path.dirname(video_path)
+                filename, extention = os.path.splitext(os.path.basename(video_path))
+                fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+                out_path = os.path.join(dirname, f'{filename}_binary.mp4')
+                shape = sub_results.binary.shape
+                video_writer = cv2.VideoWriter(out_path, fourcc, 25, (shape[1], shape[0]))
+                init = True
+            if video_writer is not None:
+                video_writer.write(cv2.cvtColor(sub_results.binary, cv2.COLOR_GRAY2BGR))
             for rect in rects:
                 if rect[2] > 15 and rect[3] > 15 and 100 < rect[1] < 900:
                     temp.append(rect)
@@ -479,6 +456,8 @@ class PostFilter(object):
             # logger.info(f'idx={idx}, temp={temp}, len_rects={len(rects)}')
             ret, frame = video_capture.read()
             idx += 1
+        if video_writer is not None:
+            video_writer.release()
         video_capture.release()
         return result_set
 
@@ -494,8 +473,9 @@ class PostFilter(object):
             return 0
         return max(data)
 
-    def post_filter(self, video_path, task_cnt):
+    def post_filter_video(self, video_path, task_cnt):
         """
+        input a video to filter object
         :param video_path: the path of the generated video to be filtered
         :param task_cnt:
         :return: False: no fast-object;
@@ -508,6 +488,21 @@ class PostFilter(object):
         result_set = self.detect_video(video_path)
         if len(result_set) <= 1:
             return False
+        return self.filter_by_speed_and_continuous_time(result_set, task_cnt, video_path)
+
+    def filter_by_speed_and_continuous_time(self, result_set, task_cnt, video_path=None):
+        """
+        filter thing notified by detection signal, if it's(their) speeds or continuous time
+        is over threshold, will be abandoned by algorithm.
+        Dolphins'appear time is mostly in 1s~2s, their motion speeds are usually less 15 pixels/s(tested in 1080P monitor),
+        but floats thing are much longer, birds or insect are much fast than dolphins
+        :param result_set: is set of bbox rects from a batch of video frames ,
+        [[[x1,y1,x2,y2],[x2,y2,x3,y3],...],].Rects in a frame are multiple and complicated according
+        candidates extraction algorithm.The result set could be produced by object tracker or detection algorithm.
+        :param task_cnt: logger need it.
+        :param video_path: None otherwise input a video file.
+        :return: True/False indicates current result is reliable or not.
+        """
         continuous_time_set = []
         speed_x_set = []
         speed_y_set = []
@@ -515,8 +510,9 @@ class PostFilter(object):
         for i in range(1, len(result_set)):
             pre_idx, pre_rects = result_set[i - 1]
             current_idx, current_rects = result_set[i]
+            # rects must be corresponding between adjacent video frames
             if len(pre_rects) == len(current_rects):
-                if abs(current_idx - pre_idx) <= 3:
+                if abs(current_idx - pre_idx) <= self.disappear_frames_thresh:
                     continuous_time += abs(current_idx - pre_idx)
                 else:
                     continuous_time_set.append(continuous_time)
@@ -524,10 +520,10 @@ class PostFilter(object):
                 for j in range(len(pre_rects)):
                     pre_rect = pre_rects[j]
                     current_rect = current_rects[j]
-                    pre_center_x = pre_rect[0] + pre_rect[2]
-                    pre_center_y = pre_rect[1] + pre_rect[3]
-                    current_center_x = current_rect[0] + current_rect[2]
-                    current_center_y = current_rect[1] + current_rect[3]
+                    pre_center_x = (pre_rect[0] + pre_rect[2]) / 2
+                    pre_center_y = (pre_rect[1] + pre_rect[3]) / 2
+                    current_center_x = (current_rect[0] + current_rect[2]) / 2
+                    current_center_y = (current_rect[1] + current_rect[3]) / 2
                     speed_x = abs(pre_center_x - current_center_x) / abs(pre_idx - current_idx)
                     speed_y = abs(pre_center_y - current_center_y) / abs(pre_idx - current_idx)
                     speed_x_set.append(speed_x)
@@ -548,7 +544,7 @@ class PostFilter(object):
             logger.info(
                 f'Post filter [{self.cfg.index}, {task_cnt}]: detect fast-object in [{video_path}]')
             return True
-        elif max_continuous_time > 20:
+        elif max_continuous_time > self.continuous_time_thresh:
             logger.info(
                 f'Post filter [{self.cfg.index}, {task_cnt}]: detect float in [{video_path}]')
             return True

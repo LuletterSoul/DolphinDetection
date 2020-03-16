@@ -298,7 +298,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             DetectionStreamRender(c, 0, c.future_frames, self.msg_queue[idx], self.controllers[idx].rect_stream_path,
                                   self.controllers[idx].original_stream_path, self.controllers[idx].render_frame_cache,
                                   self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
-                                  self.render_notify_queues[idx], self.region_path / str(c.index)) for idx, c
+                                  self.render_notify_queues[idx], self.region_path / str(c.index),
+                                  self.controllers[idx].detect_params) for idx, c
             in
             enumerate(self.cfgs)]
 
@@ -787,6 +788,8 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
         # self.stream_render = stream_render
         self.global_index = Manager().Value('i', 0)
         self.render_notify_queue = render_notify_queue
+        self.init_control_range()
+        self.init_detectors()
 
     def listen(self):
         """
@@ -931,7 +934,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                             candidate = crop_by_rect(self.cfg, rect, render_frame)
                             obj_class, output = _model.predict(candidate)
                             detect_result = (obj_class == 0)
-                            logger.info(
+                            logger.debug(
                                 self.LOG_PREFIX + f'Model Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
                         if detect_result:
                             logger.info(
@@ -1099,7 +1102,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
                 s = time.time()
                 self.dispatch_frame(frame, None, ssd_detector, classifier, current_index)
                 e = 1 / (time.time() - s)
-                logger.info(self.LOG_PREFIX + f'Detection Process Speed: [{round(e, 2)}]/FPS')
+                logger.debug(self.LOG_PREFIX + f'Detection Process Speed: [{round(e, 2)}]/FPS')
             except Exception as e:
                 logger.error(e)
                 # pass
@@ -1123,7 +1126,7 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
             frame = imutils.resize(frame, width=self.cfg.shape[1])
         self.original_frame_cache[self.global_index.get()] = frame
         e = 1 / (time.time() - s)
-        logger.info(self.LOG_PREFIX + f'Global Cache Writing Speed: [{round(e, 2)}]/FPS')
+        logger.debug(self.LOG_PREFIX + f'Global Cache Writing Speed: [{round(e, 2)}]/FPS')
         # self.frame_stack.append((None, self.frame_cnt.get()))
         # logger.info(self.LOG_PREFIX + f'Stack Put Speed: [{round(e, 2)}]/FPS')
 
@@ -1294,8 +1297,6 @@ class TaskBasedDetectorController(ThreadBasedDetectorController):
 
     def start(self, pool: Pool):
         self.status.set(SystemStatus.RUNNING)
-        self.init_control_range()
-        self.init_detectors()
 
         threading.Thread(target=self.listen, daemon=True).start()
         threading.Thread(target=self.write_frame_work, daemon=True).start()
