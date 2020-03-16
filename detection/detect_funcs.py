@@ -160,7 +160,7 @@ def detect_thresh_task(frame, block, params: DetectorParams):
 def detect_mask_task(frame, mask, block, params: DetectorParams):
     start = time.time()
     if frame is None:
-        logger.info('Detector: [{},{}] empty frame')
+        logger.debug('Detector: [{},{}] empty frame')
         return None
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
@@ -184,7 +184,7 @@ def detect_mask_task(frame, mask, block, params: DetectorParams):
     res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, params.x_index,
                           params.y_index, block.index, back(rects, params.start, frame.shape, block.shape, params.cfg))
     end = time.time() - start
-    logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
+    logger.debug('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
     return res
 
 
