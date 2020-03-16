@@ -1,17 +1,57 @@
 import json
 import socket
-
 import websockets
+import asyncio
 
 from config import ServerConfig, VideoConfig
 from utils import logger
 import os
 
 
+async def main_logic(q, vcfg: VideoConfig, scfg: ServerConfig):
+    address = f'ws://{scfg.wc_ip}:{scfg.wc_port}'
+    history_msg_json = None
+    msg_json = None
+    if not scfg.send_msg:
+        logger.info(f'Controller [{vcfg.index}]: Skipped message by server config specifing.')
+        return
+    while True:
+        logger.info(f'waiting to connect to server {address}...')
+        async with websockets.connect(address) as server:
+            logger.info(f'connect to server {address} successfully')
+            flag = True
+            while flag:
+                try:
+                    if history_msg_json is not None:
+                        await server.send(history_msg_json.encode('utf-8'))
+                        logger.info(f'client send history message to server {address} successfully')
+                        history_msg_json = None
+                        response_str = await server.recv()
+                        logger.info(f'response from server: {response_str}')
+                    while not q.empty():
+                        logger.info(f'Controller [{vcfg.index}]: Current message num: {q.qsize()}')
+                        msg_json = q.get(1)
+                        await server.send(msg_json.encode('utf-8'))
+                        logger.info(f'client send message to server {address} successfully: {msg_json}')
+                        response_str = await server.recv()
+                        logger.info(f'response from server: {response_str}')
+                except Exception as e:
+                    history_msg_json = msg_json
+                    logger.error(e)
+                    flag = False
+
+
 def websocket_client(q, vcfg: VideoConfig, scfg: ServerConfig):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(main_logic(q=q, vcfg=vcfg, scfg=scfg))
+
+
+def socket_client(q, vcfg: VideoConfig, scfg: ServerConfig):
     address = (scfg.wc_ip, scfg.wc_port)
     server = None
     history_msg_json = None
+    msg_json = None
     while True:
         if server is None:
             logger.info(f'waiting to connect to server {address}...')
@@ -27,7 +67,7 @@ def websocket_client(q, vcfg: VideoConfig, scfg: ServerConfig):
                 logger.info(f'Controller [{vcfg.index}]: Current message num: {q.qsize()}')
                 msg_json = q.get(1)
                 server.send(msg_json.encode('utf-8'))
-                logger.info(f'client send message to server {address} successfully')
+                logger.info(f'client send message to server {address} successfully: {msg_json}')
                 # time.sleep(10)
         except Exception as e:
             server = None
@@ -66,12 +106,30 @@ def creat_position_json(rects):
     """
     position = []
     for rect in rects:
-        position.append({'lx': rect[0], 'ly': rect[1], 'rx': rect[0] + rect[2], 'ry': rect[1] + rect[3]})
+        position.append({'lx': int(rect[0]), 'ly': int(rect[1]), 'rx': int(rect[2]), 'ry': int(rect[3])})
     position_json = json.dumps(position)
     return position_json
 
 
-def creat_detect_msg_json(video_stream, channel, timestamp, rects):
+def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000):
+    msg = {
+        'cmdType': 'notify',
+        "appId": "10080",
+        'clientId': 'jt001',
+        'data': {
+            'notifyType': 'detectedNotify',
+            'videoStream': video_stream,
+            'jt_id': str(dol_id),
+            'channel': channel,
+            'timestamp': timestamp,
+            'coordinates': [],
+        }
+    }
+    msg_json = json.dumps(msg)
+    return msg_json
+
+
+def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id):
     position_json = creat_position_json(rects)
     msg = {
         'cmdType': 'notify',
@@ -81,6 +139,7 @@ def creat_detect_msg_json(video_stream, channel, timestamp, rects):
             'notifyType': 'detectedNotify',
             'videoStream': video_stream,
             'channel': channel,
+            'jt_id': str(dol_id),
             'timestamp': timestamp,
             'coordinates': position_json,
         }
@@ -90,7 +149,7 @@ def creat_detect_msg_json(video_stream, channel, timestamp, rects):
 
 
 def creat_packaged_msg_json(filename, path, cfg: VideoConfig):
-    url = os.path.join('video', cfg.date, str(cfg.index), filename)
+    url = os.path.join(cfg.dip, 'video', cfg.date, str(cfg.index), filename)
     msg = {
         'cmdType': 'notify',
         'clientId': 'jt001',

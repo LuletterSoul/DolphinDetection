@@ -17,11 +17,14 @@ import time
 from multiprocessing import Manager
 from multiprocessing.queues import Queue
 from pathlib import Path
+from .ssd import SSDDetector
+from classfy.model import DolphinClassifier
 
 import cv2
 
 from config import VideoConfig, SystemStatus
 from utils import logger
+from config import ModelType
 
 
 # from .manager import TaskBasedDetectorController
@@ -66,8 +69,9 @@ class VideoCaptureThreading:
         # self.cap = cv2.VideoCapture(src)
         # logger.info('Loading done from: [{}]'.format(src))
         self.status.set(SystemStatus.RUNNING)
-        threading.Thread(target=self.update, args=(*args,), daemon=True).start()
         threading.Thread(target=self.listen, args=(), daemon=True).start()
+        # threading.Thread(target=self.update, args=(*args,), daemon=True).start()
+        self.update(*args)
         # threading.Thread(target=cpu_usage).start()
         return self
 
@@ -104,9 +108,26 @@ class VideoCaptureThreading:
         start = time.time()
         logger.info('*******************************Init video capture [{}]********************************'.format(
             self.cfg.index))
+        ssd_detector = None
+        classifier = None
+        server_cfg = args[0]
+        # if server_cfg.detect_mode == ModelType.SSD:
+        #     ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
+        #     ssd_detector.run()
+        #     logger.info(
+        #         f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
+        # elif server_cfg.detect_mode == ModelType.CLASSIFY:
+        #     classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
+        #     classifier.run()
+        #     logger.info(
+        #         f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
+            s = time.time()
             grabbed, frame = self.cap.read()
+            e = 1 / (time.time() - s)
+            logger.debug(f'Video capture [{self.cfg.index}]: Receive Speed Rate [{round(e, 2)}]/FPS')
+            s = time.time()
             if not grabbed:
                 self.update_capture(cnt)
                 end = time.time()
@@ -115,7 +136,9 @@ class VideoCaptureThreading:
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
-            self.pass_frame(frame, args[0])
+            self.pass_frame(frame, args[0], ssd_detector, classifier)
+            e = 1 / (time.time() - s)
+            logger.debug(f'Video capture [{self.cfg.index}]: Operation Speed Rate [{round(e, 2)}]/FPS')
             cnt += 1
             self.post_frame_process(frame)
             self.runtime = time.time() - start
@@ -128,6 +151,10 @@ class VideoCaptureThreading:
     def pass_frame(self, *args):
         self.frame_queue.put(args[0], block=True)
         # logger.info('Passed frame...')
+
+    def decode_fourcc(self, v):
+        v = int(v)
+        return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
 
     def update_capture(self, cnt):
         logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
@@ -144,6 +171,7 @@ class VideoCaptureThreading:
                 break
         if self.cap is not None:
             self.cap.release()
+
         self.cap = cv2.VideoCapture(src)
         return True
 
@@ -185,10 +213,12 @@ class VideoOfflineCapture(VideoCaptureThreading):
         self.pos = -1
 
     def get_posix(self):
-        self.pos += 1
         if self.pos >= len(self.streams_list):
             logger.info('Load completely for [{}]'.format(str(self.offline_path)))
             return -1
+        if self.cfg.cap_loop:
+            return self.streams_list[0]
+        self.pos += 1
         return self.streams_list[self.pos]
 
     # def load_next_src(self):
@@ -221,7 +251,8 @@ class VideoOfflineCallbackCapture(VideoOfflineCapture):
 
     def pass_frame(self, *args):
         assert len(args) >= 2
-        self.controller.dispatch_frame(*args)
+        # self.controller.dispatch_frame(*args)
+        self.controller.dispatch_to_stack(*args)
 
     def cancel(self):
         super().cancel()
@@ -346,6 +377,19 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
         start = time.time()
         logger.info('*******************************Init video capture [{}]********************************'.format(
             self.cfg.index))
+        ssd_detector = None
+        classifier = None
+        server_cfg = args[0]
+        if server_cfg.detect_mode == ModelType.SSD:
+            ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
+            ssd_detector.run()
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
+        elif server_cfg.detect_mode == ModelType.CLASSIFY:
+            classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
+            classifier.run()
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
             s = time.time()
@@ -362,7 +406,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
                 cnt = 0
                 continue
             # if cnt % self.sample_rate == 0:
-            self.pass_frame(frame, args[0])
+            self.pass_frame(frame, args[0], ssd_detector, classifier)
             e = 1 / (time.time() - s)
             logger.debug(
                 'Video capture [{}]: Operation Speed Rate [{}]/FPS'.format(
@@ -402,4 +446,5 @@ class VideoRtspCallbackCapture(VideoRtspCapture):
 
     def pass_frame(self, *args):
         assert len(args) >= 2
-        self.controller.dispatch_frame(args[0], args[1])
+        # self.controller.dispatch_frame(*args)
+        self.controller.dispatch_to_stack(*args)

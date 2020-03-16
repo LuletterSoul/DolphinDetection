@@ -1,0 +1,5 @@
+OUTPUT_DIR: "./checkpoint/Exp-5"
+DEVICE: True
+DEVICE_ID: '3'
+COWFISH_SAVE_PATH: "/data/shw/cowfish/jtdome/"
+

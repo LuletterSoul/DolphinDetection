@@ -43,6 +43,11 @@ def less_ratio(area, shape, cfg: VideoConfig):
     return ratio(area, total) >= cfg.alg['area_ratio']
 
 
+def greater_ratio(area, shape, cfg: VideoConfig):
+    total = shape[0] * shape[1]
+    return ratio(area, total) < (cfg.alg['area_ratio'] * 3.5)
+
+
 # @ray.remote
 def detect_based_task(block, params: DetectorParams) -> DetectionResult:
     frame = block.frame
@@ -131,7 +136,8 @@ def detect_thresh_task(frame, block, params: DetectorParams):
         rect = cv2.boundingRect(c)
         area = cv2.contourArea(c)
         # self.is_in_ratio(area, self.shape[0] * self.shape[1])
-        if less_ratio(area, frame.shape, params.cfg) and rect[2] / rect[3] < 10:
+        if less_ratio(area, frame.shape, params.cfg) and greater_ratio(area, frame.shape, params.cfg) and rect[2] / \
+                rect[3] < 10:
             rects.append(rect)
             filtered_contours.append(c)
     cv2.drawContours(binary, filtered_contours, -1, 255, -1)
@@ -154,7 +160,7 @@ def detect_thresh_task(frame, block, params: DetectorParams):
 def detect_mask_task(frame, mask, block, params: DetectorParams):
     start = time.time()
     if frame is None:
-        logger.info('Detector: [{},{}] empty frame')
+        logger.debug('Detector: [{},{}] empty frame')
         return None
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
@@ -178,7 +184,7 @@ def detect_mask_task(frame, mask, block, params: DetectorParams):
     res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, params.x_index,
                           params.y_index, block.index, back(rects, params.start, frame.shape, block.shape, params.cfg))
     end = time.time() - start
-    logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
+    logger.debug('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
     return res
 
 

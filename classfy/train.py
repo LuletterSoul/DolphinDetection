@@ -61,7 +61,7 @@ print(train_loader.dataset.classes)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 model = models.resnet50(pretrained=True)
-# print(model)
+# print(classify_model)
 
 """
    首先，我们必须冻结预训练过的层，因此在训练期间它们不会进行反向传播。
@@ -122,7 +122,7 @@ for epoch in range(epochs):
             running_loss = 0
             model.train()
 
-torch.save(model, os.path.join(PROJECT_DIR, "model/bc-model-0207.pth"))
+torch.save(model, os.path.join(PROJECT_DIR, "classify_model/bc-classify_model-0226.pth"))
 plt.plot(train_losses, label="Training loss")
 plt.plot(test_losses, label='Validation loss')
 plt.legend(frameon=False)

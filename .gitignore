@@ -136,7 +136,9 @@ dmypy.json
 /offline/
 /candidate
 /log
-/candidate
 /images
 /data
+/model
+/test_data
+
 
