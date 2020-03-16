@@ -37,19 +37,29 @@ def is_in_ratio(area, total, cfg: VideoConfig):
     return ratio(area, total) <= cfg.filtered_ratio
 
 
-def less_ratio(area, shape, cfg: VideoConfig):
+def is_greater_ratio(area, shape, cfg: VideoConfig):
+    if cfg.alg['area_ratio'] == -1:
+        return True
     total = shape[0] * shape[1]
     # logger.info('Area ration: [{}]'.format(ratio(area, total)))
     return ratio(area, total) >= cfg.alg['area_ratio']
 
 
-def greater_ratio(area, shape, cfg: VideoConfig):
+def is_less_ratio(area, shape, cfg: VideoConfig):
+    if cfg.alg['area_ratio'] == -1:
+        return True
     total = shape[0] * shape[1]
-    return ratio(area, total) < (cfg.alg['area_ratio'] * 3.5)
+    return ratio(area, total) < (cfg.alg['area_ratio'] * 3)
 
 
 # @ray.remote
 def detect_based_task(block, params: DetectorParams) -> DetectionResult:
+    """
+    coarser detection by traditional patter recognition method
+    :param block:
+    :param params:
+    :return:
+    """
     frame = block.frame
     # if args.cfg.alg['type'] == 'saliency':
     #     res = detect_saliency()
@@ -93,7 +103,7 @@ def detect_based_mog2(frame, block, params: DetectorParams):
         rect = cv2.boundingRect(c)
         area = cv2.contourArea(c)
         # self.is_in_ratio(area, self.shape[0] * self.shape[1])
-        if less_ratio(area, frame.shape, params.cfg) and rect[2] / rect[3] < 10:
+        if is_greater_ratio(area, frame.shape, params.cfg) and rect[2] / rect[3] < 10:
             logger.info("~~~~~~~~~~~~~~~~~~~~~~~Area:[{}]".format(area))
             rects.append(rect)
     cv2.drawContours(img_con, contours, -1, 255, -1)
@@ -125,7 +135,7 @@ def detect_thresh_task(frame, block, params: DetectorParams):
     # adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
     dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                          iterations=2)
-    img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     binary = np.zeros(dilated.shape, dtype=np.uint8)
     rects = []
     regions = []
@@ -136,8 +146,16 @@ def detect_thresh_task(frame, block, params: DetectorParams):
         rect = cv2.boundingRect(c)
         area = cv2.contourArea(c)
         # self.is_in_ratio(area, self.shape[0] * self.shape[1])
-        if less_ratio(area, frame.shape, params.cfg) and greater_ratio(area, frame.shape, params.cfg) and rect[2] / \
-                rect[3] < 10:
+        greater_ratio = is_greater_ratio(area, frame.shape, params.cfg)
+        less_ratio = is_less_ratio(area, frame.shape, params.cfg)
+        rect_regular = (rect[2] / rect[3]) < 10
+        # if greater_ratio:
+        #     logger.info(f'Greater ratio')
+        # if less_ratio:
+        #     logger.info(f'Less ratio')
+        # if rect_regular:
+        #     logger.info(f'Rect regular')
+        if greater_ratio and less_ratio and rect_regular:
             rects.append(rect)
             filtered_contours.append(c)
     cv2.drawContours(binary, filtered_contours, -1, 255, -1)
@@ -192,9 +210,11 @@ def detect(frame):
     if frame is None:
         logger.info('Detector: [{},{}] empty frame')
         return None
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-    adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, C=40)
+    # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+    adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=21, C=40)
+    cv2.imshow('CV', adaptive_thresh)
+    cv2.waitKey(0)
     dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                          iterations=1)
     img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)

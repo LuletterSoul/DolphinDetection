@@ -48,7 +48,7 @@ class DetectionStreamRender(object):
         self.is_trigger_write = True
         self.write_done = True
         # self.controller = controller
-        self.cache_size = 5000
+        self.cache_size = cfg.cache_size
         self.future_frames = future_frames
         # self.sample_rate = controller.cfg.sample_rate
         # self.render_frame_cache = controller.render_frame_cache
@@ -127,46 +127,72 @@ class DetectionStreamRender(object):
     def write_render_video_work(self, video_write, next_cnt, end_cnt, render_cache, rect_cache, frame_cache):
         if next_cnt < 1:
             next_cnt = 1
-        start = time.time()
-        try_times = 0
-        while next_cnt < end_cnt:
-            try:
-                if self.status.get() == SystemStatus.SHUT_DOWN:
-                    logger.info(
-                        f'Video Render [{self.index}]: render task interruped by exit signal')
-                    return next_cnt
-                # if next_cnt in render_cache:
-                frame = frame_cache[next_cnt % self.cache_size]
-                render_frame = rect_cache[next_cnt % self.cache_size]
-                if render_frame is not None:
-                    next_cnt = self.process_nearest_neighbor_render_frames(next_cnt, end_cnt, frame, rect_cache,
-                                                                           render_cache,
-                                                                           video_write)
-                    # elif next_cnt in frame_cache:
-                elif frame is not None:
-                    video_write.write(frame)
-                    next_cnt += 1
-                    # frame_cache[next_cnt % self.cache_size] = None
-                else:
-                    try_times += 1
-                    time.sleep(0.5)
-                    if try_times > 100:
-                        try_times = 0
-                        logger.info(f'Try time overflow.round to the next cnt: [{try_times}]')
-                        next_cnt += 1
-                    logger.info(f'Lost frame index: [{next_cnt}]')
-                end = time.time()
-                if end - start > 30:
-                    logger.info('Task time overflow, complete previous render task.')
-                    break
-            except Exception as e:
-                end = time.time()
-                if end - start > 30:
-                    logger.info('Task time overflow, complete previous render task.')
-                    break
-                logger.error(e)
-                traceback.print_stack()
+
+        render_cnt = 0
+        rects = []
+        for index in range(next_cnt, end_cnt + 1):
+            # if next_cnt in render_cache:
+            logger.info(f'Video Render Processing {index}.....')
+            frame = frame_cache[index]
+            if frame is None:
+                continue
+            tmp_rects = self.render_rect_cache[index % self.cache_size]
+            self.render_rect_cache[index % self.cache_size] = None
+            if tmp_rects is not None:
+                render_cnt = 0
+                rects = tmp_rects
+            is_render = render_cnt <= 36
+            if is_render:
+                for rect in rects:
+                    color = np.random.randint(0, 255, size=(3,))
+                    color = [int(c) for c in color]
+                    p1, p2 = bbox_points(self.cfg, rect, frame.shape)
+                    cv2.putText(frame, 'Asaeorientalis', p1,
+                                cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
+                    cv2.rectangle(frame, p1, p2, color, 2)
+                render_cnt += 1
+            next_cnt += 1
+            video_write.write(frame)
         return next_cnt
+
+        # while next_cnt < end_cnt:
+        #     try:
+        #         if self.status.get() == SystemStatus.SHUT_DOWN:
+        #             logger.info(
+        #                 f'Video Render [{self.index}]: render task interruped by exit signal')
+        #             return next_cnt
+        #         # if next_cnt in render_cache:
+        #         frame = frame_cache[next_cnt % self.cache_size]
+        #         render_frame = self.render_rect_cache[next_cnt % self.cache_size]
+        #         if render_frame is not None:
+        #             next_cnt = self.process_nearest_neighbor_render_frames(next_cnt, end_cnt, frame, rect_cache,
+        #                                                                    render_cache,
+        #                                                                    video_write)
+        #             # elif next_cnt in frame_cache:
+        #         elif frame is not None:
+        #             video_write.write(frame)
+        #             next_cnt += 1
+        #             # frame_cache[next_cnt % self.cache_size] = None
+        #         else:
+        #             try_times += 1
+        #             time.sleep(0.5)
+        #             if try_times > 100:
+        #                 try_times = 0
+        #                 logger.info(f'Try time overflow.round to the next cnt: [{try_times}]')
+        #                 next_cnt += 1
+        #             logger.info(f'Lost frame index: [{next_cnt}]')
+        #         end = time.time()
+        #         if end - start > 30:
+        #             logger.info('Task time overflow, complete previous render task.')
+        #             break
+        #     except Exception as e:
+        #         end = time.time()
+        #         if end - start > 30:
+        #             logger.info('Task time overflow, complete previous render task.')
+        #             break
+        #         logger.error(e)
+        #         traceback.print_stack()
+        # return next_cnt
 
     def process_nearest_neighbor_render_frames(self, next_cnt, end_cnt, frame, rect_cache, render_cache, video_write):
         forward_cnt = next_cnt + self.sample_rate
@@ -194,13 +220,12 @@ class DetectionStreamRender(object):
         step = forward_cnt - next_cnt
         first_rects = self.render_rect_cache[next_cnt % self.cache_size]
         last_rects = self.render_rect_cache[forward_cnt % self.cache_size]
-        self.render_rect_cache[next_cnt % self.cache_size] = None
-        self.render_rect_cache[forward_cnt % self.cache_size] = None
         len_is_equal = len(last_rects) != len(first_rects)
         if frame is not None and len_is_equal:
             for i in range(step):
                 try:
                     frame = self.original_frame_cache[next_cnt].copy()
+                    self.render_frame_cache[next_cnt % self.cache_size] = None
                     for j in range(min(len(first_rects), len(last_rects))):
                         first_rect = first_rects[j]
                         last_rect = last_rects[j]
@@ -288,8 +313,8 @@ class DetectionStreamRender(object):
         # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
         video_write = FFMPEG_MP4Writer(str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
         next_cnt = current_idx - self.future_frames
-        next_cnt = self.write_render_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
-                                                frame_cache)
+        # next_cnt = self.write_render_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
+        #                                         frame_cache)
         # the future frames count
         # next_frame_cnt = 48
         # wait the futures frames is accessable
@@ -308,9 +333,12 @@ class DetectionStreamRender(object):
         #     return False
         # logger.info('Render task Begin with frame [{}]'.format(next_cnt))
         # logger.info('After :[{}]'.format(render_cache.keys()))
-        end_cnt = next_cnt + self.future_frames
-        next_cnt = self.write_render_video_work(video_write, next_cnt, end_cnt, render_cache, rect_cache,
-                                                frame_cache)
+        end_cnt = current_idx + self.future_frames
+        try:
+            next_cnt = self.write_render_video_work(video_write, next_cnt, end_cnt, render_cache, rect_cache,
+                                                    frame_cache)
+        except Exception as e:
+            logger.error(e)
         video_write.release()
         # self.convert_byfile(str(raw_target), str(target))
         logger.info(
@@ -322,6 +350,11 @@ class DetectionStreamRender(object):
             #     raw_target.unlink()
             self.msg_queue.put(msg_json)
             logger.info(f'put packaged message in the msg_queue...')
+        msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
+        # if raw_target.exists():
+        #     raw_target.unlink()
+        self.msg_queue.put(msg_json)
+        logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
     def original_render_task(self, current_idx, current_time, frame_cache):
         start = time.time()
