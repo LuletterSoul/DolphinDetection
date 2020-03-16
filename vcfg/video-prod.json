@@ -141,8 +141,12 @@
       },
       "alg": {
         "type": "thresh",
-        "mean": 60,
-        "area_ratio": 0.03
+        "mean": 40,
+        "area_ratio": 0.03,
+        "speed_x_thresh": 15,
+        "speed_y_thresh": 15,
+        "continuous_time_thresh": 36,
+        "disappear_frames_thresh": 3
       }
     },
     {
