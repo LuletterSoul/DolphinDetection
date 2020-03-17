@@ -60,6 +60,8 @@
       "similarity_thresh": 0.6,
       "pre_cache": 48,
       "render": true,
+      "post_filter": false,
+      "forward_filter": false,
       "bbox": {
         "w": 224,
         "h": 224
@@ -138,6 +140,8 @@
       "similarity_thresh": 0.6,
       "pre_cache": 48,
       "render": true,
+      "post_filter": false,
+      "forward_filter": false,
       "bbox": {
         "w": 224,
         "h": 224

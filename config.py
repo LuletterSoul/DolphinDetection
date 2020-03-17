@@ -207,6 +207,8 @@ class VideoConfig(Config):
                  similarity_thresh,
                  pre_cache,
                  render,
+                 post_filter,
+                 forward_filter,
                  save_box, show_box, cv_only,
                  rtsp, push_to, write_timestamp,
                  enable_sample_frame,
@@ -253,6 +255,8 @@ class VideoConfig(Config):
         self.similarity_thresh = similarity_thresh
         self.pre_cache = pre_cache
         self.render = render
+        self.post_filter = post_filter
+        self.forward_filter = forward_filter
         self.bbox = bbox
         self.alg = alg
 

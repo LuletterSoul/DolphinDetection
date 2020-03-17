@@ -34,7 +34,7 @@ from utils import preprocess, paint_chinese_opencv
 
 class DetectionStreamRender(object):
 
-    def __init__(self, cfg, detect_index, future_frames, msg_queue: Queue,
+    def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue,
                  rect_stream_path, original_stream_path, render_frame_cache, render_rect_cache, original_frame_cache,
                  notify_queue, region_path, detect_params=None) -> None:
         super().__init__()
@@ -255,7 +255,11 @@ class DetectionStreamRender(object):
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
-        if not self.post_filter.post_filter_video(str(target), task_cnt):
+        if self.cfg.post_filter and not self.post_filter.post_filter_video(str(target), task_cnt):
+            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
+            self.msg_queue.put(msg_json)
+            logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+        else:
             msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
             self.msg_queue.put(msg_json)
             logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
