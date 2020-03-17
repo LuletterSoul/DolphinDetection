@@ -90,8 +90,8 @@ def bbox_points(cfg: VideoConfig, rect, shape, delta_x=0, delta_y=0):
     center_x, center_y = round((rect[0] + rect[2]) / 2), round((rect[1] + rect[3]) / 2)
     start_x, start_y = round(center_x - cfg.bbox['w'] / 2 - round(delta_x)), round(
         center_y - cfg.bbox['h'] / 2 - round(delta_y))
-    end_x = start_x + cfg.bbox['w'] + round(delta_x)
-    end_y = start_y + cfg.bbox['h'] + round(delta_y)
+    end_x = center_x + cfg.bbox['w'] / 2 + round(delta_x)
+    end_y = center_y + cfg.bbox['h'] / 2 + round(delta_y)
     if start_x < 0:
         start_x = 0
     if start_y < 0:
@@ -103,8 +103,6 @@ def bbox_points(cfg: VideoConfig, rect, shape, delta_x=0, delta_y=0):
     p1 = (int(start_x), int(start_y))
     p2 = (int(end_x), int(end_y))
     return p1, p2
-
-
 
 
 def bbox_points_float(cfg: VideoConfig, rect, shape, delta_x=0, delta_y=0):
@@ -126,7 +124,8 @@ def bbox_points_float(cfg: VideoConfig, rect, shape, delta_x=0, delta_y=0):
 
 
 def _bbox_points(w, h, rect, shape, delta_x=0, delta_y=0):
-    center_x, center_y = round(rect[0] + rect[2] / 2), round(rect[1] + rect[3] / 2)
+    center_x, center_y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+    # center_x, center_y = round(rect[0] + rect[2] / 2), round(rect[1] + rect[3] / 2)
     start_x, start_y = round(center_x - w / 2 - delta_x), round(
         center_y - h / 2 - delta_y)
     end_x = start_x + w + delta_x

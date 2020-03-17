@@ -16,4 +16,5 @@ from .manager import *
 from .params import *
 from .component import *
 from .ssd import *
+from .detect_funcs import *
 # from .ray_manager import *

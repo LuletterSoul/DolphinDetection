@@ -98,7 +98,7 @@ class FFMPEG_MP4Writer(FFMPEG_VideoWriter):
         if cvt == 'rgb':
             self.write_frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         else:
-            self.write_frame(frame)
+             - self.write_frame(frame)
 
     def release(self):
         self.close()

@@ -4,7 +4,7 @@
 @author: Shanda Lau 刘祥德
 @license: (C) Copyright 2019-now, Node Supply Chain Manager Corporation Limited.
 @contact: shandalaulv@gmail.com
-@software: 
+@software:
 @file: common.py
 @time: 2019/12/13 16:05
 @version 1.0
@@ -12,6 +12,11 @@
 """
 import threading
 import traceback
+
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
+
 from config import VideoConfig
 
 import cv2
@@ -23,14 +28,20 @@ import numpy as np
 
 
 def preprocess(frame, cfg: VideoConfig):
+    """
+    some preprocess operation such as denoising, image enhancement and crop by ROI
+    :param frame:
+    :param cfg: well-define frame detection range by ROI
+    :return: processed frame, original frame
+    """
     original_frame = frame.copy()
     frame = crop_by_roi(frame, cfg.roi)
     if cfg.resize['scale'] != -1:
         frame = cv2.resize(frame, (0, 0), fx=cfg.resize['scale'], fy=cfg.resize['scale'])
     elif cfg.resize['width'] != -1:
-        frame = resize(frame, cfg.resize['width'])
-    elif cfg.resize['height '] != -1:
-        frame = resize(frame, cfg.resize['height'])
+        frame = resize(frame, width=cfg.resize['width'])
+    elif cfg.resize['height'] != -1:
+        frame = resize(frame, height=cfg.resize['height'])
     # frame = imutils.resize(frame, width=1000)
     # frame = frame[340:, :, :]
     # frame = frame[170:, :, :]
@@ -39,26 +50,40 @@ def preprocess(frame, cfg: VideoConfig):
 
 
 def back(rects, start, shape, original_shape, cfg: VideoConfig):
+    """
+    recover original bounding box size after detection-based down sample and divide blocks frame
+    :param rects: detected bbox based cropped or resized frames
+    :param start: start position of frame block
+    :param shape: current shape
+    :param original_shape: original shape
+    :param cfg: video configuration, well-define bbox size should be
+    :return:
+    """
     if not len(rects):
         return rects
     b_rects = []
     ratio = 1
     if cfg.resize['scale'] != -1:
         ratio = cfg.resize['scale']
-    if cfg.resize['width'] != -1:
+    elif cfg.resize['width'] != -1:
         ratio = original_shape[1] / cfg.routine['col'] / shape[1]
-    if cfg.resize['height'] != -1:
+    elif cfg.resize['height'] != -1:
         ratio = original_shape[0] / cfg.routine['row'] / shape[0]
     for r in rects:
-        x = int((r[0] + start[0] + cfg.roi['x']) * ratio)
-        y = int((r[1] + start[1] + cfg.roi['y']) * ratio)
+        x = int((r[0] + start[0]) * ratio + cfg.roi['x'])
+        y = int((r[1] + start[1]) * ratio + cfg.roi['y'])
         w = int(r[2] * ratio)
         h = int(r[3] * ratio)
-        b_rects.append((x, y, w, h))
+        b_rects.append((x, y, x + w, y + h))
     return b_rects
 
 
 def cvt_rect(rects):
+    """
+    [x1,y1,w,h] --> [x1,y1,x2,y2] ,x2 = x1 + w; y2= y1+ h
+    :param rects:
+    :return:
+    """
     new_rects = []
     for rect in rects:
         new_rects.append([rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3]])
@@ -215,3 +240,19 @@ def standardization(data):
     mu = np.mean(data, axis=0)
     sigma = np.std(data, axis=0)
     return (data - mu) / sigma
+
+
+def paint_chinese_opencv(im, text, pos, color=None):
+    if color is None:
+        color = np.random.randint(0, 255, size=(3,))
+        color = [int(c) for c in color]
+    img_PIL = Image.fromarray(cv2.cvtColor(im, cv2.COLOR_BGR2RGB))
+    font = ImageFont.truetype('NotoSansCJK-Bold.ttc', 50)
+    fillColor = (color[0], color[1], color[2])  # (255,0,0)
+    position = pos  # (100,100)
+    if not isinstance(text, np.unicode):
+        text = text.decode('utf-8')
+    draw = ImageDraw.Draw(img_PIL)
+    draw.text((position[0], position[1] - 60), text, font=font, fill=fillColor)
+    img = cv2.cvtColor(np.asarray(img_PIL), cv2.COLOR_RGB2BGR)
+    return img

@@ -71,6 +71,7 @@ class VideoCaptureThreading:
         self.status.set(SystemStatus.RUNNING)
         threading.Thread(target=self.listen, args=(), daemon=True).start()
         # threading.Thread(target=self.update, args=(*args,), daemon=True).start()
+        time.sleep(5)
         self.update(*args)
         # threading.Thread(target=cpu_usage).start()
         return self
@@ -380,16 +381,16 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
         ssd_detector = None
         classifier = None
         server_cfg = args[0]
-        if server_cfg.detect_mode == ModelType.SSD:
-            ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
-            ssd_detector.run()
-            logger.info(
-                f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
-        elif server_cfg.detect_mode == ModelType.CLASSIFY:
-            classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
-            classifier.run()
-            logger.info(
-                f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
+        # if server_cfg.detect_mode == ModelType.SSD:
+        #     ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
+        #     ssd_detector.run()
+        #     logger.info(
+        #         f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
+        # elif server_cfg.detect_mode == ModelType.CLASSIFY:
+        #     classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
+        #     classifier.run()
+        #     logger.info(
+        #         f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
             s = time.time()
