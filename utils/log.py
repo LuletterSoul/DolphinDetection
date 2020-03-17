@@ -29,8 +29,8 @@ def setup_logging(log_dir, logger_name='main', level=logging.DEBUG):
     logger.setLevel(level)
 
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(Formatter(log_console_format))
+    console_handler.setLevel(logging.DEBUG)
+    console_handler.setFormatter(Formatter(log_file_format))
 
     exp_file_info_handler = RotatingFileHandler(str(log_dir / 'info.log'), maxBytes=10 ** 6, backupCount=5)
     exp_file_info_handler.setLevel(logging.INFO)

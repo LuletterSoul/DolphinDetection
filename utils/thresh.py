@@ -32,10 +32,10 @@ def adaptive_thresh_size(frame, kernel_size=(3, 3), block_size=21, C=40):
     # blur = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 1)
     th_atm = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, block_size, C)
     # ret_otsu, th_otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    edges = cv2.Canny(th_atm, canny_lth, canny_hth)
-    dilation = cv2.dilate(edges, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_size))
-    return dilation
-    # return th_atm
+    # edges = cv2.Canny(th_atm, canny_lth, canny_hth)
+    # dilation = cv2.dilate(edges, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_size))
+    # return dilation
+    return th_atm
 
 # def main():
 #     init_path = osp.join(path, 'Demo/picts/test_2.jpg')

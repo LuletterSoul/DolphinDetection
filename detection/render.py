@@ -100,11 +100,14 @@ class DetectionStreamRender(object):
             f'*******************************{self.LOG_PREFIX}: Init Stream Render Notify Service********************************')
         threading.Thread(target=self.listen, daemon=True).start()
         while self.status.get() == SystemStatus.RUNNING:
-            index, type = self.notify_queue.get()
-            if type == 'notify':
-                self.notify(index)
-            if type == 'reset':
-                self.reset(index)
+            try:
+                index, type = self.notify_queue.get()
+                if type == 'notify':
+                    self.notify(index)
+                if type == 'reset':
+                    self.reset(index)
+            except Exception as e:
+                logger.error(e)
         logger.info(
             f'*******************************{self.LOG_PREFIX}: Exit Stream Render Notify Service********************************')
 
@@ -132,8 +135,6 @@ class DetectionStreamRender(object):
         render_cnt = 0
         rects = []
         for index in range(next_cnt, end_cnt + 1):
-            # if next_cnt in render_cache:
-            # logger.info(f'Video Render Processing {index}.....')
             frame = frame_cache[index]
             if frame is None:
                 continue
@@ -148,64 +149,11 @@ class DetectionStreamRender(object):
                     color = np.random.randint(0, 255, size=(3,))
                     color = [int(c) for c in color]
                     p1, p2 = bbox_points(self.cfg, rect, frame.shape)
-                    # cv2.putText(frame, 'Asaeorientalis', p1,
-                    #             cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
                     frame = paint_chinese_opencv(frame, '江豚', p1)
                     cv2.rectangle(frame, p1, p2, color, 2)
                 render_cnt += 1
             next_cnt += 1
             video_write.write(frame)
-        return next_cnt
-
-    def process_nearest_neighbor_render_frames(self, next_cnt, end_cnt, frame, rect_cache, render_cache, video_write):
-        forward_cnt = next_cnt + self.sample_rate
-        if forward_cnt > end_cnt:
-            forward_cnt = end_cnt
-        while forward_cnt > next_cnt:
-            # if forward_cnt in render_cache:
-            if rect_cache[forward_cnt % self.cache_size] is not None:
-                break
-            forward_cnt -= 1
-        # current forward pointer
-        if forward_cnt - next_cnt <= 1:
-            # logger.info('Enter singal')
-            render_frame = render_cache[next_cnt % self.cache_size]
-            if render_frame is not None:
-                video_write.write(render_frame)
-                render_cache[next_cnt % self.cache_size] = None
-            next_cnt += 1
-            return next_cnt
-        elif forward_cnt - next_cnt > 1:
-            # logger.info('Enter internal')
-            return self.render_internal_frames(forward_cnt, next_cnt, frame, video_write)
-
-    def render_internal_frames(self, forward_cnt, next_cnt, frame, video_write):
-        step = forward_cnt - next_cnt
-        first_rects = self.render_rect_cache[next_cnt % self.cache_size]
-        last_rects = self.render_rect_cache[forward_cnt % self.cache_size]
-        len_is_equal = len(last_rects) != len(first_rects)
-        if frame is not None and len_is_equal:
-            for i in range(step):
-                try:
-                    frame = self.original_frame_cache[next_cnt].copy()
-                    self.render_frame_cache[next_cnt % self.cache_size] = None
-                    for j in range(min(len(first_rects), len(last_rects))):
-                        first_rect = first_rects[j]
-                        last_rect = last_rects[j]
-                        delta_x = (last_rect[0] - first_rect[0]) / step
-                        delta_y = (last_rect[1] - first_rect[1]) / step
-                        if abs(delta_x) > 100 / step or abs(delta_y) > 100 / step:
-                            break
-                        color = np.random.randint(0, 255, size=(3,))
-                        color = [int(c) for c in color]
-                        p1, p2 = bbox_points(self.cfg, first_rect, frame.shape, int(delta_x), int(delta_y))
-                        cv2.putText(frame, 'Asaeorientalis', p1,
-                                    cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-                        cv2.rectangle(frame, p1, p2, color, 2)
-                    video_write.write(frame)
-                    next_cnt += 1
-                except Exception as e:
-                    next_cnt += 1
         return next_cnt
 
     def write_original_video_work(self, video_write, next_cnt, end_cnt, frame_cache):

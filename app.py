@@ -22,6 +22,8 @@ from utils import sec2time
 from apscheduler.schedulers.blocking import BlockingScheduler
 from utils.scheduler import ClosableBlockingScheduler
 import os
+import warnings
+warnings.filterwarnings("ignore")
 
 
 # from apscheduler.schedulers.blocking import BlockingScheduler
