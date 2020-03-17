@@ -32,6 +32,7 @@ from .detector import *
 from config import ModelType
 import time
 import imutils
+from pysot.tracker.request import TrackingService, TrackRequester
 
 
 # from pynput.keyboard import Key, Controller, Listener
@@ -172,7 +173,7 @@ class DetectionMonitor(object):
 # Base class embedded controllers of detector
 # Each video has a detector controller
 # But a controller will manager [row*col] concurrency threads or processes
-# row and col are definied in video configuration
+# row and col are defined in video configuration
 class EmbeddingControlMonitor(DetectionMonitor):
     def __init__(self, cfgs: List[VideoConfig], scfg, stream_path: Path, sample_path: Path, frame_path: Path,
                  region_path, offline_path: Path = None, build_pool=True) -> None:
@@ -262,14 +263,33 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         # HandlerSSD.SSD_MODEL = ssd_model
         self.scfg = scfg
         self.task_futures = []
+        self.pipe_manager = Manager()
         for c in self.cfgs:
             c.date = self.time_stamp
             # self.process_pool = None
         # self.thread_pool = None
-        self.render_notify_queues = [Manager().Queue() for c in self.cfgs]
+        self.render_notify_queues = [self.pipe_manager.Queue() for c in self.cfgs]
         self.stream_renders = []
+        self.track_service = None
+        self.track_requester = None
+        self.track_input_pipe = self.pipe_manager.Queue()
+
+    def init_track_poster(self):
+        """
+        init tracking service
+        :param cfgs:
+        :return:
+        """
+        self.track_service = TrackingService(self.scfg.track_cfg_path, self.cfgs, self.scfg.track_model_path,
+                                             self.frame_caches)
+        self.track_service.run()
+        self.track_requester = self.track_service.get_request_instance()
 
     def init_stream_renders(self):
+        """
+        init rendering service
+        :return:
+        """
         self.stream_renders = [
             DetectionStreamRender(c, 0, c.future_frames, self.msg_queue[idx], self.controllers[idx].rect_stream_path,
                                   self.controllers[idx].original_stream_path, self.controllers[idx].render_frame_cache,
@@ -280,12 +300,18 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             enumerate(self.cfgs)]
 
     def init_controllers(self):
+        """
+        init detection service
+        :return:
+        """
         self.controllers = [
             TaskBasedDetectorController(self.scfg, cfg, self.stream_path / str(cfg.index),
                                         self.region_path / str(cfg.index), self.frame_path / str(cfg.index),
                                         self.caps_queue[idx], self.pipes[idx], self.msg_queue[idx],
                                         self.stream_stacks[idx],
-                                        self.render_notify_queues[idx], self.frame_caches[idx]) for
+                                        self.render_notify_queues[idx], self.frame_caches[idx], self.track_requester
+                                        )
+            for
             idx, cfg in enumerate(self.cfgs)]
         for i, cfg in enumerate(self.cfgs):
             logger.info('Init detector controller [{}]....'.format(cfg.index))
@@ -297,6 +323,12 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             logger.info('Done init detector controller [{}]....'.format(cfg.index))
 
     def init_rtsp_caps(self, c, idx):
+        """
+        init online rtsp video stream reciever
+        :param c:
+        :param idx:
+        :return:
+        """
         self.caps.append(
             VideoRtspCallbackCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
                                      self.pipes[idx], self.caps_queue[idx], c, idx, self.controllers[idx],
@@ -304,6 +336,12 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         )
 
     def init_offline_caps(self, c, idx):
+        """
+        init offline rtsp video stream reciever
+        :param c:
+        :param idx:
+        :return:
+        """
         self.caps.append(
             VideoOfflineCallbackCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
                                         self.offline_path / str(c.index),
@@ -321,6 +359,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             if self.cfgs[idx].use_sm:
                 self.frame_caches[idx].close()
                 self.stream_stacks[idx][0].close()
+            self.track_service.cancel()
 
     def init_websocket_clients(self):
         for idx, cfg in enumerate(self.cfgs):
@@ -331,6 +370,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
 
     def call(self):
         self.init_websocket_clients()
+        self.init_track_poster()
         # Init detector controller
         self.init_controllers()
         self.init_caps()
@@ -592,7 +632,7 @@ class TaskBasedDetectorController(DetectorController):
 
     def __init__(self, server_cfg: ServerConfig, cfg: VideoConfig, stream_path: Path, candidate_path: Path,
                  frame_path: Path, frame_queue: Queue, index_pool: Queue, msg_queue: Queue, streaming_queue: List,
-                 render_notify_queue, frame_cache: SharedMemoryFrameCache) -> None:
+                 render_notify_queue, frame_cache: SharedMemoryFrameCache, track_requester: TrackRequester) -> None:
         super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool, msg_queue, frame_cache)
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
@@ -611,6 +651,7 @@ class TaskBasedDetectorController(DetectorController):
         # self.stream_render = stream_render
         self.global_index = Manager().Value('i', 0)
         self.render_notify_queue = render_notify_queue
+        self.track_requester = track_requester
         self.init_control_range()
         self.init_detectors()
 

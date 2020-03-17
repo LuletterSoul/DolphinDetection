@@ -26,6 +26,7 @@ from moviepy.config import get_setting
 import cv2
 import time
 
+import numpy as np
 from config import VideoConfig, SystemStatus
 from utils import logger, bbox_points, generate_time_stamp
 

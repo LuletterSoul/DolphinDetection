@@ -146,6 +146,8 @@ class ServerConfig(Config):
 
     def __init__(self, env, http_ip, http_port, wc_ip, wc_port, send_msg, run_direct, cron, root, classify_model_path,
                  detect_model_path,
+                 track_cfg_path,
+                 track_model_path,
                  detect_mode,
                  stream_save_path,
                  sample_save_dir,
@@ -160,8 +162,10 @@ class ServerConfig(Config):
         self.cron = cron
         self.wc_port = wc_port
         self.detect_mode = detect_mode
-        self.classify_model_path = Path(os.path.join(PROJECT_DIR, classify_model_path))
+        self.track_model_path = track_model_path
+        self.track_cfg_path = track_cfg_path
         self.detect_model_path = Path(os.path.join(PROJECT_DIR, detect_model_path))
+        self.track_model_path = track_model_path
         self.stream_save_path = stream_save_path
         self.sample_save_dir = sample_save_dir
         self.frame_save_dir = frame_save_dir
