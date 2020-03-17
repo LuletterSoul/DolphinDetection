@@ -314,7 +314,9 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         for i, cfg in enumerate(self.cfgs):
             logger.info('Init detector controller [{}]....'.format(cfg.index))
             # self.task_futures.append(self.controllers[i].start(self.thread_pool))
-            self.process_pool.apply_async(self.controllers[i].start, args=(None,))
+            task_future = self.process_pool.apply_async(self.controllers[i].start, args=(None,))
+            # task_future.get()
+
             # self.controllers[i].start(self.process_pool)
             logger.info('Done init detector controller [{}]....'.format(cfg.index))
 

@@ -136,11 +136,11 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
         return
     # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     # _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-    adaptive_thresh = adaptive_thresh_size(frame, (5, 5), block_size=21, C=params.cfg.alg['mean'])
-    adaptive_thresh = cv2.erode(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
-                                iterations=2)
+    thresh_binary = adaptive_thresh_size(frame, (5, 5), block_size=21, C=params.cfg.alg['mean'])
+    thresh_binary = cv2.erode(thresh_binary, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
+                              iterations=1)
     # adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
-    dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+    dilated = cv2.dilate(thresh_binary, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                          iterations=2)
     contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     binary = np.zeros(dilated.shape, dtype=np.uint8)

@@ -147,7 +147,8 @@ class TrackingPoster(object):
         """
         post a tracking request to a gpu model, request will be block until tracker finish
         services for all rects tracking
-        :param index: monitor index
+        :param monitor_index: monitor index
+        :param frame_index: frame unique id
         :param rects: rects template
         :return: result set [[(frame_idx1,[x1,y1,x2,y2]),(frame_idx2,[x2,y2,x3,y3]),...],]
         """
@@ -162,3 +163,4 @@ class TrackingPoster(object):
                 track_result: TrackResult = self.output_pipes[monitor_index].get()
                 # track result may be out of order, should sort by original rect id
                 result_set[track_result.rect_id] = track_result.result
+        return [r for r in result_set if r is not None and len(r)]
