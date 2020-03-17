@@ -14,6 +14,7 @@ import threading
 import time
 from multiprocessing import Manager
 from multiprocessing.queues import Queue
+from threading import Event
 
 import cv2
 import numpy as np
@@ -248,24 +249,25 @@ class DetectionStreamRender(object):
 
     def render_task(self, current_idx, render_cache, rect_cache, frame_cache):
         current_time = generate_time_stamp('%m%d%H%M%S') + '_'
+        post_filter_event = Event()
         rect_render_thread = threading.Thread(
             target=self.rect_render_task,
             args=(current_idx, current_time, frame_cache,
-                  rect_cache, render_cache,), daemon=True)
+                  rect_cache, render_cache, post_filter_event), daemon=True)
         # rect_render_thread.setDaemon(True)
         rect_render_thread.start()
         # self.rect_render_task(current_idx, current_time, frame_cache, rect_cache, render_cache)
         # self.original_render_task(current_idx, current_time, frame_cache)
         original_render_thread = threading.Thread(
             target=self.original_render_task,
-            args=(current_idx, current_time, frame_cache,), daemon=True)
+            args=(current_idx, current_time, frame_cache, post_filter_event), daemon=True)
         # original_render_thread.setDaemon(True)
         original_render_thread.start()
         self.write_done = True
         self.stream_cnt += 1
         return True
 
-    def rect_render_task(self, current_idx, current_time, frame_cache, rect_cache, render_cache):
+    def rect_render_task(self, current_idx, current_time, frame_cache, rect_cache, render_cache, post_filter_event):
         start = time.time()
         task_cnt = self.stream_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
@@ -307,12 +309,15 @@ class DetectionStreamRender(object):
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
-        if not self.post_filter.post_filter_video(str(target), task_cnt):
+        post_filter_event.wait()
+        origin_video_path = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
+        if not self.post_filter.post_filter_video(str(origin_video_path), task_cnt):
             msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
             self.msg_queue.put(msg_json)
             logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+        post_filter_event.clear()
 
-    def original_render_task(self, current_idx, current_time, frame_cache):
+    def original_render_task(self, current_idx, current_time, frame_cache, post_filter_event):
         start = time.time()
         task_cnt = self.stream_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
@@ -348,6 +353,7 @@ class DetectionStreamRender(object):
         logger.info(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: ' +
             f'Consume [{round(time.time() - start, 2)}] seconds.Done write detection stream frame into: [{str(target)}]')
+        post_filter_event.set()
         # if raw_target.exists():
         #     raw_target.unlink()
     #
