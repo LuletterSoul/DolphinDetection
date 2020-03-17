@@ -83,13 +83,17 @@ def track_service(index, video_cfgs: List[VideoConfig], device, checkpoint,
         # fetch a tracking request from a global sync queue
         # monitor_index, frame_index, rect, rect_id = recv_pipe.get()
         req: TrackRequest = recv_pipe.get()
+        # threshold for filtering low confidence bbox
         track_confidence = video_cfgs[req.monitor_index].alg['track_confidence']
+        # frame number of each tracking request
         track_window_size = video_cfgs[req.monitor_index].alg['search_windows']
         logger.info(
             f'Tracker [{index}]: From monitor [{req.monitor_index}] track request, track confidence '
             f'[{track_confidence}, track window size [{track_window_size}]')
         init_frame = frame_caches[req.monitor_index][req.frame_index]
         if init_frame is None:
+            logger.info(
+                f'Tracker [{index}]: Empty frame from cache [{req.frame_index}] of monitor [{req.monitor_index}].')
             continue
         # lock the whole model in case it is busy and throw exception if multiple requests post
         with lock:
@@ -106,12 +110,17 @@ def track_service(index, video_cfgs: List[VideoConfig], device, checkpoint,
                 best_score = track_res['best_score']
                 if best_score > track_confidence:
                     result.append((i, track_res))
+            # output results into the corresponding pipe of each monitor
+            logger.info(f'Tracker [{index}]: tracking results: {result}')
             output_pipes[req.monitor_index].put(TrackResult(req.rect_id, result))
 
 
-class TrackingPoster(object):
+class TrackingRequestPoster(object):
+    """
+    Handles tracking requests from all monitor processes,and dispatch all requests into a GPU pool.
+    """
 
-    def __init__(self, video_configs: List[VideoConfig], size, checkpoint, track_window_size, frame_caches) -> None:
+    def __init__(self, video_configs: List[VideoConfig], size, checkpoint, frame_caches) -> None:
         super().__init__()
         self.devices = []
         self.models = []
@@ -130,22 +139,26 @@ class TrackingPoster(object):
         # self.rec_pipes = [self.pipe_manager.Queue() for i in range(self.device_num)]
         self.rec_pipe = self.pipe_manager.Queue()
         self.output_pipes = {}
+        self.status = self.pipe_manager.Value('i', SystemStatus.RUNNING)
         for c in self.video_configs:
             self.output_pipes[c.index] = self.pipe_manager.Queue()
         # self.output_pipes = [self.pipe_manager.Queue() for i in range(self.device_num)]
         self.gpu_locks = [Lock() for i in range(self.device_num)]
         # self.tracker_pool = Pool(len(self.devices))
+        self.proc_instances = []
         for idx, device in enumerate(self.devices):
             p = Process(target=track_service,
-                        args=(idx, video_configs, device, checkpoint, frame_caches, self.rec_pipe, self.output_pipes,),
+                        args=(idx, video_configs, device, checkpoint, frame_caches, self.rec_pipe, self.output_pipes,
+                              self.status, self.gpu_locks[idx]),
                         daemon=True)
             p.start()
+            self.proc_instances.append(p)
 
             # self.tracker_pool.
 
     def request(self, monitor_index, frame_index, rects):
         """
-        post a tracking request to a gpu model, request will be block until tracker finish
+        post a tracking request to a GPU model, request will be blocked until tracker finishing
         services for all rects tracking
         :param monitor_index: monitor index
         :param frame_index: frame unique id
@@ -160,7 +173,15 @@ class TrackingPoster(object):
                 # post to a single
                 self.rec_pipe.put(TrackRequest(monitor_index, frame_index, rect))
             for i in range(len(rects)):
+                # frames of each monitor arrival in order, track request is also in order
+                # in corresponding receive pipe
                 track_result: TrackResult = self.output_pipes[monitor_index].get()
-                # track result may be out of order, should sort by original rect id
+                # but track result may be out of order at each request, should sort by original rect id
                 result_set[track_result.rect_id] = track_result.result
         return [r for r in result_set if r is not None and len(r)]
+
+    def cancel(self):
+        self.status.set(SystemStatus.SHUT_DOWN)
+        for p in self.proc_instances:
+            p.join()
+            p.close()

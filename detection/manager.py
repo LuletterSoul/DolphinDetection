@@ -15,7 +15,6 @@ import os.path as osp
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
-from multiprocessing import cpu_count
 from typing import List
 from apscheduler.schedulers.background import BackgroundScheduler
 from multiprocessing import Pool
@@ -27,8 +26,7 @@ from multiprocessing.managers import SharedMemoryManager
 from utils.cache import SharedMemoryFrameCache, ListCache
 # from utils import NoDaemonPool as Pool
 from .capture import *
-from stream.rtsp import FFMPEG_VideoStreamer
-from .component import stream_pipes
+from stream.rtsp import PushStreamer
 from .detect_funcs import detect_based_task
 from .detector import *
 from config import ModelType
@@ -672,7 +670,7 @@ class TaskBasedDetectorController(DetectorController):
         # TODO a small size shared memory is appropriate to post sub-frame,could decrease communication cost between
             processes compared to pipes serialization
         :param args: (List[DetectResult],Detection Model Ref,Original Frame)
-        :return:
+        :return: construct result
         """
         # results = self.collect(args)
         s = time.time()
@@ -914,7 +912,7 @@ class TaskBasedDetectorController(DetectorController):
                 # _, current_index = self.frame_stack.pop()
                 # always obtain the newest reach frame when detection is slower than video stream receiver
                 current_index = self.global_index.get() - 1
-                # but sometimes detection prcoess could faster than stream receiving
+                # but sometimes detection process could be faster than stream receiving
                 # so always keep the newest frame index and don't rollback
                 # otherwise it will flicker terribly to push stream
                 if current_index <= pre_index:
@@ -976,6 +974,12 @@ class TaskBasedDetectorController(DetectorController):
         # self.clear_original_cache()
 
     def forward(self, args, original_frame):
+        """
+        do nothing, just forward video stream into target server
+        :param args:
+        :param original_frame:
+        :return:
+        """
         self.post_stream_req(None, original_frame)
         # self.push_stream_queue.append((original_frame, None, self.pre_cnt))
 
@@ -1006,15 +1010,6 @@ class TaskBasedDetectorController(DetectorController):
                                 self.dol_gone = False
                                 logger.info(
                                     f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
-                                # for rect in rects:
-                                #     p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
-                                #     logger.info(f'Dolphin position: TL:[{p1}],BR:[{p2}]')
-                                #     if self.cfg.render:
-                                #         color = np.random.randint(0, 255, size=(3,))
-                                #         color = [int(c) for c in color]
-                                #         cv2.putText(render_frame, 'Asaeorientalis', p1,
-                                #                     cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-                                #         cv2.rectangle(render_frame, p1, p2, color, 2)
                         if detect_flag:
                             json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
                                                              timestamp=current_index, rects=rects,
@@ -1122,123 +1117,3 @@ class TaskBasedDetectorController(DetectorController):
         # threading.Thread(target=self.loop_stack, daemon=True).start()
         self.loop_stack()
         return True
-
-
-class PushStreamer(object):
-    def __init__(self, cfg: VideoConfig, stream_stack: List) -> None:
-
-        super().__init__()
-        self.cfg = cfg
-        self.stream_stack = stream_stack
-        self.LOG_PREFIX = f'Push Streamer [{self.cfg.index}]: '
-        self.quit = Manager().Event()
-        self.quit.clear()
-        self.status = Manager().Value('i', SystemStatus.RUNNING)
-
-    def listen(self):
-        if self.quit.wait():
-            self.status.set(SystemStatus.SHUT_DOWN)
-            # self.stream_render.quit.set()
-
-    def push_stream(self):
-        logger.info(
-            f'*******************************Controller [{self.cfg.index}]: Init push stream service********************************')
-        draw_cnt = 0
-        tmp_results = []
-        video_streamer = FFMPEG_VideoStreamer(self.cfg.push_to, size=(self.cfg.shape[1], self.cfg.shape[0]), fps=25,
-                                              codec='h264', )
-        video_streamer.write_frame(np.zeros((self.cfg.shape[1], self.cfg.shape[0], 3), dtype=np.uint8))
-        # time.sleep(6)
-        pre_index = 0
-        threading.Thread(target=self.listen, daemon=True).start()
-        while self.status.get() == SystemStatus.RUNNING:
-            try:
-                ps = time.time()
-                # if self.status.get() == SystemStatus.SHUT_DOWN:
-                #     video_streamer.close()
-                #     break
-                # se = 1 / (time.time() - ps)
-                # logger.debug(self.LOG_PREFIX + f'Get Signal Speed Rate: [{round(se, 2)}]/FPS')
-                # gs = time.time()
-                if self.cfg.use_sm:
-                    # 4K frame has large size, get it from shared memory instead pipe serialization between
-                    # multi-processes
-                    frame = self.stream_stack[0][0]
-                    # current index and other info are smaller than frame buffer,so we can use Manager().list()
-                    if not len(self.stream_stack[1]):
-                        continue
-                    proc_res, frame_index = self.stream_stack[1].pop()
-                else:
-                    # if frame shape is 4K, obtain FPS from Manager().list is around 10,which is over slow than video fps(25)
-                    # it causes much latent when pushing stream
-                    if not len(self.stream_stack):
-                        continue
-                    frame, proc_res, frame_index = self.stream_stack.pop()
-                    logger.debug(f'Push Streamer [{self.cfg.index}]: Cache queue size: [{len(self.stream_stack)}]')
-
-                if not self.cfg.use_sm and len(self.stream_stack) > 1000:
-                    self.stream_stack[:] = []
-                    logger.info(self.LOG_PREFIX + 'Too much frames blocked in stream queue.Cleared')
-                    continue
-
-                if pre_index < frame_index:
-                    pre_index = frame_index
-                else:
-                    continue
-
-                # end = 1 / (time.time() - gs)
-                # logger.debug(self.LOG_PREFIX + f'Get Frame Speed Rate: [{round(end, 2)}]/FPS')
-                detect_flag = (proc_res is not None and proc_res.detect_flag)
-                # logger.info(f'Draw cnt: [{draw_cnt}]')
-                # if proc_res is not None:
-                #     logger.info(f'Detect flag: [{proc_res.detect_flag}]')
-                # ds = time.time()
-                if detect_flag:
-                    # logger.info('Detect flag~~~~~~~~~~')
-                    draw_cnt = 0
-                    tmp_results = proc_res.results
-                is_draw_over = draw_cnt <= 36
-                if is_draw_over:
-                    # logger.info('Draw next frames~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-                    for r in tmp_results:
-                        for rect in r.rects:
-                            color = np.random.randint(0, 255, size=(3,))
-                            color = [int(c) for c in color]
-                            p1, p2 = bbox_points(self.cfg, rect, frame.shape)
-                            # p1 = (int(rect[0]), int(rect[1]))
-                            # p2 = (int(rect[2]), int(rect[3]))
-
-                            cv2.putText(frame, 'Asaeorientalis', p1,
-                                        cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-                            cv2.rectangle(frame, p1, p2, color, 2)
-                            # if self.server_cfg.detect_mode == ModelType.SSD:
-                            #     cv2.putText(frame, str(round(r[4], 2)), (p2[0], p2[1]),
-                            #                 cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-                    draw_cnt += 1
-                if self.cfg.write_timestamp:
-                    time_stamp = generate_time_stamp("%Y-%m-%d %H:%M:%S")
-                    cv2.putText(frame, time_stamp, (100, 100),
-                                cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                # de = 1 / (time.time() - ds)
-                # logger.debug(self.LOG_PREFIX + f'Draw Speed Rate: [{round(de, 2)}]/FPS')
-                # logger.info(f'Frame index [{frame_index}]')
-                # if frame_index % self.cfg.sample_rate == 0:
-                #     for _ in range(2):
-                #         video_streamer.write_frame(frame)
-                # else:
-                #     video_streamer.write_frame(frame)
-                # end = 1 / (time.time() - ps)
-                # ws = time.time()
-                video_streamer.write_frame(frame)
-                # w_end = 1 / (time.time() - ws)
-                end = 1 / (time.time() - ps)
-                # logger.debug(self.LOG_PREFIX + f'Writing Speed Rate: [{round(w_end, 2)}]/FPS')
-                logger.info(f'Streamer [{self.cfg.index}]: Streaming Speed Rate: [{round(end, 2)}]/FPS')
-            except Exception as e:
-                logger.error(e)
-                traceback.print_stack()
-                # logger.warning(e)
-        logger.info(
-            '*******************************Controller [{}]:  Push stream service exit********************************'.format(
-                self.cfg.index))

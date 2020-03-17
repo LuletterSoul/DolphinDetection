@@ -256,3 +256,18 @@ def paint_chinese_opencv(im, text, pos, color=None):
     draw.text((position[0], position[1] - 60), text, font=font, fill=fillColor)
     img = cv2.cvtColor(np.asarray(img_PIL), cv2.COLOR_RGB2BGR)
     return img
+
+
+def split_img_to_four(image):
+    '''
+    :param image:
+    :return:
+    '''
+    a1 = np.vsplit(image, 2)[0]
+    a2 = np.vsplit(image, 2)[1]
+    b1 = np.hsplit(a1, 2)[0]
+    b2 = np.hsplit(a1, 2)[1]
+    b3 = np.hsplit(a2, 2)[0]
+    b4 = np.hsplit(a2, 2)[1]
+
+    return b1, b2, b3, b4
