@@ -12,17 +12,15 @@
 """
 
 import argparse
+import warnings
 
 from classfy.model import DolphinClassifier
 from interface import *
 # from multiprocessing import Process
-from stream.http import HttpServer
 from utils import sec2time
 # from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.schedulers.blocking import BlockingScheduler
 from utils.scheduler import ClosableBlockingScheduler
-import os
-import warnings
+
 warnings.filterwarnings("ignore")
 
 
@@ -58,7 +56,7 @@ class DolphinDetectionServer:
                                                                   self.cfg.candidate_save_dir,
                                                                   self.cfg.offline_stream_save_dir)
         self.scheduler = ClosableBlockingScheduler(stop_event=self.monitor.shut_down_event)
-        self.http_server = HttpServer(self.cfg.http_ip, self.cfg.http_port, self.cfg.env, self.cfg.candidate_save_dir)
+        # self.http_server = HttpServer(self.cfg.http_ip, self.cfg.http_port, self.cfg.env, self.cfg.candidate_save_dir)
         if not self.cfg.run_direct:
             self.scheduler.add_job(self.monitor.monitor, 'cron',
                                    month=self.cfg.cron['start']['month'],
@@ -76,7 +74,7 @@ class DolphinDetectionServer:
         logger.info(
             f'*******************************Dolphin Detection System: Running Environment [{self.cfg.env}] at '
             f'[{start_time_str}]********************************')
-        self.http_server.run()
+        # self.http_server.run()
         if self.cfg.run_direct:
             self.monitor.monitor()
         else:

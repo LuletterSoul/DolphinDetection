@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 import os
 
-from config import SystemStatus
+from config import SystemStatus, VideoConfig
 # from .manager import DetectorController
 from stream.websocket import creat_packaged_msg_json
 from utils import logger, bbox_points, generate_time_stamp, crop_by_se
@@ -30,9 +30,19 @@ from detection.params import DispatchBlock, DetectorParams
 from detection.detect_funcs import detect_based_task, adaptive_thresh_mask_no_rules, adaptive_thresh_with_rules
 from pathlib import Path
 from utils import preprocess, paint_chinese_opencv
+from pysot.tracker.request import TrackRequester
+from multiprocessing import Lock
 
 
-class DetectionStreamRender(object):
+class ArriveMsgType:
+    UPDATE = 1,
+    DETECTION = 2
+
+
+class FrameArrivalHandler(object):
+    """
+    execute some tasks when fixed frames arrive
+    """
 
     def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue,
                  rect_stream_path, original_stream_path, render_frame_cache, render_rect_cache, original_frame_cache,
@@ -40,43 +50,44 @@ class DetectionStreamRender(object):
         super().__init__()
         self.cfg = cfg
         self.detect_index = detect_index
-        # self.rect_stream_path = controller.rect_stream_path
-        # self.original_stream_path = controller.original_stream_path
         self.rect_stream_path = rect_stream_path
         self.original_stream_path = original_stream_path
         self.stream_cnt = 0
         self.index = cfg.index
-        self.is_trigger_write = True
-        self.write_done = True
-        # self.controller = controller
+        self.lock_window = True
         self.cache_size = cfg.cache_size
         self.future_frames = future_frames
-        # self.sample_rate = controller.cfg.sample_rate
-        # self.render_frame_cache = controller.render_frame_cache
-        # self.render_rect_cache = controller.render_rect_cache
-        # self.original_frame_cache = controller.original_frame_cache
         self.sample_rate = cfg.sample_rate
         self.render_frame_cache = render_frame_cache
         self.render_rect_cache = render_rect_cache
         self.original_frame_cache = original_frame_cache
-        self.next_prepare_event = Manager().Event()
+        self.next_prepare_event = Manager().Event()  # shared event lock, will be released until all future frames has come
         self.next_prepare_event.set()
         self.msg_queue = msg_queue
-        # self.fourcc = cv2.VideoWriter_fourcc(*'avc1')
         self.fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-        # self.fourcc = cv2.VideoWriter_fourcc(*'H264')
-        # self.fourcc = cv2.VideoWriter_fourcc(*'X264')
         self.quit = Manager().Event()
         self.quit.clear()
         self.status = Manager().Value('i', SystemStatus.RUNNING)
         self.notify_queue = notify_queue
         self.LOG_PREFIX = f'Video Stream Render [{self.cfg.index}]: '
-        self.post_filter = PostFilter(self.cfg, region_path, detect_params)
+        self.post_filter = Filter(self.cfg, region_path, detect_params)
 
-    def listen(self):
-        if self.quit.wait():
-            self.next_prepare_event.set()
-            self.status.set(SystemStatus.SHUT_DOWN)
+    def is_window_reach(self, detect_index):
+        return detect_index - self.detect_index > self.future_frames
+
+    def reset(self, detect_index):
+        """
+        release window lock
+        all frames in a fixed slide window will be skipped until the final frame arrival
+        :param detect_index:
+        :return:
+        """
+        if self.is_window_reach(detect_index):
+            self.detect_index = detect_index
+            self.lock_window = False
+            if not self.next_prepare_event.is_set():
+                self.next_prepare_event.set()
+            logger.info(self.LOG_PREFIX + 'Release window lock')
 
     def next_st(self, detect_index):
         if detect_index - self.detect_index > self.future_frames:
@@ -84,71 +95,140 @@ class DetectionStreamRender(object):
         else:
             return self.detect_index
 
-    def is_window_reach(self, detect_index):
-        return detect_index - self.detect_index > self.future_frames
+    def notify(self, current_index):
+        """
+        execute some analysis tasks asynchronously before the the future frame comes
+        :param current_index:
+        :return:
+        """
+        if not self.lock_window:
+            # continuous arrival signal in current window will be ignored
+            if self.next_prepare_event.is_set():
+                self.next_prepare_event.clear()
+                self.task(current_index)
+                # occupy the whole window until a sequent task is done
+                self.lock_window = True
+            self.detect_index = current_index
+        # if current_index - self.detect_index >= self.future_frames and self.write_done:
+        #     # release
+        #     if not self.next_prepare_event.is_set():
+        #         self.next_prepare_event.set()
+        #         logger.info(
+        #             f'Notify detection stream writer.Current frame index [{current_index}],Previous detected frame index [{self.detect_index}]...')
 
-    def reset(self, detect_index):
-        if self.is_window_reach(detect_index):
-            self.detect_index = detect_index
-            self.is_trigger_write = False
-            self.write_done = False
+    def task(self, current_idx):
+        """
+        override by subclass,do everything what you want in a single frame window
+        task must be executed asynchronously  in case blocking caller
+        :param current_idx:
+        :return:
+        """
+        pass
+
+
+class DetectionSignalHandler(FrameArrivalHandler):
+    """
+    track object from a batch of frames, and decides if let system
+    send detection notification,generate render video or not
+    """
+
+    def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue, rect_stream_path,
+                 original_stream_path, render_frame_cache, render_rect_cache, original_frame_cache, notify_queue,
+                 region_path, track_requester: TrackRequester, detect_params=None) -> None:
+        super().__init__(cfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
+                         render_frame_cache, render_rect_cache, original_frame_cache, notify_queue, region_path,
+                         detect_params)
+
+
+class DetectionStreamRender(FrameArrivalHandler):
+    """
+    Generate a video with fixed time when notification occurs
+    """
+
+    def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue, rect_stream_path,
+                 original_stream_path, render_frame_cache, render_rect_cache, original_frame_cache, notify_queue,
+                 region_path, detect_params=None) -> None:
+        super().__init__(cfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
+                         render_frame_cache, render_rect_cache, original_frame_cache, notify_queue, region_path,
+                         detect_params)
+
+    def listen(self):
+        if self.quit.wait():
             self.next_prepare_event.set()
-            logger.info('Reset stream render')
+            self.status.set(SystemStatus.SHUT_DOWN)
 
     def loop_render_msg(self):
+        """
+        loop render message inside a sub-process
+        :return:
+        """
         logger.info(
             f'*******************************{self.LOG_PREFIX}: Init Stream Render Notify Service********************************')
         threading.Thread(target=self.listen, daemon=True).start()
         while self.status.get() == SystemStatus.RUNNING:
             try:
                 index, type = self.notify_queue.get()
-                if type == 'notify':
+                if type == ArriveMsgType.DETECTION:
                     self.notify(index)
-                if type == 'reset':
+                if type == ArriveMsgType.UPDATE:
                     self.reset(index)
             except Exception as e:
                 logger.error(e)
         logger.info(
             f'*******************************{self.LOG_PREFIX}: Exit Stream Render Notify Service********************************')
 
-    def notify(self, current_index):
-        # next_detect_stream_occurred = current_index - self.detect_index >= self.future_frames \
-        #                               and not self.is_trigger_write
-        if not self.is_trigger_write:
-            if self.next_prepare_event.is_set():
-                self.next_prepare_event.clear()
-                # begin task asynchronously  in case blocking collector
-                self.render_task(current_index, self.render_frame_cache, self.render_rect_cache,
-                                 self.original_frame_cache)
-                self.is_trigger_write = True
-        if current_index - self.detect_index >= self.future_frames and self.write_done:
-            # notify render task that the future frames(2s default required) are done
-            if not self.next_prepare_event.is_set():
-                self.next_prepare_event.set()
-                logger.info(
-                    f'Notify detection stream writer.Current frame index [{current_index}],Previous detected frame index [{self.detect_index}]...')
+    def task(self, current_idx):
+        """
+        generate a video in fixed window,if detection signal is triggered in a window internal,the rest detection
+        frame will be merged into a video instead of producing multiple videos.
+        :param current_idx: current frame index
+        :return:
+        """
+        current_time = generate_time_stamp('%m%d%H%M%S') + '_'
+        # use two independent threads to execute video generation sub-tasks
+        rect_render_thread = threading.Thread(
+            target=self.rect_render_task,
+            args=(current_idx, current_time,), daemon=True)
+        rect_render_thread.start()
+        original_render_thread = threading.Thread(
+            target=self.original_render_task,
+            args=(current_idx, current_time,), daemon=True)
+        original_render_thread.start()
+        self.stream_cnt += 1
+        return True
 
-    def write_render_video_work(self, video_write, next_cnt, end_cnt, render_cache, rect_cache, frame_cache):
+    def write_render_video_work(self, video_write, next_cnt, end_cnt):
+        """
+        write rendering frame into a video, render bbox if rect cache exists the position record
+        :param video_write:
+        :param next_cnt: video start frame index
+        :param end_cnt:
+        :return:
+        """
         if next_cnt < 1:
             next_cnt = 1
-
         render_cnt = 0
         rects = []
         for index in range(next_cnt, end_cnt + 1):
-            frame = frame_cache[index]
+            frame = self.original_frame_cache[index]
             if frame is None:
                 continue
+
             tmp_rects = self.render_rect_cache[index % self.cache_size]
             self.render_rect_cache[index % self.cache_size] = None
+            # if current frame has bbox, just update the bbox position, and clear counting
             if tmp_rects is not None:
                 render_cnt = 0
                 rects = tmp_rects
+            # each bbox will last 1.5s in 25FPS video
             is_render = render_cnt <= 36
             if is_render:
                 for rect in rects:
                     color = np.random.randint(0, 255, size=(3,))
                     color = [int(c) for c in color]
+                    # get a square bbox, the real bbox of width and height is universal as 224 * 224 or 448 * 448
                     p1, p2 = bbox_points(self.cfg, rect, frame.shape)
+                    # write text
                     frame = paint_chinese_opencv(frame, '江豚', p1)
                     cv2.rectangle(frame, p1, p2, color, 2)
                 render_cnt += 1
@@ -156,7 +236,14 @@ class DetectionStreamRender(object):
             video_write.write(frame)
         return next_cnt
 
-    def write_original_video_work(self, video_write, next_cnt, end_cnt, frame_cache):
+    def write_original_video_work(self, video_write, next_cnt, end_cnt):
+        """
+        write original frame into video.
+        :param video_write: write video into a pipe, which is directed to ffmpeg command
+        :param next_cnt:
+        :param end_cnt:
+        :return:
+        """
         if next_cnt < 1:
             next_cnt = 1
         start = time.time()
@@ -168,7 +255,7 @@ class DetectionStreamRender(object):
                         f'Video Render [{self.index}]: original task interruped by exit signal')
                     return False
                 # if next_cnt in frame_cache:
-                frame = frame_cache[next_cnt % self.cache_size]
+                frame = self.original_frame_cache[next_cnt % self.cache_size]
                 if frame is not None:
                     video_write.write(frame)
                     # frame_cache[next_cnt % self.cache_size] = None
@@ -194,26 +281,13 @@ class DetectionStreamRender(object):
                 logger.error(e)
         return next_cnt
 
-    def render_task(self, current_idx, render_cache, rect_cache, frame_cache):
-        current_time = generate_time_stamp('%m%d%H%M%S') + '_'
-        rect_render_thread = threading.Thread(
-            target=self.rect_render_task,
-            args=(current_idx, current_time, frame_cache,
-                  rect_cache, render_cache,), daemon=True)
-        # rect_render_thread.setDaemon(True)
-        rect_render_thread.start()
-        # self.rect_render_task(current_idx, current_time, frame_cache, rect_cache, render_cache)
-        # self.original_render_task(current_idx, current_time, frame_cache)
-        original_render_thread = threading.Thread(
-            target=self.original_render_task,
-            args=(current_idx, current_time, frame_cache,), daemon=True)
-        # original_render_thread.setDaemon(True)
-        original_render_thread.start()
-        self.write_done = True
-        self.stream_cnt += 1
-        return True
-
-    def rect_render_task(self, current_idx, current_time, frame_cache, rect_cache, render_cache):
+    def rect_render_task(self, current_idx, current_time):
+        """
+        generate a short-time dolphin video with bbox indicator.
+        :param current_idx: start frame index in a slide window
+        :param current_time:
+        :return:
+        """
         start = time.time()
         task_cnt = self.stream_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
@@ -246,8 +320,7 @@ class DetectionStreamRender(object):
         # logger.info('After :[{}]'.format(render_cache.keys()))
         end_cnt = current_idx + self.future_frames
         try:
-            next_cnt = self.write_render_video_work(video_write, next_cnt, end_cnt, render_cache, rect_cache,
-                                                    frame_cache)
+            next_cnt = self.write_render_video_work(video_write, next_cnt, end_cnt)
         except Exception as e:
             logger.error(e)
         video_write.release()
@@ -264,7 +337,13 @@ class DetectionStreamRender(object):
             self.msg_queue.put(msg_json)
             logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
-    def original_render_task(self, current_idx, current_time, frame_cache):
+    def original_render_task(self, current_idx, current_time):
+        """
+        generate a short-time dolphin video without bbox indicator.
+        :param current_idx:
+        :param current_time:
+        :return:
+        """
         start = time.time()
         task_cnt = self.stream_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
@@ -277,7 +356,7 @@ class DetectionStreamRender(object):
         #     logger.error(f'Video Render [{self.index}]: Error Opened Video Writer')
 
         next_cnt = current_idx - self.future_frames
-        next_cnt = self.write_original_video_work(video_write, next_cnt, current_idx, frame_cache)
+        next_cnt = self.write_original_video_work(video_write, next_cnt, current_idx)
         # the future frames count
         # next_frame_cnt = 48
         # wait the futures frames is accessable
@@ -294,7 +373,7 @@ class DetectionStreamRender(object):
         # if not self.started:
         #     return False
         end_cnt = next_cnt + self.future_frames
-        next_cnt = self.write_original_video_work(video_write, next_cnt, end_cnt, frame_cache)
+        next_cnt = self.write_original_video_work(video_write, next_cnt, end_cnt)
         video_write.release()
         # self.convert_byfile(str(raw_target), str(target))
         logger.info(
@@ -302,38 +381,13 @@ class DetectionStreamRender(object):
             f'Consume [{round(time.time() - start, 2)}] seconds.Done write detection stream frame into: [{str(target)}]')
         # if raw_target.exists():
         #     raw_target.unlink()
-    #
-    # def convert_avi(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
-    #     ffmpeg = '{ffmpeg} -y -i "{infile}" -c:v libx264 -strict -2 "{outfile}"'.format(ffmpeg=ffmpeg_exec,
-    #                                                                                     infile=input_file,
-    #                                                                                     outfile=output_file
-    #                                                                                     )
-    #     f = os.popen(ffmpeg)
-    #     return f.readline()
-    #
-    # def convert_avi_to_webm(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
-    #     return self.convert_avi(input_file, output_file, ffmpeg_exec="ffmpeg")
-    #
-    # def convert_avi_to_mp4(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
-    #     return self.convert_avi(input_file, output_file, ffmpeg_exec="ffmpeg")
-    #
-    # def convert_to_avcmp4(self, input_file, output_file, ffmpeg_exec="ffmpeg"):
-    #     email = threading.Thread(target=self.convert_avi, args=(input_file, output_file, ffmpeg_exec,))
-    #     email.start()
-    #
-    # def convert_byfile(self, from_path, to_path):
-    #     if not os.path.exists(from_path):
-    #         logger.info("Sorry, you must create the directory for the output files first")
-    #     if not os.path.exists(os.path.dirname(to_path)):
-    #         os.makedirs(os.path.dirname(to_path), exist_ok=True)
-    #     # directory, file_name = os.path.split(from_path)
-    #     # raw_name, extension = os.path.splitext(file_name)
-    #     # print("Converting ", from_path)
-    #     line = self.convert_avi_to_mp4(from_path, to_path)
-    #     logger.info(line)
 
 
-class PostFilter(object):
+class Filter(object):
+    """
+    filter post rendering video from a video, or forward detection signal from a bbox set.
+    """
+
     def __init__(self, cfg: VideoConfig, region_path, detect_params=None):
         self.cfg = cfg
         self.region_path = region_path

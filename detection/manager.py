@@ -20,7 +20,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from multiprocessing import Pool
 import stream
 from detection.params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
-from detection.render import DetectionStreamRender
+from detection.render import DetectionStreamRender, ArriveMsgType
 from stream.websocket import *
 from multiprocessing.managers import SharedMemoryManager
 from utils.cache import SharedMemoryFrameCache, ListCache
@@ -613,7 +613,7 @@ class DetectorController(object):
                 save_file[key] = self.save_cache[key]
 
             fw = open(bbox_path, 'w')
-            fw.write(json.dumps(save_file, indent=4))
+            fw.write(json.dumps(self.save_cache, indent=4))
             fw.close()
 
             self.save_cache = {}
@@ -769,30 +769,17 @@ class TaskBasedDetectorController(DetectorController):
         try:
             self.construct_cnt += 1
             current_index = results[0].frame_index
-            try_time = 0
-            # while current_index not in self.original_frame_cache:
-            #     logger.info(
-            #         f'Current index: [{current_index}] not in original frame cache.May cache was cleared by timer')
-            #     time.sleep(0.1)
-            #     try_time += 1
-            #     if try_time > 24:
-            #         return ConstructResult(None, None, None)
-            # logger.info(self.original_frame_cache.keys())
-            # original_frame = self.original_frame_cache[current_index]
             render_frame = original_frame.copy()
             push_flag = False
             for r in results:
                 if len(r.rects):
                     self.result_queue.put((r.frame_index, r.rects))
-                    # self.result_queue.put((original_frame, r.frame_index, r.rects))
                     rects = []
-                    # r.rects = cvt_rect(r.rects)
                     if len(r.rects) >= 3:
                         logger.info(f'To many rect candidates: [{len(r.rects)}].Abandoned..... ')
                         return ConstructResult(original_frame, None, None, frame_index=current_index)
                     for rect in r.rects:
                         start = time.time()
-                        # obj_class, output = _model.predict(candidate)
                         detect_result = True
                         if not self.cfg.cv_only:
                             candidate = crop_by_rect(self.cfg, rect, render_frame)
@@ -806,30 +793,15 @@ class TaskBasedDetectorController(DetectorController):
                             self.dol_gone = False
                             push_flag = True
                             rects.append(rect)
-                            # p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
-                            # logger.info(f'Dolphin position: TL:[{p1}],BR:[{p2}]')
-                            # if self.cfg.render:
-                            #     color = np.random.randint(0, 255, size=(3,))
-                            #     color = [int(c) for c in color]
-                            #     # p1, p2 = bbox_points(self.cfg, rect, render_frame.shape)
-                            #     # logger.info(f'Dolphin position: TL:[{p1}],BR:[{p2}]')
-                            #     cv2.putText(render_frame, 'Asaeorientalis', p1,
-                            #                 cv2.FONT_HERSHEY_COMPLEX, 2, color, 2, cv2.LINE_AA)
-                            #     cv2.rectangle(render_frame, p1, p2, color, 2)
                     r.rects = rects
                     if push_flag:
                         json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
                                                          timestamp=current_index, rects=r.rects, dol_id=self.dol_id)
                         logger.info(f'put detect message in msg_queue...')
                         self.msg_queue.put(json_msg)
-                        # self.render_frame_cache[current_index % self.cache_size] = render_frame
                         self.render_rect_cache[current_index % self.cache_size] = r.rects
                         if self.cfg.render:
-                            # threading.Thread(target=self.stream_render.reset, args=(current_index,),
-                            #                  daemon=True).start()
-                            self.render_notify_queue.put((current_index, 'reset'))
-                        # self.last_detection = self.stream_render.detect_index
-                        # logger.info(self.LOG_PREFIX + f'Last detection frame index [{self.last_detection}]')
+                            self.render_notify_queue.put((current_index, ArriveMsgType.DETECTION))
                     else:
                         if not self.dol_gone:
                             empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
@@ -839,9 +811,8 @@ class TaskBasedDetectorController(DetectorController):
                             self.dol_id += 1
                             self.dol_gone = True
 
-            if self.cfg.render:
-                self.render_notify_queue.put((current_index, 'notify'))
-                # threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
+            self.render_notify_queue.put((current_index, ArriveMsgType.UPDATE))
+            # threading.Thread(target=self.stream_render.notify, args=(current_index,), daemon=True).start()
             # if not push_flag:
             #     video_streamer.write_frame(cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
             # self.clear_render_cache()
@@ -1062,8 +1033,7 @@ class TaskBasedDetectorController(DetectorController):
                             if self.cfg.render:
                                 # threading.Thread(target=self.stream_render.reset, args=(current_index,),
                                 #                  daemon=True).start()
-                                self.render_notify_queue.put((current_index, 'reset'))
-                                logger.info(f'Update {current_index}')
+                                self.render_notify_queue.put((current_index, ArriveMsgType.DETECTION))
                             # self.last_detection = self.stream_render.detect_index
                             # logger.info(self.LOG_PREFIX + f'Last detection frame index [{self.last_detection}]')
                         else:
@@ -1074,8 +1044,8 @@ class TaskBasedDetectorController(DetectorController):
                                 self.dol_id += 1
                                 self.msg_queue.put(empty_msg)
                                 self.dol_gone = True
-                if self.cfg.render:
-                    self.render_notify_queue.put((current_index, 'notify'))
+                # if self.cfg.render:
+                self.render_notify_queue.put((current_index, ArriveMsgType.UPDATE))
                 # threading.Thread(target=self.str.notify, args=(current_index,), daemon=True).start()
                 construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results,
                                                    frame_index=self.pre_cnt)
