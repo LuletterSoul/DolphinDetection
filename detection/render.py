@@ -455,7 +455,7 @@ class PostFilter(object):
             if video_writer is not None:
                 video_writer.write(cv2.cvtColor(sub_results.binary, cv2.COLOR_GRAY2BGR))
             for rect in rects:
-                if rect[2] > 15 and rect[3] > 15 and 100 < rect[1] < 900:
+                if rect[2] - rect[0] > 15 and rect[3] - rect[1] > 15 and 100 < rect[1] < 900:
                     temp.append(rect)
             if len(temp) > 0:
                 result_set.append((idx, temp))
