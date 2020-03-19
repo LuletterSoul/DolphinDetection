@@ -14,8 +14,9 @@ from pysot.tracker.siamrpn_tracker import SiamRPNTracker
 
 
 class SiamMaskTracker(SiamRPNTracker):
-    def __init__(self, model):
+    def __init__(self, model, device):
         super(SiamMaskTracker, self).__init__(model)
+        self.device = device
         assert hasattr(self.model, 'mask_head'), \
             "SiamMaskTracker must have mask_head"
         assert hasattr(self.model, 'refine_head'), \
@@ -77,7 +78,7 @@ class SiamMaskTracker(SiamRPNTracker):
                                     self.center_pos,
                                     cfg.TRACK.INSTANCE_SIZE,
                                     s_x,
-                                    self.channel_average)
+                                    self.channel_average, self.device)
         crop_box = [self.center_pos[0] - s_x / 2,
                     self.center_pos[1] - s_x / 2,
                     s_x,

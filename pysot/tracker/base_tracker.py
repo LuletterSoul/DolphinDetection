@@ -15,6 +15,7 @@ from pysot.core.config import cfg
 class BaseTracker(object):
     """ Base tracker of single objec tracking
     """
+
     def init(self, img, bbox):
         """
         args:
@@ -35,7 +36,7 @@ class BaseTracker(object):
 
 
 class SiameseTracker(BaseTracker):
-    def get_subwindow(self, im, pos, model_sz, original_sz, avg_chans):
+    def get_subwindow(self, im, pos, model_sz, original_sz, avg_chans, device):
         """
         args:
             im: bgr based image
@@ -79,10 +80,10 @@ class SiameseTracker(BaseTracker):
             if right_pad:
                 te_im[:, c + left_pad:, :] = avg_chans
             im_patch = te_im[int(context_ymin):int(context_ymax + 1),
-                             int(context_xmin):int(context_xmax + 1), :]
+                       int(context_xmin):int(context_xmax + 1), :]
         else:
             im_patch = im[int(context_ymin):int(context_ymax + 1),
-                          int(context_xmin):int(context_xmax + 1), :]
+                       int(context_xmin):int(context_xmax + 1), :]
 
         if not np.array_equal(model_sz, original_sz):
             im_patch = cv2.resize(im_patch, (model_sz, model_sz))
@@ -91,5 +92,5 @@ class SiameseTracker(BaseTracker):
         im_patch = im_patch.astype(np.float32)
         im_patch = torch.from_numpy(im_patch)
         if cfg.CUDA:
-            im_patch = im_patch.cuda()
+            im_patch = im_patch.to(device)
         return im_patch

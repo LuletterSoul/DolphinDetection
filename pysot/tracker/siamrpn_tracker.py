@@ -15,11 +15,12 @@ from pysot.tracker.base_tracker import SiameseTracker
 
 
 class SiamRPNTracker(SiameseTracker):
-    def __init__(self, model):
+    def __init__(self, model, device):
         super(SiamRPNTracker, self).__init__()
         self.score_size = (cfg.TRACK.INSTANCE_SIZE - cfg.TRACK.EXEMPLAR_SIZE) // \
                           cfg.ANCHOR.STRIDE + 1 + cfg.TRACK.BASE_SIZE
         self.anchor_num = len(cfg.ANCHOR.RATIOS) * len(cfg.ANCHOR.SCALES)
+        self.device = device
         hanning = np.hanning(self.score_size)
         window = np.outer(hanning, hanning)
         self.window = np.tile(window.flatten(), self.anchor_num)
@@ -88,7 +89,7 @@ class SiamRPNTracker(SiameseTracker):
         # get crop
         z_crop = self.get_subwindow(img, self.center_pos,
                                     cfg.TRACK.EXEMPLAR_SIZE,
-                                    s_z, self.channel_average)
+                                    s_z, self.channel_average, self.device)
         self.model.template(z_crop)
 
     def track(self, img):
@@ -105,7 +106,7 @@ class SiamRPNTracker(SiameseTracker):
         s_x = s_z * (cfg.TRACK.INSTANCE_SIZE / cfg.TRACK.EXEMPLAR_SIZE)
         x_crop = self.get_subwindow(img, self.center_pos,
                                     cfg.TRACK.INSTANCE_SIZE,
-                                    round(s_x), self.channel_average)
+                                    round(s_x), self.channel_average, self.device)
 
         outputs = self.model.track(x_crop)
 
