@@ -16,7 +16,7 @@ from multiprocessing import Pool
 
 # import interface as I
 from config import *
-from detection.manager import DetectionMonitor, EmbeddingControlBasedTaskMonitor
+from detection.monitor import DetectionMonitor, EmbeddingControlBasedTaskMonitor
 from detection.detect_funcs import detect
 from utils import *
 from skimage.measure import compare_ssim

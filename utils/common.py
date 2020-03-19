@@ -259,15 +259,44 @@ def paint_chinese_opencv(im, text, pos, color=None):
 
 
 def split_img_to_four(image):
-    '''
+    """
     :param image:
     :return:
-    '''
+    """
     a1 = np.vsplit(image, 2)[0]
     a2 = np.vsplit(image, 2)[1]
     b1 = np.hsplit(a1, 2)[0]
     b2 = np.hsplit(a1, 2)[1]
     b3 = np.hsplit(a2, 2)[0]
     b4 = np.hsplit(a2, 2)[1]
-
     return b1, b2, b3, b4
+
+
+def decode(frame, p, patch_idx):
+    """
+    recover original coordinates form four-dividen blocks
+    :param frame:
+    :param p:
+    :param patch_idx:
+    :return:
+    """
+    h, w, _ = frame.shape
+    diff_h = h / 2
+    diff_w = w / 2
+
+    if not len(p[:, :]):
+        return
+
+    if patch_idx == 0:
+        pass
+    elif patch_idx == 1:
+        p[:, :, 0] = p[:, :, 0] + diff_w
+        p[:, :, 2] = p[:, :, 2] + diff_w
+    elif patch_idx == 2:
+        p[:, :, 1] = p[:, :, 1] + diff_h
+        p[:, :, 3] = p[:, :, 3] + diff_h
+    elif patch_idx == 3:
+        p[:, :, 0] = p[:, :, 0] + diff_w
+        p[:, :, 2] = p[:, :, 2] + diff_w
+        p[:, :, 1] = p[:, :, 1] + diff_h
+        p[:, :, 3] = p[:, :, 3] + diff_h

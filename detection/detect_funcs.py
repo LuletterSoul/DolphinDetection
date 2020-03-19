@@ -49,7 +49,7 @@ def is_less_ratio(area, shape, cfg: VideoConfig):
     if cfg.alg['area_ratio'] == -1:
         return True
     total = shape[0] * shape[1]
-    logger.info(f'Area [{ratio(area,total)}],area [{area}],total [{total}]')
+    # logger.info(f'Area [{ratio(area,total)}],area [{area}],total [{total}]')
     return ratio(area, total) < (cfg.alg['area_ratio'] * 3)
 
 
@@ -163,15 +163,15 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
         greater_ratio = is_greater_ratio(area, frame.shape, params.cfg)
         less_ratio = is_less_ratio(area, frame.shape, params.cfg)
         rect_regular = (rect[2] / rect[3]) < 10
-        if greater_ratio:
-            logger.info(f'Greater ratio')
-        if less_ratio:
-            logger.info(f'Less ratio')
-        if rect_regular:
-            logger.info(f'Rect regular')
+        # if greater_ratio:
+        #     logger.info(f'Greater ratio')
+        # if less_ratio:
+        #     logger.info(f'Less ratio')
+        # if rect_regular:
+        #     logger.info(f'Rect regular')
         if greater_ratio and less_ratio and rect_regular:
             rects.append(rect)
-            logger.info(f'Detector {params.cfg.index}: {rect}')
+            # logger.info(f'Detector {params.cfg.index}: {rect}')
             filtered_contours.append(c)
     cv2.drawContours(binary, filtered_contours, -1, 255, -1)
     # if self.cfg.show_window:

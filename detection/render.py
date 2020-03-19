@@ -10,6 +10,7 @@
 @version 1.0
 @desc:
 """
+import os
 import threading
 import time
 from multiprocessing import Manager
@@ -17,21 +18,17 @@ from multiprocessing.queues import Queue
 
 import cv2
 import numpy as np
-import os
 
-from config import SystemStatus, VideoConfig
+from config import SystemStatus
+from config import VideoConfig
+from detection.detect_funcs import adaptive_thresh_with_rules
+from detection.params import DispatchBlock, DetectorParams
+from pysot.tracker.service import TrackRequester
+from stream.rtsp import FFMPEG_MP4Writer
 # from .manager import DetectorController
 from stream.websocket import creat_packaged_msg_json
 from utils import logger, bbox_points, generate_time_stamp, crop_by_se
-from stream.rtsp import FFMPEG_MP4Writer
-import traceback
-from config import VideoConfig
-from detection.params import DispatchBlock, DetectorParams
-from detection.detect_funcs import detect_based_task, adaptive_thresh_mask_no_rules, adaptive_thresh_with_rules
-from pathlib import Path
 from utils import preprocess, paint_chinese_opencv
-from pysot.tracker.request import TrackRequester
-from multiprocessing import Lock
 
 
 class ArriveMsgType:
@@ -45,31 +42,31 @@ class FrameArrivalHandler(object):
     """
 
     def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue,
-                 rect_stream_path, original_stream_path, render_frame_cache, render_rect_cache, original_frame_cache,
+                 rect_stream_path, original_stream_path, render_rect_cache, original_frame_cache,
                  notify_queue, region_path, detect_params=None) -> None:
         super().__init__()
         self.cfg = cfg
         self.detect_index = detect_index
         self.rect_stream_path = rect_stream_path
         self.original_stream_path = original_stream_path
-        self.stream_cnt = 0
+        self.task_cnt = 0
         self.index = cfg.index
-        self.lock_window = True
         self.cache_size = cfg.cache_size
         self.future_frames = future_frames
         self.sample_rate = cfg.sample_rate
-        self.render_frame_cache = render_frame_cache
+        # self.render_frame_cache = render_frame_cache
         self.render_rect_cache = render_rect_cache
         self.original_frame_cache = original_frame_cache
-        self.next_prepare_event = Manager().Event()  # shared event lock, will be released until all future frames has come
-        self.next_prepare_event.set()
+        # shared event lock, will be released until all future frames has come
+        self.lock_window = Manager().Event()
+        self.lock_window.set()
         self.msg_queue = msg_queue
         self.fourcc = cv2.VideoWriter_fourcc(*'MP4V')
         self.quit = Manager().Event()
         self.quit.clear()
         self.status = Manager().Value('i', SystemStatus.RUNNING)
         self.notify_queue = notify_queue
-        self.LOG_PREFIX = f'Video Stream Render [{self.cfg.index}]: '
+        self.LOG_PREFIX = f'Frame Arrival Handler [{self.cfg.index}]: '
         self.post_filter = Filter(self.cfg, region_path, detect_params)
 
     def is_window_reach(self, detect_index):
@@ -84,10 +81,10 @@ class FrameArrivalHandler(object):
         """
         if self.is_window_reach(detect_index):
             self.detect_index = detect_index
-            self.lock_window = False
-            if not self.next_prepare_event.is_set():
-                self.next_prepare_event.set()
-            logger.info(self.LOG_PREFIX + 'Release window lock')
+            # self.lock_window = False
+            if not self.lock_window.is_set():
+                self.lock_window.set()
+            # logger.info(self.LOG_PREFIX + 'Release window lock')
 
     def next_st(self, detect_index):
         if detect_index - self.detect_index > self.future_frames:
@@ -101,18 +98,17 @@ class FrameArrivalHandler(object):
         :param current_index:
         :return:
         """
-        if not self.lock_window:
-            # continuous arrival signal in current window will be ignored
-            if self.next_prepare_event.is_set():
-                self.next_prepare_event.clear()
-                self.task(current_index)
-                # occupy the whole window until a sequent task is done
-                self.lock_window = True
+        # if not self.lock_window:
+        # continuous arrival signal in current window will be ignored
+        if self.lock_window.is_set():
+            self.lock_window.clear()
+            self.task(current_index)
+            # occupy the whole window until a sequent task is done
             self.detect_index = current_index
         # if current_index - self.detect_index >= self.future_frames and self.write_done:
         #     # release
-        #     if not self.next_prepare_event.is_set():
-        #         self.next_prepare_event.set()
+        #     if not self.lock_window.is_set():
+        #         self.lock_window.set()
         #         logger.info(
         #             f'Notify detection stream writer.Current frame index [{current_index}],Previous detected frame index [{self.detect_index}]...')
 
@@ -121,49 +117,40 @@ class FrameArrivalHandler(object):
         override by subclass,do everything what you want in a single frame window
         task must be executed asynchronously  in case blocking caller
         :param current_idx:
-        :return:
+        :return: return immediately
         """
         pass
 
-
-class DetectionSignalHandler(FrameArrivalHandler):
-    """
-    track object from a batch of frames, and decides if let system
-    send detection notification,generate render video or not
-    """
-
-    def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue, rect_stream_path,
-                 original_stream_path, render_frame_cache, render_rect_cache, original_frame_cache, notify_queue,
-                 region_path, track_requester: TrackRequester, detect_params=None) -> None:
-        super().__init__(cfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
-                         render_frame_cache, render_rect_cache, original_frame_cache, notify_queue, region_path,
-                         detect_params)
-
-
-class DetectionStreamRender(FrameArrivalHandler):
-    """
-    Generate a video with fixed time when notification occurs
-    """
-
-    def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue, rect_stream_path,
-                 original_stream_path, render_frame_cache, render_rect_cache, original_frame_cache, notify_queue,
-                 region_path, detect_params=None) -> None:
-        super().__init__(cfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
-                         render_frame_cache, render_rect_cache, original_frame_cache, notify_queue, region_path,
-                         detect_params)
+    def wait(self, task_cnt, task_type):
+        """
+        wait frames arrival,support time out
+        :param task_cnt:
+        :param task_type:
+        :return:
+        """
+        if not self.lock_window.is_set():
+            logger.info(
+                f'{self.LOG_PREFIX} {task_type} [{task_cnt}] wait frames arrival....')
+            start = time.time()
+            # wait the future frames prepared,if trigger time out, give up waits
+            self.lock_window.wait(30)
+            logger.info(
+                f"{self.LOG_PREFIX} {task_type} " +
+                f"[{task_cnt}] wait [{round(time.time() - start, 2)}] seconds")
+            logger.info(f'{self.LOG_PREFIX} Rect Render Task [{task_cnt}] frames accessible...')
 
     def listen(self):
         if self.quit.wait():
-            self.next_prepare_event.set()
+            self.lock_window.set()
             self.status.set(SystemStatus.SHUT_DOWN)
 
-    def loop_render_msg(self):
+    def loop(self):
         """
-        loop render message inside a sub-process
+        loop message inside a sub-process
         :return:
         """
         logger.info(
-            f'*******************************{self.LOG_PREFIX}: Init Stream Render Notify Service********************************')
+            f'*******************************{self.LOG_PREFIX}: Init Frame Arrival Handle Service********************************')
         threading.Thread(target=self.listen, daemon=True).start()
         while self.status.get() == SystemStatus.RUNNING:
             try:
@@ -175,7 +162,61 @@ class DetectionStreamRender(FrameArrivalHandler):
             except Exception as e:
                 logger.error(e)
         logger.info(
-            f'*******************************{self.LOG_PREFIX}: Exit Stream Render Notify Service********************************')
+            f'*******************************{self.LOG_PREFIX}: Exit Frame Arrival Handle Service********************************')
+
+
+class DetectionSignalHandler(FrameArrivalHandler):
+    """
+    track object from a batch of frames, and decides if let system
+    send detection notification,generate render video or not
+    """
+
+    def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue, rect_stream_path,
+                 original_stream_path, render_frame_cache, original_frame_cache, notify_queue,
+                 region_path, track_requester: TrackRequester, detect_params=None) -> None:
+        super().__init__(cfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
+                         render_frame_cache, original_frame_cache, notify_queue, region_path,
+                         detect_params)
+        self.track_requester = track_requester
+        self.LOG_PREFIX = f'Detection Signal Handler [{self.cfg.index}]: '
+
+    def task(self, current_idx):
+        """
+        generate a video in fixed window,if detection signal is triggered in a window internal,the rest detection
+        frame will be merged into a video instead of producing multiple videos.
+        :param current_idx: current frame index
+        :return:
+        """
+        current_time = generate_time_stamp('%m%d%H%M%S') + '_'
+        # use two independent threads to execute video generation sub-tasks
+        handle_thread = threading.Thread(
+            target=self.handle,
+            args=(current_idx, current_time,), daemon=True)
+        handle_thread.start()
+        return True
+
+    def handle(self, current_index, current_time):
+        self.wait(self.task_cnt, 'Detection Signal Handle')
+        rects = self.render_rect_cache[current_index % self.cache_size]
+        task_cnt = self.task_cnt
+        if rects is not None:
+            result_sets = self.track_requester.request(self.cfg.index, current_index, rects)
+            is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
+            logger.info(f'{self.LOG_PREFIX}: Detection Filter Result {is_filter}')
+        self.task_cnt += 1
+
+
+class DetectionStreamRender(FrameArrivalHandler):
+    """
+    Generate a video with fixed time when notification occurs
+    """
+
+    def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue, rect_stream_path,
+                 original_stream_path, render_frame_cache, original_frame_cache, notify_queue,
+                 region_path, detect_params=None) -> None:
+        super().__init__(cfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
+                         render_frame_cache, original_frame_cache, notify_queue, region_path,
+                         detect_params)
 
     def task(self, current_idx):
         """
@@ -194,7 +235,7 @@ class DetectionStreamRender(FrameArrivalHandler):
             target=self.original_render_task,
             args=(current_idx, current_time,), daemon=True)
         original_render_thread.start()
-        self.stream_cnt += 1
+        self.task_cnt += 1
         return True
 
     def write_render_video_work(self, video_write, next_cnt, end_cnt):
@@ -289,8 +330,8 @@ class DetectionStreamRender(FrameArrivalHandler):
         :return:
         """
         start = time.time()
-        task_cnt = self.stream_cnt
-        # raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
+        task_cnt = self.task_cnt
+        # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
         target = self.rect_stream_path / (current_time + str(task_cnt) + '.mp4')
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
@@ -303,28 +344,13 @@ class DetectionStreamRender(FrameArrivalHandler):
         # the future frames count
         # next_frame_cnt = 48
         # wait the futures frames is accessable
-        if not self.next_prepare_event.is_set():
-            logger.info(
-                f'Video Render [{self.index}]: Rect Render Task [{task_cnt}] wait frames accessible....')
-            start = time.time()
-            # wait the future frames prepared,if ocurring time out, give up waits
-            self.next_prepare_event.wait(30)
-            logger.info(
-                f"Video Render [{self.cfg.index}]: Rect Render Task " +
-                f"[{task_cnt}] wait [{round(time.time() - start, 2)}] seconds")
-            logger.info(f'Video Render [{self.index}]: Rect Render Task [{task_cnt}] frames accessible...')
-
-        # if not self.started:
-        #     return False
-        # logger.info('Render task Begin with frame [{}]'.format(next_cnt))
-        # logger.info('After :[{}]'.format(render_cache.keys()))
+        self.wait(task_cnt, 'Rect Render Task')
         end_cnt = current_idx + self.future_frames
         try:
             next_cnt = self.write_render_video_work(video_write, next_cnt, end_cnt)
         except Exception as e:
             logger.error(e)
         video_write.release()
-        # self.convert_byfile(str(raw_target), str(target))
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
@@ -345,8 +371,8 @@ class DetectionStreamRender(FrameArrivalHandler):
         :return:
         """
         start = time.time()
-        task_cnt = self.stream_cnt
-        # raw_target = self.original_stream_path / (current_time + str(self.stream_cnt) + '_raw' + '.mp4')
+        task_cnt = self.task_cnt
+        # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
         target = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
         logger.info(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
@@ -357,30 +383,13 @@ class DetectionStreamRender(FrameArrivalHandler):
 
         next_cnt = current_idx - self.future_frames
         next_cnt = self.write_original_video_work(video_write, next_cnt, current_idx)
-        # the future frames count
-        # next_frame_cnt = 48
-        # wait the futures frames is accessable
-        if not self.next_prepare_event.is_set():
-            logger.info(f'Video Render [{self.index}]: Original Render Task wait frames accessible....')
-            start = time.time()
-            # wait the future frames prepared,if ocurring time out, give up waits
-            self.next_prepare_event.wait(30)
-            logger.info(
-                f"Video Render [{self.cfg.index}]: Original Render Task [{task_cnt}] wait [{time.time() - start}] seconds")
-            logger.info(f'Video Render [{self.index}]: Original Render Task [{task_cnt}] frames accessible....')
-        # logger.info('Render task Begin with frame [{}]'.format(next_cnt))
-        # logger.info('After :[{}]'.format(render_cache.keys()))
-        # if not self.started:
-        #     return False
+        self.wait(task_cnt, 'Original Render Task')
         end_cnt = next_cnt + self.future_frames
         next_cnt = self.write_original_video_work(video_write, next_cnt, end_cnt)
         video_write.release()
-        # self.convert_byfile(str(raw_target), str(target))
         logger.info(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: ' +
             f'Consume [{round(time.time() - start, 2)}] seconds.Done write detection stream frame into: [{str(target)}]')
-        # if raw_target.exists():
-        #     raw_target.unlink()
 
 
 class Filter(object):
@@ -503,7 +512,7 @@ class Filter(object):
         Dolphins'appear time is mostly in 1s~2s, their motion speeds are usually less 15 pixels/s(tested in 1080P monitor),
         but floats thing are much longer, birds or insect are much fast than dolphins
         :param result_set: is set of bbox rects from a batch of video frames ,
-        [[(frame_idx1,[x1,y1,x2,y2]),(frame_idx2,[x2,y2,x3,y3]),...],].Rects in a frame are multiple and complicated according to
+        [(frame_idx1,[x1,y1,x2,y2]),(frame_idx2,[x2,y2,x3,y3]),...)].Rects in a frame are multiple and complicated according to
         diversity of candidates extraction algorithm.The result set could be produced by object
         tracker or detection algorithm.
         :param task_cnt: logger need it.
@@ -514,6 +523,8 @@ class Filter(object):
         speed_x_set = []
         speed_y_set = []
         continuous_time = 0
+        if len(result_set) < 2:
+            return True
         for i in range(1, len(result_set)):
             pre_idx, pre_rects = result_set[i - 1]
             current_idx, current_rects = result_set[i]

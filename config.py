@@ -13,10 +13,8 @@
 import json
 import logging
 import os
-import time
+from enum import Enum
 from pathlib import Path
-
-import psutil
 
 
 class Environment(object):
@@ -34,47 +32,8 @@ class ModelType(object):
 LOG_LEVER = logging.DEBUG
 
 PROJECT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
-CANDIDATE_SAVE_DIR = PROJECT_DIR / 'data/candidates'
-CANDIDATE_SAVE_DIR.mkdir(exist_ok=True, parents=True)
-
 LOG_DIR = PROJECT_DIR / 'log'
 LOG_DIR.mkdir(exist_ok=True, parents=True)
-
-STREAM_SAVE_DIR = PROJECT_DIR / 'data/videos'
-STREAM_SAVE_DIR \
-    .mkdir(exist_ok=True, parents=True)
-
-SAMPLE_SAVE_DIR = PROJECT_DIR / 'data/samples'
-SAMPLE_SAVE_DIR \
-    .mkdir(exist_ok=True, parents=True)
-
-OFFLINE_STREAM_SAVE_DIR = PROJECT_DIR / 'data/offline'
-OFFLINE_STREAM_SAVE_DIR \
-    .mkdir(exist_ok=True, parents=True)
-
-FRAME_SAVE_DIR = PROJECT_DIR / 'data/frames'
-FRAME_SAVE_DIR \
-    .mkdir(exist_ok=True, parents=True)
-
-VIDEO_CONFIG_DIR = PROJECT_DIR / 'vcfg'
-VIDEO_CONFIG_DIR.mkdir(exist_ok=True, parents=True)
-
-LABEL_IMAGE_PATH = PROJECT_DIR / 'data/labels/image'
-LABEL_TARGET_PATH = PROJECT_DIR / 'data/labels/target'
-LABEL_IMAGE_PATH.mkdir(exist_ok=True, parents=True)
-LABEL_TARGET_PATH.mkdir(exist_ok=True, parents=True)
-LABEL_SAVE_PATH = PROJECT_DIR / 'data/labels'
-BINARY_SAVE_PATH = PROJECT_DIR / 'data/labels/binarys'
-
-INFORM_SAVE_PATH = PROJECT_DIR / 'vcfg'
-
-WEBSOCKET_SERVER_IP = '118.190.136.20'
-# WEBSOCKET_SERVER_IP = '192.168.1.7'
-WEBSOCKET_SERVER_PORT = 3400
-
-MODEL_PATH = PROJECT_DIR / 'classify_model/bc-classify_model.pth'
-
-from enum import Enum
 
 
 class MonitorType(Enum):
@@ -91,39 +50,8 @@ class Env(Enum):
     DEPLOYMENT = 3,
 
 
-# select monitor type, process-based means the system will create a process for each component,such as detector,
-# stream receiver, frame dispatcher and frame collector...
-# Required much resources because system divide resources into process units,
-# which are limited by CPU cores
-# MONITOR = MonitorType.PROCESS_BASED
-
 ENV = Env.DEV
 
-MONITOR = MonitorType.TASK_BASED
-
-enable_options = {
-    0: False,
-    1: False,
-    2: False,
-    3: False,
-    4: False,
-    5: True,
-    6: False
-}
-
-
-#
-# enable_options = {
-#     0: True,
-#     1: True,
-#     2: True,
-#     3: True,
-#     4: True,
-#     5: False,
-#     6: False,
-#     7: False,
-#     8: False,
-# }
 
 class Config(object):
     """
@@ -164,6 +92,7 @@ class ServerConfig(Config):
         self.detect_mode = detect_mode
         self.track_model_path = track_model_path
         self.track_cfg_path = track_cfg_path
+        self.classify_model_path = classify_model_path
         self.detect_model_path = Path(os.path.join(PROJECT_DIR, detect_model_path))
         self.track_model_path = track_model_path
         self.stream_save_path = stream_save_path
@@ -188,14 +117,14 @@ class ServerConfig(Config):
             self.sample_save_dir = Path(os.path.join(PROJECT_DIR, self.sample_save_dir))
             self.frame_save_dir = Path(os.path.join(PROJECT_DIR, self.frame_save_dir))
             self.candidate_save_dir = Path(os.path.join(PROJECT_DIR, self.candidate_save_dir))
-            # self.classify_model_path =
+            self.classify_model_path = Path(os.path.join(PROJECT_DIR, self.classify_model_path))
             self.offline_stream_save_dir = Path(os.path.join(PROJECT_DIR, self.offline_stream_save_dir))
         else:
             self.stream_save_path = Path(os.path.join(self.root, self.stream_save_path))
             self.sample_save_dir = Path(os.path.join(self.root, self.sample_save_dir))
             self.frame_save_dir = Path(os.path.join(self.root, self.frame_save_dir))
             self.candidate_save_dir = Path(os.path.join(self.root, self.candidate_save_dir))
-            # self.classify_model_path = Path(os.path.join(self.root, self.classify_model_path))
+            self.classify_model_path = Path(os.path.join(self.root, self.classify_model_path))
             self.offline_stream_save_dir = Path(os.path.join(self.root, self.offline_stream_save_dir))
 
 
@@ -213,7 +142,7 @@ class VideoConfig(Config):
                  render,
                  post_filter,
                  forward_filter,
-                 save_box, show_box, cv_only,
+                 save_box, show_box, cv_only, ssd_divide_four,
                  rtsp, push_to, write_timestamp,
                  enable_sample_frame,
                  rtsp_saved_per_frame,
@@ -248,6 +177,7 @@ class VideoConfig(Config):
         self.save_box = save_box
         self.show_box = show_box
         self.cv_only = cv_only
+        self.ssd_divide_four = ssd_divide_four
         self.rtsp = rtsp
         self.push_to = push_to
         self.write_timestamp = write_timestamp
@@ -276,9 +206,6 @@ class LabelConfig:
         self.center = center
 
 
-# example usage
-# User("tbrown", "Tom Brown").to_json()
-# User.from_json(User("tbrown", "Tom Brown").to_json()).to_json()
 class SystemStatus(Enum):
     RUNNING = 1,
     SHUT_DOWN = 2,
@@ -288,21 +215,3 @@ class SystemStatus(Enum):
 class ObjectClass(Enum):
     DOLPHIN = 0,
     OTHER = 1,
-
-
-_timer = getattr(time, 'monotonic', time.time)
-num_cpus = psutil.cpu_count() or 1
-
-
-def timer():
-    return _timer() * num_cpus
-
-
-pid_cpuinfo = {}
-
-
-def cpu_usage():
-    id = os.getpid()
-    p = psutil.Process(id)
-    # while True:
-    #     print(p.cpu_percent())
