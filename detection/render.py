@@ -217,6 +217,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         super().__init__(cfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
                          render_frame_cache, original_frame_cache, notify_queue, region_path,
                          detect_params)
+        self.post_filter_event = Manager().Event()
 
     def task(self, current_idx):
         """
@@ -354,14 +355,18 @@ class DetectionStreamRender(FrameArrivalHandler):
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
+        # blocked until original video generation is done.
+        self.post_filter_event.wait()
         if self.cfg.post_filter and not self.post_filter.post_filter_video(str(target), task_cnt):
             msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
             self.msg_queue.put(msg_json)
             logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
         else:
-            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
-            self.msg_queue.put(msg_json)
-            logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+            origin_video_path = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
+            if not self.post_filter.post_filter_video(str(origin_video_path), task_cnt):
+                msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
+                self.msg_queue.put(msg_json)
+                logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
     def original_render_task(self, current_idx, current_time):
         """
@@ -371,6 +376,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         :return:
         """
         start = time.time()
+        self.post_filter_event.set()
         task_cnt = self.task_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
         target = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
@@ -390,6 +396,8 @@ class DetectionStreamRender(FrameArrivalHandler):
         logger.info(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: ' +
             f'Consume [{round(time.time() - start, 2)}] seconds.Done write detection stream frame into: [{str(target)}]')
+        # notify post filter can begin its job
+        self.post_filter_event.clear()
 
 
 class Filter(object):
@@ -464,7 +472,7 @@ class Filter(object):
             if video_writer is not None:
                 video_writer.write(cv2.cvtColor(sub_results.binary, cv2.COLOR_GRAY2BGR))
             for rect in rects:
-                if rect[2] > 15 and rect[3] > 15 and 100 < rect[1] < 900:
+                if rect[2] - rect[0] > 15 and rect[3] - rect[1] > 15 and 100 < rect[1] < 900:
                     temp.append(rect)
             if len(temp) > 0:
                 result_set.append((idx, temp))
