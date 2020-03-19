@@ -217,7 +217,6 @@ class DetectionStreamRender(FrameArrivalHandler):
         super().__init__(cfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
                          render_frame_cache, original_frame_cache, notify_queue, region_path,
                          detect_params)
-        self.post_filter_event = Manager().Event()
 
     def task(self, current_idx):
         """
@@ -228,13 +227,15 @@ class DetectionStreamRender(FrameArrivalHandler):
         """
         current_time = generate_time_stamp('%m%d%H%M%S') + '_'
         # use two independent threads to execute video generation sub-tasks
+        post_filter_event = threading.Event()
+        post_filter_event.clear()
         rect_render_thread = threading.Thread(
             target=self.rect_render_task,
-            args=(current_idx, current_time,), daemon=True)
+            args=(current_idx, current_time, post_filter_event,), daemon=True)
         rect_render_thread.start()
         original_render_thread = threading.Thread(
             target=self.original_render_task,
-            args=(current_idx, current_time,), daemon=True)
+            args=(current_idx, current_time, post_filter_event,), daemon=True)
         original_render_thread.start()
         self.task_cnt += 1
         return True
@@ -323,11 +324,12 @@ class DetectionStreamRender(FrameArrivalHandler):
                 logger.error(e)
         return next_cnt
 
-    def rect_render_task(self, current_idx, current_time):
+    def rect_render_task(self, current_idx, current_time, post_filter_event):
         """
         generate a short-time dolphin video with bbox indicator.
         :param current_idx: start frame index in a slide window
         :param current_time:
+        :param post_filter_event:
         :return:
         """
         start = time.time()
@@ -355,28 +357,18 @@ class DetectionStreamRender(FrameArrivalHandler):
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
-        # blocked until original video generation is done.
-        self.post_filter_event.wait()
-        if self.cfg.post_filter and not self.post_filter.post_filter_video(str(target), task_cnt):
-            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
-            self.msg_queue.put(msg_json)
-            logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
-        else:
-            origin_video_path = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
-            if not self.post_filter.post_filter_video(str(origin_video_path), task_cnt):
-                msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
-                self.msg_queue.put(msg_json)
-                logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+        self.post_handle(current_time, post_filter_event, target, task_cnt)
 
-    def original_render_task(self, current_idx, current_time):
+    def original_render_task(self, current_idx, current_time, post_filter_event):
         """
         generate a short-time dolphin video without bbox indicator.
+        :param post_filter_event:
         :param current_idx:
         :param current_time:
         :return:
         """
         start = time.time()
-        self.post_filter_event.set()
+        post_filter_event.clear()
         task_cnt = self.task_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
         target = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
@@ -397,7 +389,40 @@ class DetectionStreamRender(FrameArrivalHandler):
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: ' +
             f'Consume [{round(time.time() - start, 2)}] seconds.Done write detection stream frame into: [{str(target)}]')
         # notify post filter can begin its job
-        self.post_filter_event.clear()
+        post_filter_event.set()
+
+    def post_handle(self, current_time, post_filter_event, target, task_cnt):
+        """
+        post process for each generated video.Can do post filter according its timing information
+        :param current_time:
+        :param post_filter_event: sync original video generation event
+        :param target: video path
+        :param task_cnt: current video counting
+        :return:
+        """
+        # blocked until original video generation is done.
+        origin_video_path = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
+        if self.post_filter:
+            self.do_post_filter(origin_video_path, task_cnt, post_filter_event)
+        else:
+            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
+            self.msg_queue.put(msg_json)
+            logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+
+    def do_post_filter(self, target, task_cnt, post_filter_event):
+        """
+        execute post filter
+        :param target:
+        :param task_cnt:
+        :param post_filter_event:
+        :return:
+        """
+        is_filter = self.post_filter.post_filter_video(str(target), task_cnt)
+        post_filter_event.wait()
+        if is_filter:
+            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
+            self.msg_queue.put(msg_json)
+            logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
 
 class Filter(object):
@@ -438,6 +463,9 @@ class Filter(object):
         for d in self.detect_params:
             block = DispatchBlock(crop_by_se(frame, d.start, d.end),
                                   idx, original_frame.shape)
+            # TODO we have to use a more robust frontground extraction algorithm get the binary map
+            #  adaptive thresh to get binay map is just a compromise,
+            #  it don't work if river background is complicated
             sub_result = adaptive_thresh_with_rules(block.frame, block, d)
             sub_results.append(sub_result)
             # shape = sub_result.binary.shape
@@ -451,6 +479,11 @@ class Filter(object):
         return rects, sub_results
 
     def detect_video(self, video_path):
+        """
+        iterates the whole shot-time video and executes analysis algorithm for timing information
+        :param video_path:
+        :return:
+        """
         result_set = []
         video_capture = cv2.VideoCapture(video_path)
         ret, frame = video_capture.read()

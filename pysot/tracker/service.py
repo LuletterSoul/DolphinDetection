@@ -131,7 +131,7 @@ def track_service(model_index, video_cfgs, checkpoint,
                 # output results into the corresponding pipe of each monitor
                 output_pipes[req.monitor_index].put(TrackResult(req.rect_id, result))
                 e = time.time() - s
-                logger.debug(f'{LOGGER_PREFIX} tracking consumes: {round(e, 2)} seconds')
+                logger.info(f'{LOGGER_PREFIX} tracking consumes: {round(e, 2)} seconds')
         except Empty as e:
             # task service will timeout if track request is empty in pipe
             # ignore

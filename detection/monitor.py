@@ -440,7 +440,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         for i, cfg in enumerate(self.cfgs):
             logger.info('Init detector controller [{}]....'.format(cfg.index))
             task_future = self.process_pool.apply_async(self.controllers[i].start, args=(None,))
-            # don't call future object get() method
+            # don't call future object get() method before
+            # all sub process is init,otherwise will be blocked probably due to some services are looping
             # task_future.get()
             logger.info('Done init detector controller [{}]....'.format(cfg.index))
         for i in range(len(self.cfgs)):
@@ -452,7 +453,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                     self.process_pool.apply_async(self.push_streamers[i].push_stream, ()))
                 self.task_futures.append(self.process_pool.apply_async(self.stream_renders[i].loop, ()))
                 # self.task_futures[-1].get()
-                # self.task_futures[-1].get()
+
+
 
     def wait(self):
         if self.process_pool is not None:
