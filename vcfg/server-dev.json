@@ -1,5 +1,6 @@
 {
   "env": "dev",
+  "log_level": "DEBUG",
   "http_ip": "127.0.0.1",
   "http_port": 6006,
   "wc_ip": "118.190.136.20",

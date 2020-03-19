@@ -52,5 +52,12 @@ def setup_logging(log_dir, logger_name='main', level=logging.DEBUG):
     return logger
 
 
-logger = setup_logging(LOG_DIR, level=LOG_LEVER)
+logger = setup_logging(LOG_DIR)
+
+# def init_logger(log_level):
+#     global logger
+#     logger =
+
+# logger = setup_logging(LOG_DIR, self.cfg.log_level)
+
 # logger.disabled = False

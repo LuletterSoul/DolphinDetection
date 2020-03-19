@@ -1,66 +1,123 @@
 # DolphinDetection
- A project for dolphin detection based online video stream
+ A project for dolphin detection based online video stream.
 
 
 # Project Structure
 
 ```
-├── data            // Will be cleaned and re-created every runtime        
-│   └── candidates  // Save the detected sample
-        ├── 0.png
-│       ├── 1.png
+├── data            
+│   └── candidates                      // video workspace
+│       └──03171503                     // daily data
+│             └─── 0                    // video index
+│               ├── original-streams    // save origianl video clips
+│               ├── render-streams      // save render video clips with bboxs
+│               ├── crops               // save bboxs patch
+│               ├── ...
+│             └─── 2                    // video index
+│               ├── ...
+│               ├── ...
+│       └──03171530
+│             └─── 0                    // video index
 │       └── ...
-│   └── frames      // Save the video stream as a single frame
-        ├── 0       // Frames from No.1 video monitor
-│           ├── 0.png
-│           ├── 1.png
-│           ├── 2.png
-│           └── ...
-│       ├── 1       // Video Stream from No.2 video monitor
-│           ├── 0.png
-│           ├── 1.png
-│           ├── 2.png
-│           └── ...
+│   └── offline                         // offilne video file
+│       └── 0                           // save some videos from video indexed by 0
+│       └── 1                           // save some videos from video indexed by 0
+│       └── 2                           // save some videos from video indexed by 0
+├── class                               // classifier training datasets
+├── labels                              // Related label work
+├── detection                           // Module of building object detection
+│       └── ssd                         // ssd detection
+│       └── capture.py                  // video capture
+│       └── monitor.py                  // video services management
+│       └── controller.py               // video controller
+│       └── render.py                   // video generation
 │       └── ...
-│   └── videos      // Buffered video stream
-│       ├── 0       // Video Stream from No.1 video monitor
-│           ├── 000.ts
-│           ├── 001.ts
-│           ├── 002.ts
-│           └── ...
-│       ├── 1       // Video Stream from No.2 video monitor
-│           ├── 000.ts
-│           ├── 001.ts
-│           ├── 002.ts
-│           └── ...
+├── model                               // checkpoints such as ssd, classfier,object tracker
+├── pysot                               // object tracker service
+├── interface                           // module of service interfaces
+├── log                                 // log file
+├── vcfg                                // video configutations
+│       └── server-prod.py              // server configuration for production env
+│       └── server-test.py              // server configuration for test env
 │       └── ...
-│   └── labels        // Related label work
-│       ├── image     // Put images ready to be labeled
-│       ├── targets   // Save ROI images
-│       └── samples_template.json // template of ROI labels
-├── detection       // Module of building object detection
-│   └── detection.py
-│   └── thresh.py
-│   └── ...
-├── stream           // Module of reading video stream
-│   └── frame.py
-│   └── video.py
-│   └── ...
-├── interface       // Module of service interfaces
-│   └── interface.py
-│   └── ...
-├── log             // Save system logs
-│   └── interface.py
-│   └── ...
-├──  vcfg           // Confiurations of all videos
-│   └── video.py
-│   └── video_template.py
-│   └── ...
-├──  test.py        // Includes all test scripts and test cases of service interface
-├──  config.py      // Unified constants and path definitions in the whole project
+│       └── video-prod.py               // video configuraiton for production env
+├──  config.py                          // video configuraiton object
+├──  app.py                             // system entry
+├──  requirements.txt                   // project dependency
+
 ```
 
-# Label
+# Download model checkponts
+
+Dowload model checkponts and put them in `model/`.
+
+# Build Environment
+
+cd`     DolphinDetection/`
+## Create a conda env 
+```
+conda create -n dol python=3.8
+
+```
+## Activate python env
+```
+conda activate dol
+```
+## Install packages
+
+```
+pip install -r requirements.txt         # install packages
+```
+
+## Build pysot
+
+```
+pip install pyyaml yacs tqdm colorama matplotlib cython tensorboardX
+```
+
+```
+python setup.py build_ext --inplace
+```
+
+Change pip mirror to `aliyun` if download slowly.
+
+
+# Run on prod env
+
+Run detection for video monitor indexed by 5 in PROD mode, configurations are loaded from vcfg/*-prod.json.
+```
+python --env prod --http_ip 192.168.0.116 --http_port 8080 --cd_id 0 --dt_id 0 --enable 5 --use_sm 5 --send_msg -log_level INFO
+```
+
+# Run on test env
+
+Run detection for video monitor indexed by 8 in TEST mode, configurations are loaded from vcfg/*-test.json.
+## Run single video detection
+
+```
+python --env test --http_ip 127.0.0.1 --http_port 8080 --cd_id 0 --dt_id 0 --run_direct --enable 8 --use_sm 8 --log_level INFO
+```
+
+## Run multiples videos detection
+
+Run detection for video monitor indexed by 8,9 in TEST mode.
+```
+python --env test --http_ip 127.0.0.1 --http_port 8080 --cd_id 0 --dt_id 0 --run_direct --enable 8,9 --use_sm 8,9 --log_level INFO
+```
+Set `log_level=DEBUG`  to see more debug information. Remove `--run_direct` to activate `cron` timing run service.
+
+# Shutdown system
+
+ Input double `Enter`  to shutdown system.
+
+# Analysis offline video
+
+See video-*json ,set item `online` to `offline` to 
+load corresponding video file.
+
+
+
+
 
 
 

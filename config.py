@@ -23,6 +23,12 @@ class Environment(object):
     DEV = 'dev'
 
 
+class LogLevel(object):
+    INFO = 'INFO'
+    DEBUG = 'DEBUG',
+    ERROR = 'ERROR'
+
+
 class ModelType(object):
     SSD = 'ssd'
     CLASSIFY = 'classify'
@@ -72,7 +78,8 @@ class ServerConfig(Config):
     Server configuration definitions
     """
 
-    def __init__(self, env, http_ip, http_port, wc_ip, wc_port, send_msg, run_direct, cron, root, classify_model_path,
+    def __init__(self, env, log_level, http_ip, http_port, wc_ip, wc_port, send_msg, run_direct, cron, root,
+                 classify_model_path,
                  detect_model_path,
                  track_cfg_path,
                  track_model_path,
@@ -82,6 +89,7 @@ class ServerConfig(Config):
                  frame_save_dir,
                  candidate_save_dir, offline_stream_save_dir) -> None:
         self.env = env
+        self.log_level = log_level
         self.http_ip = http_ip
         self.http_port = http_port
         self.wc_ip = wc_ip

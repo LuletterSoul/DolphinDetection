@@ -16,7 +16,6 @@ import time
 import warnings
 
 import detection.monitor
-from classfy.model import DolphinClassifier
 from interface import *
 # from multiprocessing import Process
 from utils import sec2time
@@ -43,12 +42,7 @@ class DolphinDetectionServer:
         self.classifier = None
         self.ssd_detector = None
         self.dt_id = dt_id
-        # self.scheduler = BackgroundScheduler()
-        # self.scheduler = BlockingScheduler()
-        if self.cfg.detect_mode == ModelType.CLASSIFY:
-            self.classifier = DolphinClassifier(model_path=self.cfg.classify_model_path, device_id=cd_id)
-        # if self.cfg.detect_mode == ModelType.SSD:
-        # self.ssd_detector = SSDDetector(model_path=self.cfg.detect_model_path, device_id=dt_id)
+        logger.setLevel(self.cfg.log_level)
         self.monitor = detection.monitor.EmbeddingControlBasedTaskMonitor(self.vcfgs, self.cfg,
                                                                           self.cfg.stream_save_path,
                                                                           self.cfg.sample_save_dir,
@@ -102,6 +96,8 @@ def load_cfg(args):
     server_config = load_server_config(args.cfg)
     video_config = load_video_config(args.vcfg)
     switcher_options = load_json_config(args.sw)
+    if args.log_level is not None:
+        server_config.log_level = args.log_level
     if args.http_ip is not None:
         server_config.http_ip = args.http_ip
     if args.http_port is not None:
@@ -148,6 +144,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', type=str, default='dev',
                         help='System environment.')
+    parser.add_argument('--log_level', default='DEBUG', help='control log output level')
     parser.add_argument('--cfg', type=str, default='vcfg/server-dev.json',
                         help='Server configuration file represented by json format.')
     parser.add_argument('--vcfg', type=str, default='vcfg/video-dev.json',
