@@ -49,7 +49,7 @@
 
 # Download model checkponts
 
-Dowload model checkponts and put them in `model/`.
+Dowload the model checkponts from [Google Drive](https://drive.google.com/open?id=1f_VvqUfYJ7xv5b2cDP6pKiU8xlO9WL-e), put all checkpoints in `model/`.
 
 # Build Environment
 
