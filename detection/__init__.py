@@ -12,7 +12,7 @@
 """
 
 from .detector import *
-from .manager import *
+from .controller import *
 from .params import *
 from .component import *
 from .ssd import *

@@ -8,9 +8,9 @@ import cv2
 import queue
 # import ray
 from multiprocessing import Queue
-from detection.capture import VideoOnlineSampleBasedRayCapture
 
 
+# TODO delete legay code
 class StreamReceiver(object):
 
     def __init__(self, stream_save_path: Path, offline_path: Path, cfg: VideoConfig, mq: Queue) -> None:
@@ -110,7 +110,7 @@ class StreamReceiver(object):
 class StreamRayReceiver(StreamReceiver):
 
     def __init__(self, stream_save_path: Path, offline_path: Path, cfg: VideoConfig,
-                 cap_actor: VideoOnlineSampleBasedRayCapture, mq=None) -> None:
+                 cap_actor, mq=None) -> None:
         super().__init__(stream_save_path, offline_path, cfg, mq)
         self.cap_actor = cap_actor
         self.try_cnt = 0

@@ -1,5 +1,6 @@
 {
   "env": "test",
+  "log_level": "DEBUG",
   "http_ip": "127.0.0.1",
   "http_port": 8085,
   "wc_ip": "118.190.136.20",
@@ -22,6 +23,8 @@
   },
   "classify_model_path": "model/bc-model-0314.pth",
   "detect_model_path": "model/0220-ssd.pth",
+  "track_cfg_path": "pysot/configs/config.yaml",
+  "track_model_path": "model/0315-track.pth",
   "detect_mode": "classify",
   "root": "",
   "stream_save_path": "data/videos",

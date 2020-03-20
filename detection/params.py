@@ -63,12 +63,11 @@ class ConstructResult(object):
 
 class ConstructParams(object):
 
-    def __init__(self, result_queue, original_frame_cache, render_frame_cache, render_rect_cache, stream_render,
+    def __init__(self, result_queue, original_frame_cache, render_rect_cache, stream_render,
                  len_thresh, cfg: VideoConfig) -> None:
         super().__init__()
         self.result_queue = result_queue
         self.original_frame_cache = original_frame_cache
-        self.render_frame_cache = render_frame_cache
         self.render_rect_cache = render_rect_cache
         self.stream_render = stream_render
         # self.cache_clear_cfg = cache_clear_cfg

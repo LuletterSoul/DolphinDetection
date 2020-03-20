@@ -49,6 +49,7 @@ def is_less_ratio(area, shape, cfg: VideoConfig):
     if cfg.alg['area_ratio'] == -1:
         return True
     total = shape[0] * shape[1]
+    # logger.info(f'Area [{ratio(area,total)}],area [{area}],total [{total}]')
     return ratio(area, total) < (cfg.alg['area_ratio'] * 3)
 
 
@@ -125,9 +126,9 @@ def detect_based_mog2(frame, block, params: DetectorParams):
 def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     """
     perform adaptive binary thresh with filter rules
-    :param frame:
+    :param frame: preprocessed frame by preprocessed module, may be smaller and blurred than the original.
     :param block:
-    :param params:
+    :param params: contain some data structure such as video configuration...
     :return:
     """
     start = time.time()
@@ -136,11 +137,15 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
         return
     # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     # _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-    adaptive_thresh = adaptive_thresh_size(frame, (5, 5), block_size=21, C=params.cfg.alg['mean'])
-    adaptive_thresh = cv2.erode(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
-                                iterations=2)
+
+    # thresh based on a smaller or blur frame will be faster
+    thresh_binary = adaptive_thresh_size(frame, (5, 5), block_size=params.cfg.alg['block_size'],
+                                         C=params.cfg.alg['mean'])
+    # TODO using multiple scales thresh to filter small object or noises
+    thresh_binary = cv2.erode(thresh_binary, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
+                              iterations=1)
     # adaptive_thresh = cv2.bitwise_and(adaptive_thresh, mask)
-    dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+    dilated = cv2.dilate(thresh_binary, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                          iterations=2)
     contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     binary = np.zeros(dilated.shape, dtype=np.uint8)
@@ -153,6 +158,8 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
         rect = cv2.boundingRect(c)
         area = cv2.contourArea(c)
         # self.is_in_ratio(area, self.shape[0] * self.shape[1])
+        # dolphin size internal is usually at x~[30,100] pixels,y~[15,50] pixels in 12 focus, 1080P monitor
+        # dolphin area mostly is not large or small
         greater_ratio = is_greater_ratio(area, frame.shape, params.cfg)
         less_ratio = is_less_ratio(area, frame.shape, params.cfg)
         rect_regular = (rect[2] / rect[3]) < 10
@@ -164,6 +171,7 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
         #     logger.info(f'Rect regular')
         if greater_ratio and less_ratio and rect_regular:
             rects.append(rect)
+            # logger.info(f'Detector {params.cfg.index}: {rect}')
             filtered_contours.append(c)
     cv2.drawContours(binary, filtered_contours, -1, 255, -1)
     # if self.cfg.show_window:
@@ -173,7 +181,18 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     # logger.info(
     #     '~~~~ Detector: [{},{}] detect done [{}] frames..'.format(params.col_index, params.row_index,
     #                                                               params))
+
+    # rect coordinates in original frame
     original_rects = back(rects, params.start, frame.shape, block.shape, params.cfg)
+
+    # load rect width and height thresh value from configuration
+    rect_width_thresh = params.cfg.alg['rwt']
+    rect_height_thresh = params.cfg.alg['rht']
+
+    # dolphin size internal is usually at x~[30,100] pixels,y~[15,50] pixels in 12 focus, 1080P monitor
+    # should be adjust according to different focuses
+    original_rects = [rect for rect in original_rects if
+                      abs(rect[2] - rect[0]) > rect_width_thresh and abs(rect[3] - rect[1]) > rect_height_thresh]
     res = DetectionResult(None, None, status, regions, binary, dilated, coordinates, params.x_index,
                           params.y_index, block.index, original_rects, rects)
     end = time.time() - start

@@ -30,7 +30,7 @@ def setup_logging(log_dir, logger_name='main', level=logging.DEBUG):
 
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.DEBUG)
-    console_handler.setFormatter(Formatter(log_console_format))
+    console_handler.setFormatter(Formatter(log_file_format))
 
     exp_file_info_handler = RotatingFileHandler(str(log_dir / 'info.log'), maxBytes=10 ** 6, backupCount=5)
     exp_file_info_handler.setLevel(logging.INFO)
@@ -52,5 +52,12 @@ def setup_logging(log_dir, logger_name='main', level=logging.DEBUG):
     return logger
 
 
-logger = setup_logging(LOG_DIR, level=LOG_LEVER)
+logger = setup_logging(LOG_DIR)
+
+# def init_logger(log_level):
+#     global logger
+#     logger =
+
+# logger = setup_logging(LOG_DIR, self.cfg.log_level)
+
 # logger.disabled = False
