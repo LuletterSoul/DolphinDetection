@@ -140,5 +140,7 @@ dmypy.json
 /data
 /model
 /test_data
+/experiments
 
 
+/resnet50-19c8e357.pth

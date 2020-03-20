@@ -4,7 +4,7 @@
 @author: Shanda Lau 刘祥德
 @license: (C) Copyright 2019-now, Node Supply Chain Manager Corporation Limited.
 @contact: shandalaulv@gmail.com
-@software: 
+@software:
 @file: common.py
 @time: 2019/12/13 16:05
 @version 1.0
@@ -12,6 +12,11 @@
 """
 import threading
 import traceback
+
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
+
 from config import VideoConfig
 
 import cv2
@@ -20,45 +25,66 @@ import time
 from .crop import crop_by_roi
 from skimage.measure import compare_ssim
 import numpy as np
+import imutils
 
 
 def preprocess(frame, cfg: VideoConfig):
+    """
+    some preprocess operation such as denoising, image enhancement and crop by ROI
+    :param frame:
+    :param cfg: well-define frame detection range by ROI
+    :return: processed frame, original frame
+    """
     original_frame = frame.copy()
     frame = crop_by_roi(frame, cfg.roi)
     if cfg.resize['scale'] != -1:
         frame = cv2.resize(frame, (0, 0), fx=cfg.resize['scale'], fy=cfg.resize['scale'])
     elif cfg.resize['width'] != -1:
-        frame = resize(frame, cfg.resize['width'])
-    elif cfg.resize['height '] != -1:
-        frame = resize(frame, cfg.resize['height'])
+        frame = imutils.resize(frame, width=cfg.resize['width'])
+    elif cfg.resize['height'] != -1:
+        frame = imutils.resize(frame, height=cfg.resize['height'])
     # frame = imutils.resize(frame, width=1000)
     # frame = frame[340:, :, :]
     # frame = frame[170:, :, :]
-    frame = cv2.GaussianBlur(frame, ksize=(3, 3), sigmaX=0)
+    # frame = cv2.GaussianBlur(frame, ksize=(3, 3), sigmaX=0)
     return frame, original_frame
 
 
 def back(rects, start, shape, original_shape, cfg: VideoConfig):
+    """
+    recover original bounding box size after detection-based down sample and divide blocks frame
+    :param rects: detected bbox based cropped or resized frames
+    :param start: start position of frame block
+    :param shape: current shape
+    :param original_shape: original shape
+    :param cfg: video configuration, well-define bbox size should be
+    :return:
+    """
     if not len(rects):
         return rects
     b_rects = []
     ratio = 1
     if cfg.resize['scale'] != -1:
         ratio = cfg.resize['scale']
-    if cfg.resize['width'] != -1:
+    elif cfg.resize['width'] != -1:
         ratio = original_shape[1] / cfg.routine['col'] / shape[1]
-    if cfg.resize['height'] != -1:
+    elif cfg.resize['height'] != -1:
         ratio = original_shape[0] / cfg.routine['row'] / shape[0]
     for r in rects:
-        x = int((r[0] + start[0] + cfg.roi['x']) * ratio)
-        y = int((r[1] + start[1] + cfg.roi['y']) * ratio)
+        x = int((r[0] + start[0]) * ratio + cfg.roi['x'])
+        y = int((r[1] + start[1]) * ratio + cfg.roi['y'])
         w = int(r[2] * ratio)
         h = int(r[3] * ratio)
-        b_rects.append((x, y, w, h))
+        b_rects.append((x, y, x + w, y + h))
     return b_rects
 
 
 def cvt_rect(rects):
+    """
+    [x1,y1,w,h] --> [x1,y1,x2,y2] ,x2 = x1 + w; y2= y1+ h
+    :param rects:
+    :return:
+    """
     new_rects = []
     for rect in rects:
         new_rects.append([rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3]])
@@ -94,36 +120,6 @@ def clear_cache(cache, num=2):
                 # traceback.print_exc()
 
 
-def resize(image, width=None, height=None, inter=cv2.INTER_AREA):
-    # initialize the dimensions of the image to be resized and
-    # grab the image size
-    dim = None
-    (h, w) = image.shape[:2]
-
-    # if both the width and height are None, then return the
-    # original image
-    if width is None and height is None:
-        return image
-
-    # check to see if the width is None
-    if width is None:
-        # calculate the ratio of the height and construct the
-        # dimensions
-        r = height / float(h)
-        dim = (int(w * r), height)
-
-    # otherwise, the height is None
-    else:
-        # calculate the ratio of the width and construct the
-        # dimensions
-        r = width / float(w)
-        dim = (width, int(h * r))
-
-    # resize the image
-    resized = cv2.resize(image, dim, interpolation=inter)
-
-    # return the resized image
-    return resized
 
 
 def clear_cache_by_len(cache, len_cache):
@@ -215,3 +211,63 @@ def standardization(data):
     mu = np.mean(data, axis=0)
     sigma = np.std(data, axis=0)
     return (data - mu) / sigma
+
+
+def paint_chinese_opencv(im, text, pos, color=None):
+    if color is None:
+        color = np.random.randint(0, 255, size=(3,))
+        color = [int(c) for c in color]
+    img_PIL = Image.fromarray(cv2.cvtColor(im, cv2.COLOR_BGR2RGB))
+    font = ImageFont.truetype('NotoSansCJK-Bold.ttc', 50)
+    fillColor = (color[0], color[1], color[2])  # (255,0,0)
+    position = pos  # (100,100)
+    if not isinstance(text, np.unicode):
+        text = text.decode('utf-8')
+    draw = ImageDraw.Draw(img_PIL)
+    draw.text((position[0], position[1] - 60), text, font=font, fill=fillColor)
+    img = cv2.cvtColor(np.asarray(img_PIL), cv2.COLOR_RGB2BGR)
+    return img
+
+
+def split_img_to_four(image):
+    """
+    :param image:
+    :return:
+    """
+    a1 = np.vsplit(image, 2)[0]
+    a2 = np.vsplit(image, 2)[1]
+    b1 = np.hsplit(a1, 2)[0]
+    b2 = np.hsplit(a1, 2)[1]
+    b3 = np.hsplit(a2, 2)[0]
+    b4 = np.hsplit(a2, 2)[1]
+    return b1, b2, b3, b4
+
+
+def decode(frame, p, patch_idx):
+    """
+    recover original coordinates form four-dividen blocks
+    :param frame:
+    :param p:
+    :param patch_idx:
+    :return:
+    """
+    h, w, _ = frame.shape
+    diff_h = h / 2
+    diff_w = w / 2
+
+    if not len(p[:, :]):
+        return
+
+    if patch_idx == 0:
+        pass
+    elif patch_idx == 1:
+        p[:, :, 0] = p[:, :, 0] + diff_w
+        p[:, :, 2] = p[:, :, 2] + diff_w
+    elif patch_idx == 2:
+        p[:, :, 1] = p[:, :, 1] + diff_h
+        p[:, :, 3] = p[:, :, 3] + diff_h
+    elif patch_idx == 3:
+        p[:, :, 0] = p[:, :, 0] + diff_w
+        p[:, :, 2] = p[:, :, 2] + diff_w
+        p[:, :, 1] = p[:, :, 1] + diff_h
+        p[:, :, 3] = p[:, :, 3] + diff_h

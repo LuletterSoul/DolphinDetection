@@ -17,23 +17,18 @@ import time
 from multiprocessing import Manager
 from multiprocessing.queues import Queue
 from pathlib import Path
-from .ssd import SSDDetector
-from classfy.model import DolphinClassifier
 
 import cv2
 
 from config import VideoConfig, SystemStatus
 from utils import logger
-from config import ModelType
-
-
-# from .manager import TaskBasedDetectorController
-
-
-# import ray
 
 
 class VideoCaptureThreading:
+    """
+    read video frames based cv2.VideoCapture
+    """
+
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
                  idx,
                  sample_rate=5, width=640, height=480, delete_post=True):
@@ -60,25 +55,26 @@ class VideoCaptureThreading:
         self.cap.set(var1, var2)
 
     def __start__(self, *args):
+        """
+        capture initialization
+        :param args:
+        :return:
+        """
         if self.status.get() == SystemStatus.RUNNING:
             print('[!] Threaded video capturing has already been started.')
             return None
         self.update_capture(0)
-        # src = self.load_next_src()
-        # logger.info('Loading next video stream from [{}]....'.format(src))
-        # self.cap = cv2.VideoCapture(src)
-        # logger.info('Loading done from: [{}]'.format(src))
         self.status.set(SystemStatus.RUNNING)
         threading.Thread(target=self.listen, args=(), daemon=True).start()
-        # threading.Thread(target=self.update, args=(*args,), daemon=True).start()
+        time.sleep(5)  # wait detection service init done
         self.update(*args)
-        # threading.Thread(target=cpu_usage).start()
         return self
 
-    # def cal_cpu_usage(self):
-    #         cpu_usage(id)
-
     def listen(self):
+        """
+        controller capture process to shutdown
+        :return:
+        """
         logger.info('Video Capture [{}]: Start listen event'.format(self.cfg.index))
         if self.quit.wait():
             logger.info('Video Capture [{}]: Receive quit signal'.format(self.cfg.index))
@@ -88,6 +84,10 @@ class VideoCaptureThreading:
         self.status.set(SystemStatus.SHUT_DOWN)
 
     def load_next_src(self):
+        """
+        load next video source
+        :return:
+        """
         logger.debug('Loading video stream from video index pool....')
         self.posix = self.get_posix()
         self.src = str(self.posix)
@@ -101,9 +101,19 @@ class VideoCaptureThreading:
             return 0
 
     def get_posix(self):
+        """
+        a base pointer,  can be overrived by sub-class
+        :return:
+        """
+        # DEPRECATED
         return self.video_path / self.index_pool.get()
 
     def update(self, *args):
+        """
+        video capture service, loop video frames from a rtsp stream
+        :param args:
+        :return:
+        """
         cnt = 0
         start = time.time()
         logger.info('*******************************Init video capture [{}]********************************'.format(
@@ -129,6 +139,7 @@ class VideoCaptureThreading:
             logger.debug(f'Video capture [{self.cfg.index}]: Receive Speed Rate [{round(e, 2)}]/FPS')
             s = time.time()
             if not grabbed:
+                # if current video source is end,load the next video sources
                 self.update_capture(cnt)
                 end = time.time()
                 logger.info('Current src consumes time: [{}] seconds'.format(end - start))
@@ -152,11 +163,12 @@ class VideoCaptureThreading:
         self.frame_queue.put(args[0], block=True)
         # logger.info('Passed frame...')
 
-    def decode_fourcc(self, v):
-        v = int(v)
-        return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
-
     def update_capture(self, cnt):
+        """
+        release old video capture instance and init a new video capture when update video source
+        :param cnt:
+        :return:
+        """
         logger.debug('Read frame done from [{}].Has loaded [{}] frames'.format(self.src, cnt))
         logger.debug('Read next frame from video ....')
         self.handle_history()
@@ -179,13 +191,14 @@ class VideoCaptureThreading:
         if self.posix.exists() and self.delete_post:
             self.posix.unlink()
 
-    def post_update(self):
-        pass
-
     def post_frame_process(self, frame):
         pass
 
     def read(self, *args):
+        """
+        :param args:
+        :return:
+        """
         if self.status.get() == SystemStatus.SHUT_DOWN:
             self.__start__(*args)
         return True
@@ -204,6 +217,10 @@ class VideoCaptureThreading:
 
 
 class VideoOfflineCapture(VideoCaptureThreading):
+    """
+    Read video frames from a offline video file
+    """
+
     def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
                  cfg: VideoConfig, idx, sample_rate=5, width=640, height=480, delete_post=True):
         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
@@ -213,6 +230,10 @@ class VideoOfflineCapture(VideoCaptureThreading):
         self.pos = -1
 
     def get_posix(self):
+        """
+        maintain a video file pointer,could loop a batch videos of a directory.
+        :return:
+        """
         if self.pos >= len(self.streams_list):
             logger.info('Load completely for [{}]'.format(str(self.offline_path)))
             return -1
@@ -221,25 +242,19 @@ class VideoOfflineCapture(VideoCaptureThreading):
         self.pos += 1
         return self.streams_list[self.pos]
 
-    # def load_next_src(self):
-    #     logger.debug('Loading next video stream ....')
-    #     if self.pos >= len(self.streams_list):
-    #         logger.info('Load completely for [{}]'.format(str(self.offline_path)))
-    #         return -1
-    #     self.posix = self.streams_list[self.pos]
-    #     self.src = str(self.posix)
-    #     self.pos += 1
-    #     if not os.path.exists(self.src):
-    #         logger.debug('Video path not exist: [{}]'.format(self.src))
-    #         return -1
-    #     return self.src
-
     def handle_history(self):
+        """
+        delete video file when reading done.
+        :return:
+        """
         if self.delete_post:
             self.posix.unlink()
 
 
 class VideoOfflineCallbackCapture(VideoOfflineCapture):
+    """
+    Read video frames from a offline video file,
+    """
 
     def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
                  cfg: VideoConfig, idx, controller, shut_down_event, sample_rate=5, width=640, height=480,
@@ -252,7 +267,7 @@ class VideoOfflineCallbackCapture(VideoOfflineCapture):
     def pass_frame(self, *args):
         assert len(args) >= 2
         # self.controller.dispatch_frame(*args)
-        self.controller.dispatch_to_stack(*args)
+        self.controller.put_cache(*args)
 
     def cancel(self):
         super().cancel()
@@ -260,8 +275,12 @@ class VideoOfflineCallbackCapture(VideoOfflineCapture):
             self.shut_down_event.set()
 
 
-# Sample video stream at intervals
 class VideoOnlineSampleCapture(VideoCaptureThreading):
+    """
+    enhance video capture functionality, which could record or post handle a frame.
+    it was designed to sample and write a frame into disks at special time.
+    """
+
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
                  idx,
                  sample_rate=5, width=640, height=480, delete_post=True):
@@ -280,81 +299,86 @@ class VideoOnlineSampleCapture(VideoCaptureThreading):
         super().handle_history()
 
 
-# @ray.remote
-class VideoOfflineRayCapture(VideoCaptureThreading):
-    def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
-                 cfg: VideoConfig, idx, sample_rate=5, width=640, height=480, delete_post=True):
-        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
-                         delete_post)
-        self.offline_path = offline_path
-        self.streams_list = list(self.offline_path.glob('*'))
-        self.pos = 0
+# # @ray.remote
+# TODO delete legacy code
+# class VideoOfflineRayCapture(VideoCaptureThreading):
+#     def __init__(self, video_path: Path, sample_path: Path, offline_path: Path, index_pool: Queue, frame_queue: Queue,
+#                  cfg: VideoConfig, idx, sample_rate=5, width=640, height=480, delete_post=True):
+#         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
+#                          delete_post)
+#         self.offline_path = offline_path
+#         self.streams_list = list(self.offline_path.glob('*'))
+#         self.pos = 0
+#
+#     def get_posix(self):
+#         if self.pos >= len(self.streams_list):
+#             logger.info('Load completely for [{}]'.format(str(self.offline_path)))
+#             return -1
+#         return self.streams_list[self.pos]
 
-    def get_posix(self):
-        if self.pos >= len(self.streams_list):
-            logger.info('Load completely for [{}]'.format(str(self.offline_path)))
-            return -1
-        return self.streams_list[self.pos]
+#
+# TODO delete legacy code
+# # @ray.remote(num_cpus=0.5)
+# class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
+#     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+#                  idx,
+#                  controller_actor,
+#                  sample_rate=5, width=640, height=480, delete_post=True):
+#         super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
+#                          delete_post)
+#         # if ray_index_pool is None:
+#         #     raise Exception('Invalid index pool object id.')
+#         # self.ray_index_pool = ray.get(ray_index_pool)
+#         self.controller_actor = controller_actor
+#         self.current = 0
+#         self.stream_futures = []
+#         # self.frame_queue = ray.get(frame_queue)
+#
+#     def pass_frame(self, frame):
+#         # put the ray id of frame into global shared memory
+#         # frame_id = ray.put(frame)
+#         # self.frame_queue.put(frame_id)
+#         self.stream_futures.append(self.controller_actor.start_stream_task.remote(frame))
+#         logger.info('Passing frame [{}]'.format(self.current))
+#         self.current += 1
+#         # if self.current > 100:
+#         #     logger.info('Blocked cap wait stream complete.')
+#         #     ray.wait(self.stream_futures)
+#         #     logger.info('Release cap.')
+#         #     self.current = 0
+#
+#     def remote_update(self, src):
+#         cnt = 0
+#         start = time.time()
+#         self.set_posix(src)
+#         self.cap = cv2.VideoCapture(str(self.posix))
+#         while True:
+#             # with self.read_lock:
+#             grabbed, frame = self.cap.read()
+#             # logger.info('Video Capture [{}]: cnt ..'.format(cnt))
+#             if not grabbed:
+#                 # self.update_capture(cnt)
+#                 break
+#             if (cnt + 1) % 20 == 0:
+#                 time.sleep(1)
+#             if cnt % self.sample_rate == 0:
+#                 self.pass_frame(frame)
+#             cnt += 1
+#             self.runtime = time.time() - start
+#         self.handle_history()
+#         self.cap.release()
+#         # logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
+#         return self.posix
+#
+#     def set_posix(self, src):
+#         self.posix = self.video_path / src
+#
 
-
-# @ray.remote(num_cpus=0.5)
-class VideoOnlineSampleBasedRayCapture(VideoCaptureThreading):
-    def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
-                 idx,
-                 controller_actor,
-                 sample_rate=5, width=640, height=480, delete_post=True):
-        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, sample_rate, width, height,
-                         delete_post)
-        # if ray_index_pool is None:
-        #     raise Exception('Invalid index pool object id.')
-        # self.ray_index_pool = ray.get(ray_index_pool)
-        self.controller_actor = controller_actor
-        self.current = 0
-        self.stream_futures = []
-        # self.frame_queue = ray.get(frame_queue)
-
-    def pass_frame(self, frame):
-        # put the ray id of frame into global shared memory
-        # frame_id = ray.put(frame)
-        # self.frame_queue.put(frame_id)
-        self.stream_futures.append(self.controller_actor.start_stream_task.remote(frame))
-        logger.info('Passing frame [{}]'.format(self.current))
-        self.current += 1
-        # if self.current > 100:
-        #     logger.info('Blocked cap wait stream complete.')
-        #     ray.wait(self.stream_futures)
-        #     logger.info('Release cap.')
-        #     self.current = 0
-
-    def remote_update(self, src):
-        cnt = 0
-        start = time.time()
-        self.set_posix(src)
-        self.cap = cv2.VideoCapture(str(self.posix))
-        while True:
-            # with self.read_lock:
-            grabbed, frame = self.cap.read()
-            # logger.info('Video Capture [{}]: cnt ..'.format(cnt))
-            if not grabbed:
-                # self.update_capture(cnt)
-                break
-            if (cnt + 1) % 20 == 0:
-                time.sleep(1)
-            if cnt % self.sample_rate == 0:
-                self.pass_frame(frame)
-            cnt += 1
-            self.runtime = time.time() - start
-        self.handle_history()
-        self.cap.release()
-        # logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
-        return self.posix
-
-    def set_posix(self, src):
-        self.posix = self.video_path / src
-
-
-# Read stream from rtsp
 class VideoRtspCapture(VideoOnlineSampleCapture):
+    """
+     Read video frames from rtsp stream,could call back controller's method, passing the frame in a global cache.
+    """
+
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
                  idx,
                  sample_rate=5, width=640, height=480, delete_post=True):
@@ -377,19 +401,21 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
         start = time.time()
         logger.info('*******************************Init video capture [{}]********************************'.format(
             self.cfg.index))
+        # TODO delete legacy code
+        # TODO refactor args structure
         ssd_detector = None
         classifier = None
         server_cfg = args[0]
-        if server_cfg.detect_mode == ModelType.SSD:
-            ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
-            ssd_detector.run()
-            logger.info(
-                f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
-        elif server_cfg.detect_mode == ModelType.CLASSIFY:
-            classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
-            classifier.run()
-            logger.info(
-                f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
+        # if server_cfg.detect_mode == ModelType.SSD:
+        #     ssd_detector = SSDDetector(model_path=server_cfg.detect_model_path, device_id=server_cfg.cd_id)
+        #     ssd_detector.run()
+        #     logger.info(
+        #         f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
+        # elif server_cfg.detect_mode == ModelType.CLASSIFY:
+        #     classifier = DolphinClassifier(model_path=server_cfg.classify_model_path, device_id=server_cfg.dt_id)
+        #     classifier.run()
+        #     logger.info(
+        #         f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
             s = time.time()
@@ -436,6 +462,10 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
 
 
 class VideoRtspCallbackCapture(VideoRtspCapture):
+    """
+    Read video frames from rtsp stream,could call back controller's method, passing frame in a global cache
+    """
+
     def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
                  idx,
                  controller,
@@ -447,4 +477,4 @@ class VideoRtspCallbackCapture(VideoRtspCapture):
     def pass_frame(self, *args):
         assert len(args) >= 2
         # self.controller.dispatch_frame(*args)
-        self.controller.dispatch_to_stack(*args)
+        self.controller.put_cache(*args)

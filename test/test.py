@@ -16,13 +16,14 @@ from multiprocessing import Pool
 
 # import interface as I
 from config import *
-from detection.manager import DetectionMonitor, EmbeddingControlBasedTaskMonitor
+from detection.monitor import DetectionMonitor, EmbeddingControlBasedTaskMonitor
 from detection.detect_funcs import detect
 from utils import *
 from skimage.measure import compare_ssim
 import cv2
-import redis
+# import redis
 import base64
+import imutils
 
 
 def test_video_config():
@@ -141,19 +142,35 @@ def MOG2_substractor():
 
 
 def crop_from_frame():
-    frame_names = list(Path('/Users/luvletteru/Documents/dolphin/label/negatives').glob('*'))
-    output_dir = '/Users/luvletteru/Documents/dolphin/label/crops-sample/other'
+    frame_names = list(Path('/Users/luvletteru/Documents/GitHub/DolphinDetection/data/test/0312').glob('*'))
+    output_dir = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/test/output/0312'
     cfg = {}
     for idx, f in enumerate(frame_names):
-        frame = cv2.imread(str(f))
+        original_frame = cv2.imread(str(f))
+        roi = {
+            "x": 0,
+            "y": 60,
+            "width": -1,
+            "height": -1
+        }
+        # frame = crop_by_roi(original_frame, roi)
+        # cv2.imshow('Cropped', frame)
+        # cv2.waitKey(0)
+        frame = imutils.resize(original_frame, width=1000)
+        ratio = original_frame.shape[1] / 1000
+        original_frame = original_frame[200:, :]
+        cv2.imshow('ORIGIANL', original_frame)
+        cv2.waitKey(0)
         if frame is None:
             continue
         rects = detect(frame)
+        # rects = cvt_rect(rects)
         print(f)
         if len(rects):
-            for rect in rects:
-                bbox = crop_by_rect_wh(224, 224, rect, frame)
-                cv2.imwrite(os.path.join(output_dir, str(idx) + '.png'), bbox)
+            for rect_idx, rect in enumerate(rects):
+                rect = [rect[0] * ratio, rect[1] * ratio, rect[2] * ratio, rect[3] * ratio]
+                bbox = crop_by_rect_wh(224 * 2, 224 * 2, rect, original_frame)
+                cv2.imwrite(os.path.join(output_dir, str(idx) + '_' + str(rect_idx) + '.png'), bbox)
 
 
 def test_hist():
@@ -213,10 +230,10 @@ def test_redis_performance():
 
 if __name__ == '__main__':
     # MOG2_substractor()
-    # crop_from_frame()
+    crop_from_frame()
     # test_hist()
     # test_task_monitor(k)
-    test_redis_performance()
+    # test_redis_performance()
     # test_load_video_json()
     # test_load_label_json()
     # test_video_config()

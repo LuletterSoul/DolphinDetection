@@ -10,6 +10,7 @@
 @version 1.0
 @desc:
 """
+import argparse
 from multiprocessing import Process
 
 from flask import Flask
@@ -53,7 +54,24 @@ class HttpServer(object):
         elif self.env == Environment.PROD:
             Process(target=app.run, args=(self.host_ip, self.host_port, False,), daemon=True).start()
 
+    def run_front(self):
+        if self.env == Environment.DEV:
+            app.run(self.host_ip, self.host_port, True)
+            # Process(target=app.run, args=(self.host_ip, self.host_port, False,), daemon=True).start()
+        elif self.env == Environment.TEST:
+            app.run(self.host_ip, self.host_port, True)
+            # Process(target=app.run, args=(self.host_ip, self.host_port, False,), daemon=True).start()
+        elif self.env == Environment.PROD:
+            app.run(self.host_ip, self.host_port, False)
+
 
 if __name__ == '__main__':
-    http = HttpServer("127.0.0.1", "8080")
-    http.run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--env', type=str, default='prod',
+                        help='System environment.')
+    parser.add_argument('--http_ip', type=str, default="10.196.122.94", help='Http server ip address')
+    parser.add_argument('--http_port', type=int, default=8080, help='Http server listen port')
+    parser.add_argument('--root', type=str, default="data/candidates", help='Http server listen port')
+    args = parser.parse_args()
+    http = HttpServer(args.http_ip, args.http_port)
+    http.run_front()

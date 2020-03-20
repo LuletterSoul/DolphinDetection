@@ -102,10 +102,9 @@ class SSDDetector(nn.Module):
                 pt = np.append(pt, detections[i, 1, j, 0].item())
                 pts = np.row_stack((pts, pt))
                 j += 1
-
             frames_pts.append(pts[np.newaxis, :, :])
-        dets = np.concatenate(frames_pts)
 
+        dets = np.concatenate(frames_pts)
         # t2 = time.time()
         # self.logger.info(' after processing  time: %.4f sec.' % (t2 - t1))
         # self.logger.info(' all  time: %.4f sec.' % (t2 - t0))
