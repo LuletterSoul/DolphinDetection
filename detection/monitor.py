@@ -196,7 +196,7 @@ class EmbeddingControlMonitor(DetectionMonitor):
                                                      shape=cfg.shape)
                 self.frame_caches.append(frame_cache)
                 self.stream_stacks.append(
-                    [SharedMemoryFrameCache(self.frame_cache_manager, 1, template.nbytes, shape=cfg.shape),
+                    [frame_cache,
                      Manager().list()])
             else:
                 self.frame_caches.append(ListCache(Manager(), cfg.cache_size, template))
@@ -453,8 +453,6 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                     self.process_pool.apply_async(self.push_streamers[i].push_stream, ()))
                 self.task_futures.append(self.process_pool.apply_async(self.stream_renders[i].loop, ()))
                 # self.task_futures[-1].get()
-
-
 
     def wait(self):
         if self.process_pool is not None:

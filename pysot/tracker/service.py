@@ -200,6 +200,8 @@ class TrackingService(object):
             raise Exception('Track model checkpoint not found.')
 
         cfg.merge_from_file(model_cfg_path)
+        logger.info(cfg.BACKBONE.TYPE)
+
         # self.devices = []
         self.models = []
         self.pipe_manager = Manager()
