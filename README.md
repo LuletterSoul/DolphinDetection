@@ -86,23 +86,24 @@ Change pip mirror to `aliyun` if download slowly.
 
 Run detection for video monitor indexed by 5 in PROD mode, configurations are loaded from vcfg/*-prod.json.
 ```
-python --env prod --http_ip 192.168.0.116 --http_port 8080 --cd_id 0 --dt_id 0 --enable 5 --use_sm 5 --send_msg -log_level INFO
+python app.py --env prod --http_ip 192.168.0.116 --http_port 8080 --cd_id 0 --dt_id 0 --enable 5 --use_sm 5 --send_msg -log_level INFO
 ```
 
 # Run on test env
 
-Run detection for video monitor indexed by 8 in TEST mode, configurations are loaded from vcfg/*-test.json.
+Run detection for video monitor indexed by 8 in TEST mode, configurations are loaded from vcfg/*-test.json. 
+If the configuration set the item `online=offine`,it should be placed a video file at least at `data/offline/8`.
 ## Run single video detection
 
 ```
-python --env test --http_ip 127.0.0.1 --http_port 8080 --cd_id 0 --dt_id 0 --run_direct --enable 8 --use_sm 8 --log_level INFO
+python app.py --env test --http_ip 127.0.0.1 --http_port 8080 --cd_id 0 --dt_id 0 --run_direct --enable 8 --use_sm 8 --log_level INFO
 ```
 
 ## Run multiples videos detection
 
 Run detection for video monitor indexed by 8,9 in TEST mode.
 ```
-python --env test --http_ip 127.0.0.1 --http_port 8080 --cd_id 0 --dt_id 0 --run_direct --enable 8,9 --use_sm 8,9 --log_level INFO
+python app.py --env test --http_ip 127.0.0.1 --http_port 8080 --cd_id 0 --dt_id 0 --run_direct --enable 8,9 --use_sm 8,9 --log_level INFO
 ```
 Set `log_level=DEBUG`  to see more debug information. Remove `--run_direct` to activate `cron` timing run service.
 
