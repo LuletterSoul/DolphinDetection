@@ -389,8 +389,9 @@ class TaskBasedDetectorController(DetectorController):
                             rects.append(rect)
                     r.rects = rects
                     if push_flag:
-                        json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
-                                                         timestamp=current_index, rects=r.rects, dol_id=self.dol_id)
+                        json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
+                                                         timestamp=current_index, rects=r.rects, dol_id=self.dol_id,
+                                                         camera_id=self.cfg.camera_id)
                         logger.info(f'put detect message in msg_queue...')
                         self.msg_queue.put(json_msg)
                         self.render_rect_cache[current_index % self.cache_size] = r.rects
@@ -398,8 +399,8 @@ class TaskBasedDetectorController(DetectorController):
                         self.notify_render(current_index)
                     else:
                         if not self.dol_gone:
-                            empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
-                                                                    timestamp=current_index, dol_id=self.dol_id)
+                            empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
+                                                                    timestamp=current_index, dol_id=self.dol_id,camera_id=self.cfg.camera_id)
                             self.msg_queue.put(empty_msg)
                             logger.info(self.LOG_PREFIX + f'Send empty msg: {empty_msg}')
                             self.dol_id += 1
@@ -534,9 +535,9 @@ class TaskBasedDetectorController(DetectorController):
                             logger.info(
                                 f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
                     if detect_flag:
-                        json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.index,
-                                                         timestamp=current_index, rects=rects,
-                                                         dol_id=self.dol_id)
+                        json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
+                                                         timestamp=current_index, rects=rects, dol_id=self.dol_id,
+                                                         camera_id=self.cfg.camera_id)
                         self.msg_queue.put(json_msg)
                         logger.debug(f'put detect message in msg_queue {json_msg}...')
                         # self.render_frame_cache[current_index % self.cache_size] = render_frame
@@ -546,8 +547,8 @@ class TaskBasedDetectorController(DetectorController):
                     else:
                         if not self.dol_gone:
                             empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
-                                                                    channel=self.cfg.index,
-                                                                    timestamp=current_index, dol_id=self.dol_id)
+                                                                    channel=self.cfg.channel,
+                                                                    timestamp=current_index, dol_id=self.dol_id,camera_id=self.cfg.camera_id)
                             self.dol_id += 1
                             self.msg_queue.put(empty_msg)
                             self.dol_gone = True
@@ -690,3 +691,4 @@ class TaskBasedDetectorController(DetectorController):
         # threading.Thread(target=self.loop_stack, daemon=True).start()
         self.control()
         return True
+

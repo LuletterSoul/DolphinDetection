@@ -114,7 +114,7 @@ def creat_position_json(rects):
     return position_json
 
 
-def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000):
+def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000,camera_id='camera_bp_1'):
     msg = {
         'cmdType': 'notify',
         "appId": "10080",
@@ -122,8 +122,9 @@ def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000):
         'data': {
             'notifyType': 'detectedNotify',
             'videoStream': video_stream,
+            "camera_id": camera_id,
+            "channel": channel,
             'jt_id': str(dol_id),
-            'channel': channel,
             'timestamp': timestamp,
             'coordinates': [],
         }
@@ -132,7 +133,7 @@ def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000):
     return msg_json
 
 
-def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id):
+def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id, camera_id):
     position_json = creat_position_json(rects)
     msg = {
         'cmdType': 'notify',
@@ -141,6 +142,7 @@ def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id):
         'data': {
             'notifyType': 'detectedNotify',
             'videoStream': video_stream,
+            "cameraId": camera_id,
             'channel': channel,
             'jt_id': str(dol_id),
             'timestamp': timestamp,
@@ -151,11 +153,13 @@ def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id):
     return msg_json
 
 
-def creat_packaged_msg_json(filename, path, cfg: VideoConfig):
+def creat_packaged_msg_json(filename, path, cfg: VideoConfig, camera_id, channel):
     url = os.path.join(cfg.dip, 'video', cfg.date, str(cfg.index), filename)
     msg = {
         'cmdType': 'notify',
         'clientId': 'jt001',
+        'camera_id':camera_id,
+        'channel':channel,
         'data': {
             'notifyType': 'packagedNotify',
             'filename': filename,

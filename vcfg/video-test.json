@@ -3,6 +3,8 @@
     {
       "index": 8,
       "name": "4K_test",
+      "camera_id": "camera_bp_test",
+      "channel": 0,
       "shape": [
         1072,
         1920,
@@ -89,6 +91,8 @@
     {
       "index": 9,
       "name": "yuzhu_test",
+      "camera_id": "camera_bp_test",
+      "channel": 0,
       "shape": [
         1072,
         1920,
