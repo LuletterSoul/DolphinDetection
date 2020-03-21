@@ -31,9 +31,16 @@ async def main_logic(q, vcfg: VideoConfig, scfg: ServerConfig):
                         history_msg_json = None
                         response_str = await server.recv()
                         logger.info(f'response from server: {response_str}')
-                    while not q.empty():
-                        logger.info(f'Controller [{vcfg.index}]: Current message num: {q.qsize()}')
-                        msg_json = q.get(1)
+                    try:
+                        if not q.empty():
+                            logger.info(f'Controller [{vcfg.index}]: Current message num: {q.qsize()}')
+                            msg_json = q.get(1)
+                        else:
+                            msg_json = None
+                    except Exception as e:
+                        logger.error(e)
+                        return
+                    if msg_json is not None:
                         await server.send(msg_json.encode('utf-8'))
                         logger.info(f'client send message to server {address} successfully: {msg_json}')
                         response_str = await server.recv()
