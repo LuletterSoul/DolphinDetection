@@ -405,7 +405,8 @@ class DetectionStreamRender(FrameArrivalHandler):
         if self.post_filter:
             self.do_post_filter(origin_video_path, task_cnt, post_filter_event)
         else:
-            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
+            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
+                                               camera_id=self.cfg.camera_id, channel=self.cfg.channal)
             self.msg_queue.put(msg_json)
             logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
@@ -420,7 +421,8 @@ class DetectionStreamRender(FrameArrivalHandler):
         is_filter = self.post_filter.post_filter_video(str(target), task_cnt)
         post_filter_event.wait()
         if is_filter:
-            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg)
+            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
+                                               camera_id=self.cfg.camera_id, channel=self.cfg.channal)
             self.msg_queue.put(msg_json)
             logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
