@@ -86,7 +86,7 @@ Change pip mirror to `aliyun` if download slowly.
 
 Run detection for video monitor indexed by 5 in PROD mode, configurations are loaded from vcfg/*-prod.json.
 ```
-python app.py --env prod --http_ip 192.168.0.116 --http_port 8080 --cd_id 0 --dt_id 0 --enable 5 --use_sm 5 --send_msg -log_level INFO
+python app.py --env prod --http_ip 192.168.0.116 --http_port 8080 --cd_id 0 --dt_id 0 --enable 5 --use_sm 5 --send_msg --log_level INFO
 ```
 
 # Run on test env

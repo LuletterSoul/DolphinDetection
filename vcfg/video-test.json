@@ -6,7 +6,7 @@
       "camera_id": "camera_bp_test",
       "channel": 0,
       "shape": [
-        1072,
+        1080,
         1920,
         3
       ],
@@ -63,8 +63,8 @@
       "similarity_thresh": 0.6,
       "pre_cache": 48,
       "render": true,
-      "post_filter": true,
-      "forward_filter": true,
+      "post_filter": false,
+      "forward_filter": false,
       "bbox": {
         "w": 224,
         "h": 224
