@@ -25,6 +25,7 @@ import time
 from .crop import crop_by_roi
 from skimage.measure import compare_ssim
 import numpy as np
+import imutils
 
 
 def preprocess(frame, cfg: VideoConfig):
@@ -39,13 +40,13 @@ def preprocess(frame, cfg: VideoConfig):
     if cfg.resize['scale'] != -1:
         frame = cv2.resize(frame, (0, 0), fx=cfg.resize['scale'], fy=cfg.resize['scale'])
     elif cfg.resize['width'] != -1:
-        frame = resize(frame, width=cfg.resize['width'])
+        frame = imutils.resize(frame, width=cfg.resize['width'])
     elif cfg.resize['height'] != -1:
-        frame = resize(frame, height=cfg.resize['height'])
+        frame = imutils.resize(frame, height=cfg.resize['height'])
     # frame = imutils.resize(frame, width=1000)
     # frame = frame[340:, :, :]
     # frame = frame[170:, :, :]
-    frame = cv2.GaussianBlur(frame, ksize=(3, 3), sigmaX=0)
+    # frame = cv2.GaussianBlur(frame, ksize=(3, 3), sigmaX=0)
     return frame, original_frame
 
 
@@ -119,36 +120,6 @@ def clear_cache(cache, num=2):
                 # traceback.print_exc()
 
 
-def resize(image, width=None, height=None, inter=cv2.INTER_AREA):
-    # initialize the dimensions of the image to be resized and
-    # grab the image size
-    dim = None
-    (h, w) = image.shape[:2]
-
-    # if both the width and height are None, then return the
-    # original image
-    if width is None and height is None:
-        return image
-
-    # check to see if the width is None
-    if width is None:
-        # calculate the ratio of the height and construct the
-        # dimensions
-        r = height / float(h)
-        dim = (int(w * r), height)
-
-    # otherwise, the height is None
-    else:
-        # calculate the ratio of the width and construct the
-        # dimensions
-        r = width / float(w)
-        dim = (width, int(h * r))
-
-    # resize the image
-    resized = cv2.resize(image, dim, interpolation=inter)
-
-    # return the resized image
-    return resized
 
 
 def clear_cache_by_len(cache, len_cache):

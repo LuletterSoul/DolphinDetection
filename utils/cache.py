@@ -23,7 +23,6 @@ class SharedMemoryFrameCache(object):
 
     def __init__(self, manager: SharedMemoryManager, cache_size, unit, shape) -> None:
         self.unit = unit
-        print(self.unit)
         self.shape = shape
         self.cache_size = cache_size
         self.total_bytes = self.unit * self.cache_size
