@@ -130,6 +130,20 @@ def load_cfg(args):
             if cfg.index in enables:
                 cfg.use_sm = True
 
+    if args.enable_forward_filter is not None:
+        enables = args.enable_forward_filter.split(",")
+        enables = [int(e) for e in enables]
+        for cfg in video_config:
+            if cfg.index in enables:
+                cfg.forward_filter = True
+
+    if args.enable_post_filter is not None:
+        enables = args.enable_post_filter.split(",")
+        enables = [int(e) for e in enables]
+        for cfg in video_config:
+            if cfg.index in enables:
+                cfg.post_filter = True
+
     if args.push_stream is not None:
         enables = args.push_stream.split(",")
         enables = [int(e) for e in enables]
@@ -169,6 +183,10 @@ if __name__ == '__main__':
                         help='timing start or run directly.default is False,system will be blocked until time arrivals.')
     parser.add_argument('--enable', type=str, default="5",
                         help='Enable video using index,should input a index at least.')
+    parser.add_argument('--enable_forward_filter', type=str, default=None,
+                        help='Enable forward filter, default forward filter services of all monitors are disabled.')
+    parser.add_argument('--enable_post_filter', type=str, default=None,
+                        help='Enable post filter, default post filter services of all monitors are disabled.')
     parser.add_argument('--disable', type=str, default=None,
                         help='Disable video using index,default all videos are disabled.')
     parser.add_argument('--send_msg', action='store_true', default=False,

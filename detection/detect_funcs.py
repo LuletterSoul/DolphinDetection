@@ -324,8 +324,8 @@ def construct(results: List[DetectionResult], params: ConstructParams):
                     cv2.rectangle(original_frame, p1, p2, color, 2)
                 params.render_frame_cache[current_index] = original_frame
                 params.render_rect_cache[current_index] = r.rects
-                params.stream_render.reset(current_index)
-        params.stream_render.notify(current_index)
+                params.stream_render.reset(None)
+        params.stream_render.notify(None)
         clear_cache_by_len(params.render_frame_cache, params.len_thresh)
         clear_cache_by_len(params.render_rect_cache, params.len_thresh)
         # return constructed_frame, constructed_binary, constructed_thresh

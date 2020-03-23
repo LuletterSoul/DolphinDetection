@@ -120,8 +120,6 @@ def clear_cache(cache, num=2):
                 # traceback.print_exc()
 
 
-
-
 def clear_cache_by_len(cache, len_cache):
     if len(cache) > len_cache:
         thread = threading.Thread(
@@ -271,3 +269,16 @@ def decode(frame, p, patch_idx):
         p[:, :, 2] = p[:, :, 2] + diff_w
         p[:, :, 1] = p[:, :, 1] + diff_h
         p[:, :, 3] = p[:, :, 3] + diff_h
+
+
+def to_bboxs_wh(rects):
+    """
+    [x1,y1,x2,y2] to [x1,y1,w,h]
+    :param rects:
+    :return:
+    """
+    return [to_bbox_wh(r) for r in rects]
+
+
+def to_bbox_wh(r):
+    return [r[0], r[1], r[2] - r[0], r[3] - r[1]]

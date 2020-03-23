@@ -17,6 +17,7 @@ import time
 from multiprocessing import Manager
 from multiprocessing.queues import Queue
 from pathlib import Path
+import traceback
 
 import cv2
 
@@ -199,9 +200,13 @@ class VideoCaptureThreading:
         :param args:
         :return:
         """
-        if self.status.get() == SystemStatus.SHUT_DOWN:
-            self.__start__(*args)
-        return True
+        try:
+            if self.status.get() == SystemStatus.SHUT_DOWN:
+                self.__start__(*args)
+            return True
+        except Exception as e:
+            logger.error(e)
+            traceback.print_exc()
         # with self.read_lock:
         # frame = self.frame.copy()
         # grabbed = self.grabbed

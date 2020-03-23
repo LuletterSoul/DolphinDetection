@@ -27,7 +27,7 @@ from multiprocessing import Pool, Manager, Queue, Process, Lock
 from utils.cache import SharedMemoryFrameCache
 from typing import List
 import torch
-from utils import logger
+from utils import logger, to_bbox_wh
 from config import SystemStatus, VideoConfig
 
 
@@ -115,15 +115,20 @@ def track_service(model_index, video_cfgs, checkpoint,
             # lock the whole model in case it is busy and throw exception if multiple requests post
             with lock:
                 s = time.time()
-                tracker.init(init_frame, req.rect)
+                tracker.init(init_frame, to_bbox_wh(req.rect))
                 end_index = req.frame_index + track_window_size + 1
                 result = []
                 result.append((req.frame_index, req.rect))
-                # track in a slice windows
+                # fetch frames ASAP in case history caches were covered by the future frames
+                frames = []
                 for i in range(req.frame_index + 1, end_index):
                     frame = frame_caches[req.monitor_index][i]
                     if frame is None:
                         continue
+                    frames.append((i, frame))
+
+                # track in a slice windows
+                for i, frame in frames:
                     track_res = tracker.track(frame)
                     best_score = track_res['best_score']
                     if best_score > track_confidence:
@@ -136,9 +141,9 @@ def track_service(model_index, video_cfgs, checkpoint,
             # task service will timeout if track request is empty in pipe
             # ignore
             pass
-        except Exception as e:
-            logger.info(e)
-            traceback.print_exc()
+        except:
+            # catch Broken pipe exception possibly
+            return
 
 
 class TrackRequester(object):
@@ -155,12 +160,14 @@ class TrackRequester(object):
         :param monitor_index: monitor index
         :param frame_index: frame unique id
         :param rects: rects template
-        :return: result sets N * WINDOW_SIZE * (frame_idx,[x1,y1,x2,y2])
+        :return:  res: WINDOW_SIZE * (frame_idx,[[x1,y1,x2,y2],[x3,y3,x4,y4],...](one frame with all rects);
+                  seq: N * WINDOW_SIZE * (frame_idx,[x1,y1,x2,y2]); N is rects' number
         """
-        result_set = []
+        res = []
         organize = {}
+        seq = [[]] * len(rects)
         if not len(rects):
-            return []
+            return [], []
         else:
             for rect_id, rect in enumerate(rects):
                 # post to a single
@@ -169,6 +176,8 @@ class TrackRequester(object):
                 # frames of each monitor arrival in order, track request is also in order
                 # in corresponding receive pipe
                 track_result: TrackResult = self.output_pipes[monitor_index].get()
+                # but track result may be out of order at each request, should sort by original rect id
+                seq[track_result.rect_id] = track_result.result
                 frame_seq = track_result.result
                 for f_idx, rect in frame_seq:
                     # logger.info(f'frame index {f_idx} rect {rect}')
@@ -178,11 +187,9 @@ class TrackRequester(object):
             # organize data structure for filter input
             for k, v in organize.items():
                 if len(v):
-                    result_set.append((k, v))
-            # but track result may be out of order at each request, should sort by original rect id
-            # result_set[track_result.rect_id] = track_result.result
+                    res.append((k, v))
             # logger.info(f'tracking results: {result_set}')
-        return result_set
+        return res, seq
 
 
 class TrackingService(object):

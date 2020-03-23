@@ -48,7 +48,7 @@
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
-      "cv_only": false,
+      "cv_only": true,
       "ssd_divide_four": false,
       "rtsp": "rtsp://222.190.243.243/bp/jtdome",
       "push_to": "rtsp://192.168.0.116/yz",
@@ -57,7 +57,7 @@
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
       "detect_internal": 72,
-      "search_window_size": 24,
+      "search_window_size": 125,
       "use_sm": false,
       "cache_size": 700,
       "similarity_thresh": 0.05,
@@ -85,7 +85,7 @@
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
         "disappear_frames_thresh": 3,
-        "track_confidence": 0.95
+        "track_confidence": 0.98
       }
     },
     {
@@ -145,7 +145,7 @@
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
       "detect_internal": 72,
-      "search_window_size": 24,
+      "search_window_size": 125,
       "use_sm": false,
       "cache_size": 700,
       "similarity_thresh": 0.6,
@@ -173,7 +173,7 @@
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
         "disappear_frames_thresh": 3,
-        "track_confidence": 0.95
+        "track_confidence": 0.98
       }
     },
     {
@@ -224,7 +224,7 @@
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
-      "cv_only": false,
+      "cv_only": true,
       "ssd_divide_four": false,
       "rtsp": "rtsp://10.196.122.98/cvcam/31/stream1",
       "push_to": "rtsp://192.168.0.116/yz",
@@ -233,7 +233,7 @@
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
       "detect_internal": 72,
-      "search_window_size": 24,
+      "search_window_size": 125,
       "use_sm": false,
       "cache_size": 700,
       "similarity_thresh": 0.05,
@@ -261,7 +261,7 @@
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
         "disappear_frames_thresh": 3,
-        "track_confidence": 0.95
+        "track_confidence": 0.98
       }
     },
 
@@ -313,7 +313,7 @@
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
-      "cv_only": false,
+      "cv_only": true,
       "ssd_divide_four": false,
       "rtsp": "rtsp://10.196.122.98/cvcam/32/stream1",
       "push_to": "rtsp://192.168.0.116/yz",
@@ -322,7 +322,7 @@
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
       "detect_internal": 72,
-      "search_window_size": 24,
+      "search_window_size": 125,
       "use_sm": false,
       "cache_size": 700,
       "similarity_thresh": 0.05,
@@ -350,7 +350,7 @@
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
         "disappear_frames_thresh": 3,
-        "track_confidence": 0.95
+        "track_confidence": 0.98
       }
     },
     {
@@ -401,7 +401,7 @@
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
-      "cv_only": false,
+      "cv_only": true,
       "ssd_divide_four": false,
       "rtsp": "rtsp://10.196.122.98/cvcam/33/stream1",
       "push_to": "rtsp://192.168.0.116/yz",
@@ -410,7 +410,7 @@
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
       "detect_internal": 72,
-      "search_window_size": 24,
+      "search_window_size": 125,
       "use_sm": false,
       "cache_size": 700,
       "similarity_thresh": 0.05,
@@ -438,7 +438,7 @@
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
         "disappear_frames_thresh": 3,
-        "track_confidence": 0.95
+        "track_confidence": 0.98
       }
     },
     {
@@ -489,7 +489,7 @@
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
-      "cv_only": false,
+      "cv_only": true,
       "ssd_divide_four": false,
       "rtsp": "rtsp://10.196.122.98/cvcam/34/stream1",
       "push_to": "rtsp://192.168.0.116/yz",
@@ -498,7 +498,7 @@
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
       "detect_internal": 72,
-      "search_window_size": 24,
+      "search_window_size": 125,
       "use_sm": false,
       "cache_size": 700,
       "similarity_thresh": 0.05,
@@ -526,7 +526,7 @@
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
         "disappear_frames_thresh": 3,
-        "track_confidence": 0.95
+        "track_confidence": 0.98
       }
     },
     {
@@ -577,7 +577,7 @@
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
-      "cv_only": false,
+      "cv_only": true,
       "ssd_divide_four": false,
       "rtsp": "rtsp://10.196.122.98/cvcam/35/stream1",
       "push_to": "rtsp://192.168.0.116/yz",
@@ -586,7 +586,7 @@
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
       "detect_internal": 72,
-      "search_window_size": 24,
+      "search_window_size": 125,
       "use_sm": false,
       "cache_size": 700,
       "similarity_thresh": 0.05,
@@ -614,7 +614,7 @@
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
         "disappear_frames_thresh": 3,
-        "track_confidence": 0.95
+        "track_confidence": 0.98
       }
     },
     {
@@ -665,7 +665,7 @@
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
-      "cv_only": false,
+      "cv_only": true,
       "ssd_divide_four": false,
       "rtsp": "rtsp://10.196.122.98/cvcam/21/stream1",
       "push_to": "rtsp://192.168.0.116/yz",
@@ -674,7 +674,7 @@
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
       "detect_internal": 72,
-      "search_window_size": 24,
+      "search_window_size": 125,
       "use_sm": false,
       "cache_size": 700,
       "similarity_thresh": 0.05,
@@ -702,7 +702,7 @@
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
         "disappear_frames_thresh": 3,
-        "track_confidence": 0.95
+        "track_confidence": 0.98
       }
     },
     {
@@ -753,7 +753,7 @@
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
-      "cv_only": false,
+      "cv_only": true,
       "ssd_divide_four": false,
       "rtsp": "rtsp://10.196.122.98/cvcam/22/stream1",
       "push_to": "rtsp://192.168.0.116/yz",
@@ -762,7 +762,7 @@
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
       "detect_internal": 72,
-      "search_window_size": 24,
+      "search_window_size": 125,
       "use_sm": false,
       "cache_size": 700,
       "similarity_thresh": 0.05,
@@ -790,7 +790,7 @@
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
         "disappear_frames_thresh": 3,
-        "track_confidence": 0.95
+        "track_confidence": 0.98
       }
     },
     {
@@ -841,7 +841,7 @@
       "sample_internal": 15,
       "save_box": false,
       "show_box": true,
-      "cv_only": false,
+      "cv_only": true,
       "ssd_divide_four": false,
       "rtsp": "rtsp://10.196.122.98/cvcam/23/stream1",
       "push_to": "rtsp://192.168.0.116/yz",
@@ -850,7 +850,7 @@
       "rtsp_saved_per_frame": 240,
       "future_frames": 72,
       "detect_internal": 72,
-      "search_window_size": 24,
+      "search_window_size": 125,
       "use_sm": false,
       "cache_size": 700,
       "similarity_thresh": 0.05,
@@ -878,7 +878,7 @@
         "speed_y_thresh": 15,
         "continuous_time_thresh": 36,
         "disappear_frames_thresh": 3,
-        "track_confidence": 0.95
+        "track_confidence": 0.98
       }
     }
   ]

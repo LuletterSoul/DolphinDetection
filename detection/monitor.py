@@ -342,7 +342,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                    self.controllers[idx].original_stream_path,
                                    self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
                                    self.render_notify_queues[idx], self.region_path / str(c.index),
-                                   self.track_requester,
+                                   self.track_requester, self.render_notify_queues[idx],
                                    self.controllers[idx].detect_params) for idx, c
             in
             enumerate(self.cfgs)]
@@ -451,7 +451,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                 # self.task_futures[-1].get()
                 self.task_futures.append(
                     self.process_pool.apply_async(self.push_streamers[i].push_stream, ()))
-                self.task_futures.append(self.process_pool.apply_async(self.stream_renders[i].loop, ()))
+                self.task_futures.append(self.process_pool.apply_async(self.stream_renders[i].
+                                                                       loop, ()))
                 # self.task_futures[-1].get()
 
     def wait(self):
