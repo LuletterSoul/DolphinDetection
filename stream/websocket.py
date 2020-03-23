@@ -21,7 +21,7 @@ async def main_logic(q, vcfg: VideoConfig, scfg: ServerConfig):
             logger.info(f'connect to server {address} successfully')
             flag = True
             if not scfg.send_msg:
-                logger.info(f'Controller [{vcfg.index}]: Skipped message by server config specifing.')
+                logger.info(f'Controller [{vcfg.index}]: Skipped message from server config indication.')
                 return
             while flag:
                 try:
@@ -121,7 +121,7 @@ def creat_position_json(rects):
     return position_json
 
 
-def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000,camera_id='camera_bp_1'):
+def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000, camera_id='camera_bp_1'):
     msg = {
         'cmdType': 'notify',
         "appId": "10080",
@@ -165,8 +165,8 @@ def creat_packaged_msg_json(filename, path, cfg: VideoConfig, camera_id, channel
     msg = {
         'cmdType': 'notify',
         'clientId': 'jt001',
-        'camera_id':camera_id,
-        'channel':channel,
+        'camera_id': camera_id,
+        'channel': channel,
         'data': {
             'notifyType': 'packagedNotify',
             'filename': filename,
