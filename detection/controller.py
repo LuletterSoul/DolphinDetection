@@ -434,7 +434,7 @@ class TaskBasedDetectorController(DetectorController):
             ssd_detector.run()
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
-        elif self.server_cfg.detect_mode == ModelType.CLASSIFY:
+        elif self.server_cfg.detect_mode == ModelType.CLASSIFY and not self.cfg.cv_only:
             classifier = DolphinClassifier(model_path=self.server_cfg.classify_model_path,
                                            device_id=self.server_cfg.dt_id)
             classifier.run()
