@@ -94,7 +94,6 @@ def load_cfg(args):
     server_config = load_server_config(args.cfg)
     video_config = load_video_config(args.vcfg)
     switcher_options = load_yaml_config(args.sw)
-    print(video_config)
     if args.log_level is not None:
         server_config.log_level = args.log_level
     if args.http_ip is not None:

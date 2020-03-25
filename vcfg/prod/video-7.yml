@@ -47,9 +47,9 @@ push_to: 'rtsp://192.168.0.116/qj'
 write_timestamp: true
 enable_sample_frame: false
 rtsp_saved_per_frame: 240
-future_frames: 72
+future_frames: 76
 detect_internal: 72
-search_window_size: 24
+search_window_size: 125
 use_sm: false
 cache_size: 500
 similarity_thresh: 0.6
@@ -57,6 +57,8 @@ pre_cache: 48
 render: true
 post_filter: false
 forward_filter: false
+limit_freq: true
+freq_thresh: 60
 bbox:
   w: 224
   h: 224
@@ -68,10 +70,16 @@ alg:
   ok_size: 3
   mean: 40
   block_size: 51
+  filtered_by_wh: false
   rwt: 30
   rht: 15
-  area: 50
+  area: 800
   area_ratio: -1
+  color_range:
+    - 65
+    - 65
+    - 65
+  color_scale: 1.60
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36

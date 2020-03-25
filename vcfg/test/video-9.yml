@@ -57,6 +57,8 @@ pre_cache: 48
 render: true
 post_filter: true
 forward_filter: false
+limit_freq: false
+freq_thresh: 60
 bbox:
   w: 224
   h: 224
@@ -72,6 +74,11 @@ alg:
   rht: 10
   area: 50
   area_ratio: 0.03
+  color_range:
+    - 65
+    - 65
+    - 65
+  color_scale: 1.60
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36

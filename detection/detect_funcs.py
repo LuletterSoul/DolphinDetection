@@ -138,7 +138,6 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     # construct kernel element
     dk_size = params.cfg.alg['dk_size']
     ok_size = params.cfg.alg['ok_size']
-    dilated_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dk_size, dk_size))
     open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ok_size, ok_size))
 
     # smooth frame regions whose color is similar
@@ -149,21 +148,37 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
                                          C=params.cfg.alg['mean'])
     # TODO using multiple scales thresh to filter small object or noises
     # remove small objects
-    open_binary = cv2.morphologyEx(thresh_binary, cv2.MORPH_OPEN, open_kernel)
+    binary = cv2.morphologyEx(thresh_binary, cv2.MORPH_OPEN, open_kernel)
 
     # enlarge candidates a little
-    dilated = cv2.dilate(open_binary, dilated_kernel)
+    if dk_size != -1:
+        dilated_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dk_size, dk_size))
+        binary = cv2.dilate(binary, dilated_kernel)
+
+    color_scale = params.cfg.alg['color_scale']
+    color_range = params.cfg.alg['color_range']
+    global_mean = cv2.mean(frame)
+    if color_scale != -1:
+        color_range = [global_mean[0] / color_scale, global_mean[1] / color_scale, global_mean[2] / color_scale]
+
+    # global_mean = cv2.mean(frame)
 
     # compute linked components
-    num_components, label_map, rects, centroids = cv2.connectedComponentsWithStats(dilated)
+    num_components, label_map, rects, centroids = cv2.connectedComponentsWithStats(binary)
 
-    binary_map = np.zeros(dilated.shape, dtype=np.uint8)
+    binary_map = np.zeros(binary.shape, dtype=np.uint8)
     filtered_rects = []
+    block_bgr_means = []  # candidate block color mean
     # 0 index is background,skipped it
     for i in range(1, num_components):
         # only process if it has more than defualt(50pix) area
-        if rects[i][cv2.CC_STAT_AREA] > params.cfg.alg['area']:
+        # block color range is black enough
+        if rects[i][cv2.CC_STAT_AREA] > params.cfg.alg['area'] and is_block_black(frame, i, label_map, color_range):
+            # if rects[i][cv2.CC_STAT_AREA] > params.cfg.alg['area']:
             # draw white pixels if current is a components
+            logger.info(f'Area: {rects[i][cv2.CC_STAT_AREA]}')
+            logger.info(f'Height: {rects[i][cv2.CC_STAT_HEIGHT]}')
+            logger.info(f'Width: {rects[i][cv2.CC_STAT_WIDTH]}')
             binary_map[label_map == i] = 255
             # merge all white blocks into a single binary map
             filtered_rects.append(rects[i])
@@ -172,18 +187,57 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     original_rects = back(filtered_rects, params.start, frame.shape, block.shape, params.cfg)
 
     # load rect width and height thresh value from configuration
-    rect_width_thresh = params.cfg.alg['rwt']
-    rect_height_thresh = params.cfg.alg['rht']
+    # rect_width_thresh = params.cfg.alg['rwt']
+    # rect_height_thresh = params.cfg.alg['rht']
 
     # dolphin size internal is usually at x~[200,300] pixels,y~[50,100] pixels in 12 focus, 1080P monitor
     # should be adjusted according the different focuses
-    original_rects = [rect for rect in original_rects if
-                      abs(rect[2] - rect[0]) > rect_width_thresh and abs(rect[3] - rect[1]) > rect_height_thresh]
-    res = DetectionResult(None, None, None, None, binary_map, dilated, [], params.x_index,
+    # original_rects = [rect for rect in original_rects if
+    #                   abs(rect[2] - rect[0]) > rect_width_thresh and abs(rect[3] - rect[1]) > rect_height_thresh]
+    if params.cfg.alg['filtered_by_wh']:
+        original_rects = filtered_shot_block(original_rects, params.cfg)
+    res = DetectionResult(None, None, None, None, binary_map, binary, [], params.x_index,
                           params.y_index, block.index, original_rects, rects)
     end = time.time() - start
     logger.debug('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
     return res
+
+
+def cal_block_bgr_mean(frame, label, label_map):
+    mask = (label_map == label).astype(np.uint8)
+    block_pixels = mask.sum()
+    mask = cv2.cvtColor(mask * 255, cv2.COLOR_GRAY2BGR)
+    block = cv2.bitwise_and(frame, mask)
+    b_mean = np.sum(block[:, :, 0]) / block_pixels
+    g_mean = np.sum(block[:, :, 1]) / block_pixels
+    r_mean = np.sum(block[:, :, 2]) / block_pixels
+    mean = [b_mean, g_mean, r_mean]
+    return mean
+
+
+def filtered_shot_block(rects, cfg: VideoConfig):
+    rect_width_thresh = cfg.alg['rwt']
+    rect_height_thresh = cfg.alg['rht']
+    min_len = min(rect_width_thresh, rect_height_thresh)
+    max_len = max(rect_width_thresh, rect_height_thresh)
+    filtered_rects = []
+    for r in rects:
+        w = r[2] - r[0]
+        h = r[3] - r[1]
+        width = max(w, h)
+        height = min(w, h)
+        # dolphin may appear with a head only,width equal to heightz
+        if (width >= max_len and height >= min_len) or (width >= max_len / 2 and height >= max_len / 2):
+            filtered_rects.append(r)
+    return filtered_rects
+
+
+def is_block_black(frame, i, label_map, color_range):
+    mean = cal_block_bgr_mean(frame, i, label_map)
+    logger.info(f'Block mean: {mean}')
+    logger.info(f'Color range {color_range}')
+    return mean[0] < color_range[0] and mean[1] < color_range[1] and mean[2] < \
+           color_range[2]
 
 
 def adaptive_thresh_mask_no_rules(frame, mask, block, params: DetectorParams):

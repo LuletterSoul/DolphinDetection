@@ -27,6 +27,33 @@ class SharedMemoryFrameCache(object):
         self.cache_size = cache_size
         self.total_bytes = self.unit * self.cache_size
         self.cache_block = manager.SharedMemory(size=self.total_bytes)
+        self.lock = Manager().Lock()
+        self.st_id = Manager().Value('i', cache_size)
+        self.et_id = Manager().Value('i', -1)
+
+    def lock_cache(self, st_index, et_index):
+        """
+        lock the cache in a windows slide.The cache cannot be writen
+        if it was under the locked status, blocked until
+        release() is called.
+        :param st_index:
+        :param et_index:
+        :return:
+        """
+        assert et_index >= st_index
+        self.st_id.set(st_index % self.cache_size)
+        self.et_id.set(et_index % self.cache_size)
+        self.lock.acquire()
+        print('Lock windows')
+
+    def release(self):
+        """
+        release
+        :return:
+        """
+        self.st_id.set(self.cache_size)
+        self.et_id.set(-1)
+        self.lock.release()
 
     def __getitem__(self, index):
         """
@@ -44,6 +71,18 @@ class SharedMemoryFrameCache(object):
         :param frame:
         :return:
         """
+        if self.st_id.get() <= index % self.cache_size <= self.et_id.get():
+            print('Waite writing lock')
+            self.set_with_locked(frame, index)
+        else:
+            self.set(frame, index)
+
+    def set_with_locked(self, frame, index):
+        # blocked until lock is released
+        with self.lock:
+            self.set(frame, index)
+
+    def set(self, frame, index):
         buf = self.get_buf(index)
         buf_frame = np.ndarray(self.shape, dtype=np.uint8, buffer=buf)
         buf_frame[:, :, :] = frame[:, :, :]
