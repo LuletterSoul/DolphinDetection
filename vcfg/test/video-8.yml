@@ -51,10 +51,10 @@ future_frames: 76
 detect_internal: 72
 search_window_size: 125
 use_sm: false
-cache_size: 500
+cache_size: 700
 similarity_thresh: 0.6
 pre_cache: 48
-render: false
+render: true
 post_filter: false
 forward_filter: false
 bbox:

@@ -340,10 +340,10 @@ class DetectionStreamRender(FrameArrivalHandler):
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
         self.post_handle(current_time, post_filter_event, target, task_cnt)
-        if msg.no_wait:
-            # release lock status
-            self.original_frame_cache.release()
-            logger.info('Release original frame cache')
+        # if msg.no_wait:
+        # release lock status
+        # self.original_frame_cache.release()
+        # logger.info('Release original frame cache')
 
     def original_render_task(self, current_idx, current_time, post_filter_event, msg: ArrivalMessage):
         """
@@ -653,8 +653,8 @@ class DetectionSignalHandler(FrameArrivalHandler):
         self.wait(self.task_cnt, 'Detection Signal Handle', msg)
         # rects = self.render_rect_cache[current_index % self.cache_size]
         # lock the whole window in case cached was covered by the future arrival frames.
-        self.original_frame_cache.lock_cache(current_index - self.cfg.future_frames,
-                                             current_index + self.cfg.search_window_size)
+        # self.original_frame_cache.lock_cache(current_index - self.cfg.future_frames,
+        #                                      current_index + self.cfg.search_window_size)
         rects = msg.rects
         task_cnt = self.task_cnt
         if rects is not None:
