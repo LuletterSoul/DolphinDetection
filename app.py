@@ -85,17 +85,16 @@ class DolphinDetectionServer:
 def load_cfg(args):
     if args.env is not None:
         if args.env == Environment.DEV:
-            args.cfg = 'vcfg/server-dev.json'
-            args.vcfg = 'vcfg/video-dev.json'
+            args.cfg = 'vcfg/dev/server.yml'
         if args.env == Environment.TEST:
-            args.cfg = 'vcfg/server-test.json'
-            args.vcfg = 'vcfg/video-test.json'
+            args.cfg = 'vcfg/test/server.yml'
         if args.env == Environment.PROD:
-            args.cfg = 'vcfg/server-prod.json'
-            args.vcfg = 'vcfg/video-prod.json'
+            args.cfg = 'vcfg/prod/server.yml'
+        args.vcfg = get_video_cfgs(args.env)
     server_config = load_server_config(args.cfg)
     video_config = load_video_config(args.vcfg)
-    switcher_options = load_json_config(args.sw)
+    switcher_options = load_yaml_config(args.sw)
+    print(video_config)
     if args.log_level is not None:
         server_config.log_level = args.log_level
     if args.http_ip is not None:
@@ -105,7 +104,7 @@ def load_cfg(args):
     if args.wc_ip is not None:
         server_config.wc_ip = args.wc_ip
     if args.wc_port is not None:
-        server_config.http_port = args.wc_port
+        server_config.wc_port = args.wc_port
     if args.root is not None:
         server_config.set_root(args.root)
     if args.cdp is not None:
@@ -115,42 +114,40 @@ def load_cfg(args):
     if args.send_msg is not None:
         server_config.send_msg = args.send_msg
     if args.enable is not None:
-        enables = args.enable.split(",")
+        enables = args.enable.split(',')
         for e in enables:
             switcher_options[e] = True
     if args.disable is not None:
-        disables = args.disable.split(",")
-        for e in disables:
-            switcher_options[e] = False
-
+        disables = args.disable.split(',')
+        for d in disables:
+            switcher_options[d] = False
     if args.use_sm is not None:
-        enables = args.use_sm.split(",")
+        enables = args.use_sm.split(',')
         enables = [int(e) for e in enables]
         for cfg in video_config:
             if cfg.index in enables:
                 cfg.use_sm = True
 
     if args.enable_forward_filter is not None:
-        enables = args.enable_forward_filter.split(",")
+        enables = args.enable_forward_filter.split(',')
         enables = [int(e) for e in enables]
         for cfg in video_config:
             if cfg.index in enables:
                 cfg.forward_filter = True
 
     if args.enable_post_filter is not None:
-        enables = args.enable_post_filter.split(",")
+        enables = args.enable_post_filter.split(',')
         enables = [int(e) for e in enables]
         for cfg in video_config:
             if cfg.index in enables:
                 cfg.post_filter = True
 
     if args.push_stream is not None:
-        enables = args.push_stream.split(",")
+        enables = args.push_stream.split(',')
         enables = [int(e) for e in enables]
         for cfg in video_config:
             if cfg.index in enables:
                 cfg.push_stream = True
-
     return server_config, video_config, switcher_options
 
 
@@ -163,7 +160,7 @@ if __name__ == '__main__':
                         help='Server configuration file represented by json format.')
     parser.add_argument('--vcfg', type=str, default='vcfg/video-dev.json',
                         help='Video configuration file represented by json format.')
-    parser.add_argument('--sw', type=str, default='vcfg/switcher.json',
+    parser.add_argument('--sw', type=str, default='vcfg/switcher.yml',
                         help='Control video switcher')
     parser.add_argument('--http_ip', type=str, help='Http server ip address')
     parser.add_argument('--http_port', type=int, help='Http server listen port')

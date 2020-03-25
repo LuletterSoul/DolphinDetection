@@ -71,6 +71,10 @@ class Config(object):
     def from_json(cls, json_dict):
         # json_dict = json.loads(json_str)
         return cls(**json_dict)
+    
+    @classmethod
+    def from_yaml(cls, yaml_dict):
+        return cls(**yaml_dict)
 
 
 class ServerConfig(Config):
