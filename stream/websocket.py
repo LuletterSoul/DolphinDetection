@@ -129,7 +129,7 @@ def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000, 
         'data': {
             'notifyType': 'detectedNotify',
             'videoStream': video_stream,
-            "camera_id": camera_id,
+            "cameraId": camera_id,
             "channel": channel,
             'jt_id': str(dol_id),
             'timestamp': timestamp,
