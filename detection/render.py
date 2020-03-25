@@ -31,6 +31,11 @@ from stream.websocket import creat_packaged_msg_json
 from utils import logger, bbox_points, generate_time_stamp, crop_by_se
 from utils import preprocess, paint_chinese_opencv
 from typing import List
+from threading import Event
+
+from utils.cache import SharedMemoryFrameCache
+
+m = Manager()
 
 
 class ArrivalMsgType:
@@ -45,7 +50,7 @@ class ArrivalMessage(object):
     """
     current_index: int
     type: int  # message type See ArriveMsgType
-    ignored: bool = False  # ignore window lock
+    no_wait: bool = False  # ignore window lock
     rects: List = None  # potential bbox
 
 
@@ -69,7 +74,7 @@ class FrameArrivalHandler(object):
         self.sample_rate = cfg.sample_rate
         # self.render_frame_cache = render_frame_cache
         self.render_rect_cache = render_rect_cache
-        self.original_frame_cache = original_frame_cache
+        self.original_frame_cache: SharedMemoryFrameCache = original_frame_cache
         # shared event lock, will be released until all future frames has come
         self.lock_window = Manager().Event()
         self.lock_window.set()
@@ -92,7 +97,7 @@ class FrameArrivalHandler(object):
         :param msg:
         :return:
         """
-        if self.is_window_reach(msg.current_index) or msg.ignored:
+        if self.is_window_reach(msg.current_index):
             self.detect_index = msg.current_index
             # self.lock_window = False
             if not self.lock_window.is_set():
@@ -115,9 +120,9 @@ class FrameArrivalHandler(object):
         # continuous arrival signal in current window will be ignored
         if self.lock_window.is_set():
             self.lock_window.clear()
-            self.task(msg)
             # occupy the whole window until a sequent task is done
             self.detect_index = msg.current_index
+            self.task(msg)
         # if current_index - self.detect_index >= self.future_frames and self.write_done:
         #     # release
         #     if not self.lock_window.is_set():
@@ -134,9 +139,10 @@ class FrameArrivalHandler(object):
         """
         pass
 
-    def wait(self, task_cnt, task_type):
+    def wait(self, task_cnt, task_type, msg: ArrivalMessage):
         """
         wait frames arrival,support time out
+        :param msg:
         :param task_cnt:
         :param task_type:
         :return:
@@ -146,7 +152,8 @@ class FrameArrivalHandler(object):
                 f'{self.LOG_PREFIX} {task_type} [{task_cnt}] wait frames arrival....')
             start = time.time()
             # wait the future frames prepared,if trigger time out, give up waits
-            self.lock_window.wait(30)
+            if not msg.no_wait:
+                self.lock_window.wait(30)
             logger.info(
                 f"{self.LOG_PREFIX} {task_type} " +
                 f"[{task_cnt}] wait [{round(time.time() - start, 2)}] seconds")
@@ -200,16 +207,16 @@ class DetectionStreamRender(FrameArrivalHandler):
         """
         current_idx = msg.current_index
         current_time = generate_time_stamp('%m%d%H%M%S') + '_'
-        # use two independent threads to execute video generation sub-tasks
         post_filter_event = threading.Event()
         post_filter_event.clear()
+        # use two independent threads to execute video generation sub-tasks
         rect_render_thread = threading.Thread(
             target=self.rect_render_task,
-            args=(current_idx, current_time, post_filter_event,), daemon=True)
+            args=(current_idx, current_time, post_filter_event, msg,), daemon=True)
         rect_render_thread.start()
         original_render_thread = threading.Thread(
             target=self.original_render_task,
-            args=(current_idx, current_time, post_filter_event,), daemon=True)
+            args=(current_idx, current_time, post_filter_event, msg,), daemon=True)
         original_render_thread.start()
         self.task_cnt += 1
         return True
@@ -298,12 +305,13 @@ class DetectionStreamRender(FrameArrivalHandler):
                 logger.error(e)
         return next_cnt
 
-    def rect_render_task(self, current_idx, current_time, post_filter_event):
+    def rect_render_task(self, current_idx, current_time, post_filter_event, msg: ArrivalMessage):
         """
         generate a short-time dolphin video with bbox indicator.
         :param current_idx: start frame index in a slide window
         :param current_time:
         :param post_filter_event:
+        :param msg: arrival message
         :return:
         """
         start = time.time()
@@ -321,7 +329,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         # the future frames count
         # next_frame_cnt = 48
         # wait the futures frames is accessable
-        self.wait(task_cnt, 'Rect Render Task')
+        self.wait(task_cnt, 'Rect Render Task', msg)
         end_cnt = current_idx + self.future_frames
         try:
             next_cnt = self.write_render_video_work(video_write, next_cnt, end_cnt)
@@ -332,10 +340,15 @@ class DetectionStreamRender(FrameArrivalHandler):
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
         self.post_handle(current_time, post_filter_event, target, task_cnt)
+        if msg.no_wait:
+            # release lock status
+            self.original_frame_cache.release()
+            logger.info('Release original frame cache')
 
-    def original_render_task(self, current_idx, current_time, post_filter_event):
+    def original_render_task(self, current_idx, current_time, post_filter_event, msg: ArrivalMessage):
         """
         generate a short-time dolphin video without bbox indicator.
+        :param msg:
         :param post_filter_event:
         :param current_idx:
         :param current_time:
@@ -355,7 +368,7 @@ class DetectionStreamRender(FrameArrivalHandler):
 
         next_cnt = current_idx - self.future_frames
         next_cnt = self.write_original_video_work(video_write, next_cnt, current_idx)
-        self.wait(task_cnt, 'Original Render Task')
+        self.wait(task_cnt, 'Original Render Task', msg)
         end_cnt = next_cnt + self.future_frames
         next_cnt = self.write_original_video_work(video_write, next_cnt, end_cnt)
         video_write.release()
@@ -400,10 +413,10 @@ class DetectionStreamRender(FrameArrivalHandler):
             """
             post filter think it is a video clip with dolphin
             """
-            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
-                                               camera_id=self.cfg.camera_id, channel=self.cfg.channel)
-            self.msg_queue.put(msg_json)
-            logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+        msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
+                                           camera_id=self.cfg.camera_id, channel=self.cfg.channel)
+        self.msg_queue.put(msg_json)
+        logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
 
 class Filter(object):
@@ -637,8 +650,11 @@ class DetectionSignalHandler(FrameArrivalHandler):
         current_index = msg.current_index
         if not self.cfg.forward_filter:
             logger.info(self.LOG_PREFIX + f'The signal forward operation is disabled by configuration.')
-        self.wait(self.task_cnt, 'Detection Signal Handle')
+        self.wait(self.task_cnt, 'Detection Signal Handle', msg)
         # rects = self.render_rect_cache[current_index % self.cache_size]
+        # lock the whole window in case cached was covered by the future arrival frames.
+        self.original_frame_cache.lock_cache(current_index - self.cfg.future_frames,
+                                             current_index + self.cfg.search_window_size)
         rects = msg.rects
         task_cnt = self.task_cnt
         if rects is not None:
@@ -656,9 +672,17 @@ class DetectionSignalHandler(FrameArrivalHandler):
         :param result_sets:
         :return:
         """
+        self.write_bbox(result_sets)
+        # send message via message pipe
+        self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.DETECTION, True))
+        self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.UPDATE))
+
+    def write_bbox(self, result_sets):
+        cnt = 0
+        self.render_rect_cache[:] = [None] * self.cfg.cache_size
         for frame_idx, rects in result_sets:
             # bbox rendering is post to render
             self.render_rect_cache[frame_idx % self.cache_size] = rects
-        # send message via message pipe
-        self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.UPDATE, True))  # release window lock
-        self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.DETECTION))
+            cnt += 1
+            if cnt >= self.cfg.future_frames:
+                break

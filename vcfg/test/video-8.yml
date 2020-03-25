@@ -47,14 +47,14 @@ push_to: 'rtsp://192.168.0.116/yz_test'
 write_timestamp: true
 enable_sample_frame: false
 rtsp_saved_per_frame: 240
-future_frames: 72
+future_frames: 76
 detect_internal: 72
-search_window_size: 120
+search_window_size: 125
 use_sm: false
-cache_size: 1000
+cache_size: 500
 similarity_thresh: 0.6
 pre_cache: 48
-render: true
+render: false
 post_filter: false
 forward_filter: false
 bbox:

@@ -47,9 +47,9 @@ push_to: 'rtsp://192.168.0.116/qj'
 write_timestamp: true
 enable_sample_frame: false
 rtsp_saved_per_frame: 240
-future_frames: 72
+future_frames: 76
 detect_internal: 72
-search_window_size: 24
+search_window_size: 125
 use_sm: false
 cache_size: 500
 similarity_thresh: 0.6
