@@ -399,8 +399,10 @@ class TaskBasedDetectorController(DetectorController):
                         self.notify_render(current_index)
                     else:
                         if not self.dol_gone:
-                            empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
-                                                                    timestamp=current_index, dol_id=self.dol_id,camera_id=self.cfg.camera_id)
+                            empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
+                                                                    channel=self.cfg.channel,
+                                                                    timestamp=current_index, dol_id=self.dol_id,
+                                                                    camera_id=self.cfg.camera_id)
                             self.msg_queue.put(empty_msg)
                             logger.info(self.LOG_PREFIX + f'Send empty msg: {empty_msg}')
                             self.dol_id += 1
@@ -548,7 +550,8 @@ class TaskBasedDetectorController(DetectorController):
                         if not self.dol_gone:
                             empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
                                                                     channel=self.cfg.channel,
-                                                                    timestamp=current_index, dol_id=self.dol_id,camera_id=self.cfg.camera_id)
+                                                                    timestamp=current_index, dol_id=self.dol_id,
+                                                                    camera_id=self.cfg.camera_id)
                             self.dol_id += 1
                             self.msg_queue.put(empty_msg)
                             self.dol_gone = True
@@ -691,4 +694,3 @@ class TaskBasedDetectorController(DetectorController):
         # threading.Thread(target=self.loop_stack, daemon=True).start()
         self.control()
         return True
-

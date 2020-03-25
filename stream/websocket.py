@@ -21,7 +21,7 @@ async def main_logic(q, vcfg: VideoConfig, scfg: ServerConfig):
             logger.info(f'connect to server {address} successfully')
             flag = True
             if not scfg.send_msg:
-                logger.info(f'Controller [{vcfg.index}]: Skipped message by server config specifing.')
+                logger.info(f'Controller [{vcfg.index}]: Skipped message from server config indication.')
                 return
             while flag:
                 try:
@@ -31,9 +31,16 @@ async def main_logic(q, vcfg: VideoConfig, scfg: ServerConfig):
                         history_msg_json = None
                         response_str = await server.recv()
                         logger.info(f'response from server: {response_str}')
-                    while not q.empty():
-                        logger.info(f'Controller [{vcfg.index}]: Current message num: {q.qsize()}')
-                        msg_json = q.get(1)
+                    try:
+                        if not q.empty():
+                            logger.info(f'Controller [{vcfg.index}]: Current message num: {q.qsize()}')
+                            msg_json = q.get(1)
+                        else:
+                            msg_json = None
+                    except Exception as e:
+                        logger.error(e)
+                        return
+                    if msg_json is not None:
                         await server.send(msg_json.encode('utf-8'))
                         logger.info(f'client send message to server {address} successfully: {msg_json}')
                         response_str = await server.recv()
@@ -114,7 +121,7 @@ def creat_position_json(rects):
     return position_json
 
 
-def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000,camera_id='camera_bp_1'):
+def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000, camera_id='camera_bp_1'):
     msg = {
         'cmdType': 'notify',
         "appId": "10080",
@@ -158,8 +165,8 @@ def creat_packaged_msg_json(filename, path, cfg: VideoConfig, camera_id, channel
     msg = {
         'cmdType': 'notify',
         'clientId': 'jt001',
-        'camera_id':camera_id,
-        'channel':channel,
+        'camera_id': camera_id,
+        'channel': channel,
         'data': {
             'notifyType': 'packagedNotify',
             'filename': filename,

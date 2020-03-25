@@ -402,7 +402,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         """
         # blocked until original video generation is done.
         origin_video_path = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
-        if self.post_filter:
+        if self.cfg.post_filter:
             self.do_post_filter(origin_video_path, task_cnt, post_filter_event)
         else:
             msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
@@ -418,9 +418,12 @@ class DetectionStreamRender(FrameArrivalHandler):
         :param post_filter_event:
         :return:
         """
-        is_filter = self.post_filter.post_filter_video(str(target), task_cnt)
         post_filter_event.wait()
-        if is_filter:
+        is_filter = self.post_filter.post_filter_video(str(target), task_cnt)
+        if not is_filter:
+            """
+            post filter think it is a video clip with dolphin
+            """
             msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
                                                camera_id=self.cfg.camera_id, channel=self.cfg.channal)
             self.msg_queue.put(msg_json)
