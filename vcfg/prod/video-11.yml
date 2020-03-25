@@ -1,7 +1,7 @@
 index: 11
 name: video6_hungred_million
 camera_id: camera_bp_1
-channel: 0
+channel: 5
 shape:
   - 1080
   - 1920
@@ -77,3 +77,4 @@ alg:
   continuous_time_thresh: 36
   disappear_frames_thresh: 3
   track_confidence: 0.95
+  ssd_confidence: 0.90

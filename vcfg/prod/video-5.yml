@@ -77,3 +77,4 @@ alg:
   continuous_time_thresh: 36
   disappear_frames_thresh: 3
   track_confidence: 0.95
+  ssd_confidence: 0.90

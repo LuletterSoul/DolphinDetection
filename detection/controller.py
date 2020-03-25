@@ -526,7 +526,7 @@ class TaskBasedDetectorController(DetectorController):
             if len(frames_results):
                 for frame_result in frames_results:
                     if len(frame_result):
-                        rects = [r for r in frame_result if r[4] > 0.8]
+                        rects = [r for r in frame_result if r[4] > self.cfg.alg['ssd_confidence']]
                         if len(rects):
                             self.result_queue.put((current_index, rects))
                             if len(rects) >= 3:
@@ -545,7 +545,7 @@ class TaskBasedDetectorController(DetectorController):
                         logger.debug(f'put detect message in msg_queue {json_msg}...')
                         # self.render_frame_cache[current_index % self.cache_size] = render_frame
                         if self.cfg.render:
-                            self.render_rect_cache[current_index % self.cache_size] = r.rects
+                            self.render_rect_cache[current_index % self.cache_size] = rects
                         self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
                     else:
