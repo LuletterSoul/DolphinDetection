@@ -24,6 +24,7 @@ def mog2(video_path, open_kernel_size=None, dilate_kernel_size=None, gaussian_si
     # cap = cv2.VideoCapture(video_path)
     grabbed, frame = cap.read()
     cv2.namedWindow('Mog', cv2.WINDOW_FREERATIO)
+    cv2.namedWindow('', cv2.WINDOW_FREERATIO)
     cv2.namedWindow('Original', cv2.WINDOW_FREERATIO)
     # kernel_size = (10, 10)
     # gaussian_size = (5, 5)
@@ -38,7 +39,7 @@ def mog2(video_path, open_kernel_size=None, dilate_kernel_size=None, gaussian_si
             frame = cv2.pyrMeanShiftFiltering(frame, sp, 60)
             # binary = mog.apply(frame)
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, block_size, 40)
+            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, block_size, 80)
             # _,binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
             binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, open_kernel)
             # contours = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[1]
@@ -65,10 +66,15 @@ def mog2(video_path, open_kernel_size=None, dilate_kernel_size=None, gaussian_si
 if __name__ == '__main__':
     # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/6/22_1080P.mp4'
     # mog2(video_path, (10, 10), (5, 5),)
-    # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/9/0316115208_merged.mp4'
+    video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/9/0316115208_merged.mp4'
     # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/6/bird15.mp4'
     # mog2(video_path, (3, 3), (3, 3), 54, block_size=51, width=960)
     # mog2(video_path, (3, 3), (3, 3), 54, block_size=101, width=1920, sp=10)
     # mog2(video_path, (3, 3), (3, 3), 54)
-    video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/6x/0225_merged.mp4'
-    mog2(video_path, open_kernel_size=3, dilate_kernel_size=5, block_size=101, width=1000, sp=10)
+    # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/6x/0225_merged.mp4'
+    # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/candidates/0325_cvam_21.mp4'
+    # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/candidates/0325110728_0.mp4'
+    video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/candidates/0321164540_0.mp4'
+    # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/candidates/0325110728_0.mp4'
+    # mog2(video_path, open_kernel_size=3, dilate_kernel_size=5, block_size=51, width=1000, sp=10)
+    mog2(video_path, open_kernel_size=3, dilate_kernel_size=5, block_size=101, width=1000, sp=20)
