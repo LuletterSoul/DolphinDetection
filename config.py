@@ -71,7 +71,7 @@ class Config(object):
     def from_json(cls, json_dict):
         # json_dict = json.loads(json_str)
         return cls(**json_dict)
-    
+
     @classmethod
     def from_yaml(cls, yaml_dict):
         return cls(**yaml_dict)
@@ -145,7 +145,8 @@ class VideoConfig(Config):
     Video configuration object
     """
 
-    def __init__(self, index, name, camera_id, channel, shape, ip, dip, port, suffix, headers, m3u8_url, url, roi, resize, show_window,
+    def __init__(self, index, name, camera_id, channel, shape, ip, dip, port, suffix, headers, m3u8_url, url, roi,
+                 resize, show_window,
                  push_stream,
                  window_position, routine, sample_rate, draw_boundary, enable, filtered_ratio, max_streams_cache,
                  online, cap_loop, sample_internal, detect_internal, search_window_size, use_sm, cache_size,
@@ -162,7 +163,7 @@ class VideoConfig(Config):
                  alg):
         self.index = index
         self.camera_id = camera_id
-        self.channel= channel
+        self.channel = channel
         self.name = name
         self.shape = shape
         self.ip = ip

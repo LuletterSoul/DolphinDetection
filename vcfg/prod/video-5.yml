@@ -38,9 +38,9 @@ max_streams_cache: 5000
 online: rtsp
 cap_loop: false
 sample_internal: 15
-save_box: false
+save_box: true
 show_box: true
-cv_only: false
+cv_only: true
 ssd_divide_four: false
 rtsp: 'rtsp://222.190.243.243/bp/jtdome'
 push_to: 'rtsp://192.168.0.116/yz'
@@ -64,7 +64,7 @@ alg:
   type: thresh
   sp: 10
   sr: 60
-  dk_size: 5
+  dk_size: -1
   ok_size: 3
   mean: 40
   block_size: 51
@@ -72,6 +72,10 @@ alg:
   rht: 10
   area: 50
   area_ratio: 0.03
+  color_range:
+    - 90
+    - 90
+    - 90
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36

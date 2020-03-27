@@ -72,6 +72,10 @@ alg:
   rht: 40
   area: 300
   area_ratio: 0.03
+  color_range:
+    - 65
+    - 65
+    - 65
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36

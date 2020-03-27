@@ -1,7 +1,7 @@
 index: 12
 name: video6_hungred_million
 camera_id: camera_bp_1
-channel: 6
+channel: 5
 shape:
   - 1080
   - 1920
@@ -38,9 +38,9 @@ max_streams_cache: 5000
 online: rtsp
 cap_loop: false
 sample_internal: 15
-save_box: false
+save_box: true
 show_box: true
-cv_only: false
+cv_only: true
 ssd_divide_four: false
 rtsp: 'rtsp://10.196.122.98/cvcam/32/stream1'
 push_to: 'rtsp://192.168.0.116/yz'
@@ -51,7 +51,7 @@ future_frames: 76
 detect_internal: 72
 search_window_size: 125
 use_sm: false
-cache_size: 500
+cache_size: 700
 similarity_thresh: 0.05
 pre_cache: 48
 render: true
@@ -64,14 +64,18 @@ alg:
   type: thresh
   sp: 10
   sr: 60
-  dk_size: 5
+  dk_size: -1
   ok_size: 3
   mean: 40
-  block_size: 51
-  rwt: 80
-  rht: 40
-  area: 300
+  block_size: 201
+  rwt: 240
+  rht: 50
+  area: 1600
   area_ratio: 0.03
+  color_range:
+    - 80
+    - 80
+    - 80
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36

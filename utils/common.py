@@ -282,3 +282,10 @@ def to_bboxs_wh(rects):
 
 def to_bbox_wh(r):
     return [r[0], r[1], r[2] - r[0], r[3] - r[1]]
+
+
+def bgr_img_mean(img):
+    b_mean = np.mean(img[:, :, 0])
+    g_mean = np.mean(img[:, :, 1])
+    r_mean = np.mean(img[:, :, 2])
+    return np.array([b_mean, g_mean, r_mean])

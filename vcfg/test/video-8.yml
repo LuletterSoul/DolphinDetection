@@ -64,7 +64,7 @@ alg:
   type: thresh
   sp: 10
   sr: 60
-  dk_size: 5
+  dk_size: -1
   ok_size: 3
   mean: 40
   block_size: 101
@@ -72,6 +72,10 @@ alg:
   rht: 20
   area: 300
   area_ratio: 0.03
+  color_range:
+    - 90
+    - 90
+    - 90
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36

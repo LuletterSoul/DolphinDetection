@@ -1,7 +1,7 @@
-index: 16
+index: 17
 name: video6_hungred_million
 camera_id: camera_bp_1
-channel: 0
+channel: 1
 shape:
 - 1080
 - 1920
@@ -72,6 +72,10 @@ alg:
   rht: 40
   area: 300
   area_ratio: 0.03
+  color_range:
+    - 65
+    - 65
+    - 65
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36

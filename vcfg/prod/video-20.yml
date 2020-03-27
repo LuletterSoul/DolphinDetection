@@ -3,9 +3,9 @@ name: video6_hungred_million
 camera_id: camera_bp_1
 channel: 4
 shape:
-- 1080
-- 1920
-- 3
+  - 1080
+  - 1920
+  - 3
 ip: 222.190.243.176
 dip: http://10.196.122.94:8080
 port: '8081'
@@ -72,6 +72,10 @@ alg:
   rht: 40
   area: 300
   area_ratio: 0.03
+  color_range:
+    - 65
+    - 65
+    - 65
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36
