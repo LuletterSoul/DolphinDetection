@@ -7,7 +7,7 @@ shape:
   - 1920
   - 3
 ip: 222.190.243.176
-dip: http://10.196.122.94:8080
+dip: http://10.196.122.96:8081
 port: '8081'
 suffix: ''
 headers: {}
@@ -42,7 +42,7 @@ save_box: true
 show_box: true
 cv_only: true
 ssd_divide_four: false
-rtsp: rtsp://10.196.122.98/cvcam/21/stream1
+rtsp: rtsp://10.196.122.98/cvcam/24/stream1
 push_to: rtsp://192.168.0.116/yz
 write_timestamp: false
 enable_sample_frame: false
