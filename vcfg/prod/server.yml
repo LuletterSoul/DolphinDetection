@@ -10,13 +10,13 @@ cron:
   start:
     month: '*'
     day: '*'
-    hour: '7'
-    minute: '30'
+    hour: '8'
+    minute: '00'
   end:
     month: '*'
     day: '*'
-    hour: '18'
-    minute: '30'
+    hour: '16'
+    minute: '00'
 classify_model_path: model/bc-model-0314.pth
 detect_model_path: model/0220-ssd.pth
 track_cfg_path: pysot/configs/config.yaml
