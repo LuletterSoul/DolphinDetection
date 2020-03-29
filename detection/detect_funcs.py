@@ -181,13 +181,15 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     original_rects = back(filtered_rects, params.start, frame.shape, block.shape, params.cfg)
 
     # load rect width and height thresh value from configuration
-    rect_width_thresh = params.cfg.alg['rwt']
-    rect_height_thresh = params.cfg.alg['rht']
+    # rect_width_thresh = params.cfg.alg['rwt']
+    # rect_height_thresh = params.cfg.alg['rht']
 
     # dolphin size internal is usually at x~[200,300] pixels,y~[50,100] pixels in 12 focus, 1080P monitor
     # should be adjusted according the different focuses
-    original_rects = [rect for rect in original_rects if
-                      abs(rect[2] - rect[0]) > rect_width_thresh and abs(rect[3] - rect[1]) > rect_height_thresh]
+    # original_rects = [rect for rect in original_rects if
+    #                   abs(rect[2] - rect[0]) > rect_width_thresh and abs(rect[3] - rect[1]) > rect_height_thresh]
+    if params.cfg.alg['filtered_by_wh']:
+        original_rects = filtered_shot_block(original_rects, params.cfg)
     res = DetectionResult(None, None, None, None, binary_map, binary, [], params.x_index,
                           params.y_index, block.index, original_rects, rects)
     end = time.time() - start
@@ -205,6 +207,23 @@ def cal_block_bgr_mean(frame, label, label_map):
     r_mean = np.sum(block[:, :, 2]) / block_pixels
     mean = [b_mean, g_mean, r_mean]
     return mean
+
+
+def filtered_shot_block(rects, cfg: VideoConfig):
+    rect_width_thresh = cfg.alg['rwt']
+    rect_height_thresh = cfg.alg['rht']
+    min_len = min(rect_width_thresh, rect_height_thresh)
+    max_len = max(rect_width_thresh, rect_height_thresh)
+    filtered_rects = []
+    for r in rects:
+        w = r[2] - r[0]
+        h = r[3] - r[1]
+        width = max(w, h)
+        height = min(w, h)
+        # dolphin may appear with a head only,width equal to heightz
+        if (width >= max_len and height >= min_len) or (width >= max_len / 2 and height >= max_len / 2):
+            filtered_rects.append(r)
+    return filtered_rects
 
 
 def is_block_black(frame, i, label_map, cfg: VideoConfig):
