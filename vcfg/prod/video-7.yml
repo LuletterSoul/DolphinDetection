@@ -68,6 +68,7 @@ alg:
   ok_size: 3
   mean: 40
   block_size: 51
+  filtered_by_wh: false
   rwt: 30
   rht: 15
   area: 50
