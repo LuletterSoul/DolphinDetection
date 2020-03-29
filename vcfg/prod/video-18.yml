@@ -1,11 +1,11 @@
-index: 18
+index: 17
 name: video6_hungred_million
 camera_id: camera_bp_1
-channel: 2
+channel: 1
 shape:
-- 1080
-- 1920
-- 3
+  - 1080
+  - 1920
+  - 3
 ip: 222.190.243.176
 dip: http://10.196.122.94:8080
 port: '8081'
@@ -38,11 +38,11 @@ max_streams_cache: 5000
 online: rtsp
 cap_loop: false
 sample_internal: 15
-save_box: false
+save_box: true
 show_box: true
-cv_only: false
+cv_only: true
 ssd_divide_four: false
-rtsp: rtsp://10.196.122.98/cvcam/23/stream1
+rtsp: rtsp://10.196.122.98/cvcam/21/stream1
 push_to: rtsp://192.168.0.116/yz
 write_timestamp: false
 enable_sample_frame: false
@@ -64,21 +64,22 @@ alg:
   type: thresh
   sp: 10
   sr: 60
-  dk_size: 5
+  dk_size: -1
   ok_size: 3
   mean: 40
-  block_size: 51
+  block_size: 101
   filtered_by_wh: false
-  rwt: 80
-  rht: 40
-  area: 300
+  rwt: 120
+  rht: 25
+  area: 1000
   area_ratio: 0.03
   color_range:
-    - 65
-    - 65
-    - 65
+    - 80
+    - 80
+    - 80
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36
   disappear_frames_thresh: 3
+  track_confidence: 0.95
   ssd_confidence: 0.90
