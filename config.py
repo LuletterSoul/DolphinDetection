@@ -155,6 +155,8 @@ class VideoConfig(Config):
                  render,
                  post_filter,
                  forward_filter,
+                 limit_freq,
+                 freq_thresh,
                  save_box, show_box, cv_only, ssd_divide_four,
                  rtsp, push_to, write_timestamp,
                  enable_sample_frame,
@@ -206,6 +208,8 @@ class VideoConfig(Config):
         self.render = render
         self.post_filter = post_filter
         self.forward_filter = forward_filter
+        self.limit_freq = limit_freq
+        self.freq_thresh = freq_thresh
         self.bbox = bbox
         self.alg = alg
 

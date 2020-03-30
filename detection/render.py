@@ -86,6 +86,7 @@ class FrameArrivalHandler(object):
         self.notify_queue = notify_queue
         self.LOG_PREFIX = f'Frame Arrival Handler [{self.cfg.index}]: '
         self.post_filter = Filter(self.cfg, region_path, detect_params)
+        self.last_detection = time.time()
 
     def is_window_reach(self, detect_index):
         return detect_index - self.detect_index > self.future_frames
@@ -120,6 +121,16 @@ class FrameArrivalHandler(object):
         # continuous arrival signal in current window will be ignored
         if self.lock_window.is_set():
             self.lock_window.clear()
+            # skipped this detection if it is closed enough to the previous one
+            # avoid generating videos frequently
+            # It's common that the river situation becomes terrible if frequent
+            # detections were triggered.
+            if self.cfg.limit_freq and time.time() - self.last_detection < self.cfg.freq_thresh:
+                logger.info(
+                    self.LOG_PREFIX + f'Detection frequency: {round(time.time() - self.last_detection, 2)} is lower than the thresh,ignored.')
+                self.detect_index = msg.current_index
+                self.last_detection = time.time()
+                return
             # occupy the whole window until a sequent task is done
             self.detect_index = msg.current_index
             self.task(msg)

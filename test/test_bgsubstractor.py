@@ -36,47 +36,49 @@ def mog2(video_path, open_kernel_size=None, dilate_kernel_size=None, gaussian_si
         frame = imutils.resize(blur, width=width)
         print(cv2.mean(frame))
         if cnt % 1 == 0:
-            # frame = cv2.GaussianBlur(frame, gaussian_size, sigmaY=0, sigmaX=0)
-            s = time.time()
-            blur = cv2.pyrMeanShiftFiltering(frame, sp, 60)
-            global_mean = cv2.mean(blur)
-            # print(f'Global mean {global_mean}')
-            # binary = mog.apply(frame)
-            gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
-            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, block_size, 40)
-            # binary = mog.apply(blur)
-            # _,binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
-            binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, open_kernel)
-            # contours = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[1]
-            frame_area = binary.shape[1] * binary.shape[0]
-            # binary = cv2.dilate(binary, dilate_kernel)
-            num_labels, label_map, stats, centroids = cv2.connectedComponentsWithStats(binary)
-            e = 1 / (time.time() - s)
-            # print(f'Operation Speed [{round(e, 2)}]/FPS')
-
-            for i in range(1, num_labels):
-                mask = (label_map == i).astype(np.uint8)
-                block_pixels = mask.sum()
-                mask = cv2.merge([mask, mask, mask]) * 255
-                block = cv2.bitwise_and(frame, mask)
-                # cv2.imshow('block', block)
-                b_mean = np.sum(block[:, :, 0]) / block_pixels
-                g_mean = np.sum(block[:, :, 1]) / block_pixels
-                r_mean = np.sum(block[:, :, 2]) / block_pixels
-                print(f'block mean {b_mean, g_mean, r_mean}')
-                diff = np.array([b_mean, g_mean, r_mean, 0]) - global_mean
-                print(f'mean diff {abs(diff)}')
-                print(f'Area {stats[i][cv2.CC_STAT_AREA]}')
-                print(f'Width {stats[i][cv2.CC_STAT_WIDTH]}')
-                print(f'Height {stats[i][cv2.CC_STAT_HEIGHT]}')
-                cv2.imshow('Mask', block)
-
-            cv2.imshow('Mog', binary)
-            cv2.imshow('Blur', blur)
-            cv2.imshow('Original', frame)
-            cv2.waitKey(0)
+            bg(frame, block_size, open_kernel, sp)
             grabbed, blur = cap.read()
         cnt += 1
+
+
+def bg(frame, block_size, open_kernel, sp):
+    # frame = cv2.GaussianBlur(frame, gaussian_size, sigmaY=0, sigmaX=0)
+    s = time.time()
+    blur = cv2.pyrMeanShiftFiltering(frame, sp, 60)
+    global_mean = cv2.mean(blur)
+    # print(f'Global mean {global_mean}')
+    # binary = mog.apply(frame)
+    gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
+    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, block_size, 40)
+    # binary = mog.apply(blur)
+    # _,binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, open_kernel)
+    # contours = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[1]
+    frame_area = binary.shape[1] * binary.shape[0]
+    # binary = cv2.dilate(binary, dilate_kernel)
+    num_labels, label_map, stats, centroids = cv2.connectedComponentsWithStats(binary)
+    e = 1 / (time.time() - s)
+    # print(f'Operation Speed [{round(e, 2)}]/FPS')
+    for i in range(1, num_labels):
+        mask = (label_map == i).astype(np.uint8)
+        block_pixels = mask.sum()
+        mask = cv2.merge([mask, mask, mask]) * 255
+        block = cv2.bitwise_and(frame, mask)
+        # cv2.imshow('block', block)
+        b_mean = np.sum(block[:, :, 0]) / block_pixels
+        g_mean = np.sum(block[:, :, 1]) / block_pixels
+        r_mean = np.sum(block[:, :, 2]) / block_pixels
+        print(f'block mean {b_mean, g_mean, r_mean}')
+        diff = np.array([b_mean, g_mean, r_mean, 0]) - global_mean
+        print(f'mean diff {abs(diff)}')
+        print(f'Area {stats[i][cv2.CC_STAT_AREA]}')
+        print(f'Width {stats[i][cv2.CC_STAT_WIDTH]}')
+        print(f'Height {stats[i][cv2.CC_STAT_HEIGHT]}')
+        cv2.imshow('Mask', block)
+    cv2.imshow('Mog', binary)
+    cv2.imshow('Blur', blur)
+    cv2.imshow('Original', frame)
+    cv2.waitKey(0)
 
 
 if __name__ == '__main__':
