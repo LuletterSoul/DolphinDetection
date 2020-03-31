@@ -26,7 +26,9 @@ def mog2(video_path, open_kernel_size=None, dilate_kernel_size=None, gaussian_si
     grabbed, blur = cap.read()
     cv2.namedWindow('Mog', cv2.WINDOW_FREERATIO)
     cv2.namedWindow('Original', cv2.WINDOW_FREERATIO)
+    cv2.namedWindow('Mask', cv2.WINDOW_FREERATIO)
     cv2.namedWindow('Blur', cv2.WINDOW_FREERATIO)
+    cv2.namedWindow('Binary', cv2.WINDOW_FREERATIO)
     # kernel_size = (10, 10)
     # gaussian_size = (5, 5)
     open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (open_kernel_size, open_kernel_size))
@@ -46,24 +48,31 @@ def bg(frame, block_size, open_kernel, sp):
     s = time.time()
     blur = cv2.pyrMeanShiftFiltering(frame, sp, 60)
     global_mean = cv2.mean(blur)
-    # print(f'Global mean {global_mean}')
+    print(f'Global mean {global_mean}')
     # binary = mog.apply(frame)
     gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
     binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, block_size, 40)
+
     # binary = mog.apply(blur)
     # _,binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, open_kernel)
+    cv2.imshow('Binary', binary)
     # contours = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[1]
     frame_area = binary.shape[1] * binary.shape[0]
     # binary = cv2.dilate(binary, dilate_kernel)
     num_labels, label_map, stats, centroids = cv2.connectedComponentsWithStats(binary)
     e = 1 / (time.time() - s)
     # print(f'Operation Speed [{round(e, 2)}]/FPS')
+
+    blocks = np.zeros(frame.shape, dtype=np.uint8)
     for i in range(1, num_labels):
         mask = (label_map == i).astype(np.uint8)
+        if stats[i][cv2.CC_STAT_AREA] < 100:
+            continue
         block_pixels = mask.sum()
         mask = cv2.merge([mask, mask, mask]) * 255
         block = cv2.bitwise_and(frame, mask)
+        blocks += block
         # cv2.imshow('block', block)
         b_mean = np.sum(block[:, :, 0]) / block_pixels
         g_mean = np.sum(block[:, :, 1]) / block_pixels
@@ -74,7 +83,7 @@ def bg(frame, block_size, open_kernel, sp):
         print(f'Area {stats[i][cv2.CC_STAT_AREA]}')
         print(f'Width {stats[i][cv2.CC_STAT_WIDTH]}')
         print(f'Height {stats[i][cv2.CC_STAT_HEIGHT]}')
-        cv2.imshow('Mask', block)
+    cv2.imshow('Mask', blocks)
     cv2.imshow('Mog', binary)
     cv2.imshow('Blur', blur)
     cv2.imshow('Original', frame)
@@ -95,6 +104,7 @@ if __name__ == '__main__':
     # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/candidates/0321164540_0.mp4'
     # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/candidates/0325110728_0.mp4'
     # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/candidates/0325151208_303.mp4'
-    video_path = '/Users/luvletteru/Downloads/20200221/15点14分  23 2.58-3.03近.mp4'
+    # video_path = '/Users/luvletteru/Downloads/20200221/15点14分  23 2.58-3.03近.mp4'
+    video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/16/1.mp4'
     # mog2(video_path, open_kernel_size=3, dilate_kernel_size=5, block_size=51, width=1000, sp=10)
     mog2(video_path, open_kernel_size=3, dilate_kernel_size=5, block_size=101, width=1000, sp=20)

@@ -36,7 +36,7 @@ enable: false
 filtered_ratio: 0.5
 max_streams_cache: 5000
 online: rtsp
-cap_loop: false
+cap_loop: true
 sample_internal: 15
 save_box: true
 show_box: true
@@ -73,12 +73,13 @@ alg:
   filtered_by_wh: false
   rwt: 120
   rht: 25
-  area: 1000
+  area: 400
   area_ratio: 0.03
   color_range:
     - 80
     - 80
     - 80
+  color_scale: 1.60
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36

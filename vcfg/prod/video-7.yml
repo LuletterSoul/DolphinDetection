@@ -73,12 +73,13 @@ alg:
   filtered_by_wh: false
   rwt: 30
   rht: 15
-  area: 50
+  area: 800
   area_ratio: -1
   color_range:
     - 65
     - 65
     - 65
+  color_scale: 1.60
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36

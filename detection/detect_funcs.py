@@ -227,9 +227,14 @@ def filtered_shot_block(rects, cfg: VideoConfig):
 
 
 def is_block_black(frame, i, label_map, cfg: VideoConfig):
+    global_mean = cv2.mean(frame)
     mean = cal_block_bgr_mean(frame, i, label_map)
     logger.info(f'Block mean: {mean}')
     color_range = cfg.alg['color_range']
+    color_scale = cfg.alg['color_scale']
+    if color_scale != -1:
+        color_range = [global_mean[0] / color_scale, global_mean[1] / color_scale, global_mean[2] / color_scale]
+        logger.info(f'Change color range to {color_range} for global color mean {global_mean}')
     return mean[0] < color_range[0] and mean[1] < color_range[1] and mean[2] < \
            color_range[2]
 

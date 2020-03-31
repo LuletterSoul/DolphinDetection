@@ -79,6 +79,7 @@ alg:
     - 80
     - 80
     - 80
+  color_scale: 1.60
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36
