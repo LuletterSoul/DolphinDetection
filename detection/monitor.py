@@ -63,7 +63,7 @@ class DetectionMonitor(object):
         self.quit = False
         # Communication Pipe between detector and stream receiver
         self.pipes = [Manager().Queue(c.max_streams_cache) for c in self.cfgs]
-        self.time_stamp = generate_time_stamp()
+        self.time_stamp = generate_time_stamp('%m%d')
         self.stream_path = stream_path / self.time_stamp
         self.sample_path = sample_path / self.time_stamp
         self.frame_path = frame_path / self.time_stamp
