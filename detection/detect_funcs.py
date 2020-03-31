@@ -155,6 +155,12 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
         dilated_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dk_size, dk_size))
         binary = cv2.dilate(binary, dilated_kernel)
 
+    color_scale = params.cfg.alg['color_scale']
+    color_range = params.cfg.alg['color_range']
+    global_mean = cv2.mean(frame)
+    if color_scale != -1:
+        color_range = [global_mean[0] / color_scale, global_mean[1] / color_scale, global_mean[2] / color_scale]
+
     # global_mean = cv2.mean(frame)
 
     # compute linked components
@@ -167,7 +173,7 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     for i in range(1, num_components):
         # only process if it has more than defualt(50pix) area
         # block color range is black enough
-        if rects[i][cv2.CC_STAT_AREA] > params.cfg.alg['area'] and is_block_black(frame, i, label_map, params.cfg):
+        if rects[i][cv2.CC_STAT_AREA] > params.cfg.alg['area'] and is_block_black(frame, i, label_map, color_range):
             # if rects[i][cv2.CC_STAT_AREA] > params.cfg.alg['area']:
             # draw white pixels if current is a components
             logger.info(f'Area: {rects[i][cv2.CC_STAT_AREA]}')
@@ -226,15 +232,10 @@ def filtered_shot_block(rects, cfg: VideoConfig):
     return filtered_rects
 
 
-def is_block_black(frame, i, label_map, cfg: VideoConfig):
-    global_mean = cv2.mean(frame)
+def is_block_black(frame, i, label_map, color_range):
     mean = cal_block_bgr_mean(frame, i, label_map)
     logger.info(f'Block mean: {mean}')
-    color_range = cfg.alg['color_range']
-    color_scale = cfg.alg['color_scale']
-    if color_scale != -1:
-        color_range = [global_mean[0] / color_scale, global_mean[1] / color_scale, global_mean[2] / color_scale]
-        logger.info(f'Change color range to {color_range} for global color mean {global_mean}')
+    logger.info(f'Color range {color_range}')
     return mean[0] < color_range[0] and mean[1] < color_range[1] and mean[2] < \
            color_range[2]
 
