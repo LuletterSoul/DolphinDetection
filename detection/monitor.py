@@ -80,7 +80,7 @@ class DetectionMonitor(object):
             # self.process_pool = Pool(processes=pool_size)
             self.process_pool = Pool(processes=len(self.cfgs) * 5)
             self.thread_pool = ThreadPoolExecutor()
-        self.clean()
+        # self.clean()
         self.stream_receivers = [
             stream.StreamReceiver(self.stream_path / str(c.index), offline_path, c, self.pipes[idx]) for idx, c in
             enumerate(self.cfgs)]
