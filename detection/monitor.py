@@ -323,7 +323,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         :return:
         """
         self.stream_renders = [
-            DetectionStreamRender(c, 0, c.future_frames, self.msg_queue[idx], self.controllers[idx].rect_stream_path,
+            DetectionStreamRender(c, self.scfg, 0, c.future_frames, self.msg_queue[idx],
+                                  self.controllers[idx].rect_stream_path,
                                   self.controllers[idx].original_stream_path,
                                   self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
                                   self.render_notify_queues[idx], self.region_path / str(c.index),
@@ -337,7 +338,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         :return:
         """
         self.detect_handlers = [
-            DetectionSignalHandler(c, 0, c.search_window_size, self.msg_queue[idx],
+            DetectionSignalHandler(c, self.scfg, 0, c.search_window_size, self.msg_queue[idx],
                                    self.controllers[idx].rect_stream_path,
                                    self.controllers[idx].original_stream_path,
                                    self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,

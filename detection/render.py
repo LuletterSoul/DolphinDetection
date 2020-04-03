@@ -21,7 +21,7 @@ import cv2
 import numpy as np
 
 from config import SystemStatus
-from config import VideoConfig
+from config import VideoConfig, ServerConfig, ModelType
 from detection.detect_funcs import adaptive_thresh_with_rules
 from detection.params import DispatchBlock, DetectorParams
 from pysot.tracker.service import TrackRequester
@@ -59,11 +59,12 @@ class FrameArrivalHandler(object):
     execute some tasks when fixed frames arrive
     """
 
-    def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue,
+    def __init__(self, cfg: VideoConfig, scfg: ServerConfig, detect_index, future_frames, msg_queue: Queue,
                  rect_stream_path, original_stream_path, render_rect_cache, original_frame_cache,
                  notify_queue, region_path, detect_params=None) -> None:
         super().__init__()
         self.cfg = cfg
+        self.scfg = scfg
         self.detect_index = detect_index
         self.rect_stream_path = rect_stream_path
         self.original_stream_path = original_stream_path
@@ -202,10 +203,11 @@ class DetectionStreamRender(FrameArrivalHandler):
     Generate a video with fixed time when notification occurs
     """
 
-    def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue, rect_stream_path,
+    def __init__(self, cfg: VideoConfig, scfg: ServerConfig, detect_index, future_frames, msg_queue: Queue,
+                 rect_stream_path,
                  original_stream_path, render_frame_cache, original_frame_cache, notify_queue,
                  region_path, detect_params=None) -> None:
-        super().__init__(cfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
+        super().__init__(cfg, scfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
                          render_frame_cache, original_frame_cache, notify_queue, region_path,
                          detect_params)
 
@@ -266,6 +268,9 @@ class DetectionStreamRender(FrameArrivalHandler):
                     # write text
                     frame = paint_chinese_opencv(frame, '江豚', p1)
                     cv2.rectangle(frame, p1, p2, color, 2)
+                    if self.scfg.detect_mode == ModelType.SSD:
+                        cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
                 render_cnt += 1
             next_cnt += 1
             video_write.write(frame)
@@ -623,11 +628,12 @@ class DetectionSignalHandler(FrameArrivalHandler):
     send detection notification,generate render video or not
     """
 
-    def __init__(self, cfg: VideoConfig, detect_index, future_frames, msg_queue: Queue, rect_stream_path,
+    def __init__(self, cfg: VideoConfig, scfg: ServerConfig, detect_index, future_frames, msg_queue: Queue,
+                 rect_stream_path,
                  original_stream_path, render_frame_cache, original_frame_cache, notify_queue,
                  region_path, track_requester: TrackRequester, render_queue: Queue,
                  detect_params=None) -> None:
-        super().__init__(cfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
+        super().__init__(cfg, scfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
                          render_frame_cache, original_frame_cache, notify_queue, region_path,
                          detect_params)
         self.track_requester = track_requester
