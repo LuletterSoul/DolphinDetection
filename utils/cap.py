@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+# encoding: utf-8
+"""
+@author: Shanda Lau 刘祥德
+@license: (C) Copyright 2019-now, Node Supply Chain Manager Corporation Limited.
+@contact: shandalaulv@gmail.com
+@software: 
+@file: cat.py
+@time: 4/4/20 7:09 PM
+@version 1.0
+@desc:
+"""
+import vlc
+import ctypes
+import time
+import cv2
+import numpy
+from PIL import Image
+import queue
+
+current_index = -1
+VIDEOWIDTH = -1
+VIDEOHEIGHT = -1
+RUN = True
+q = queue.Queue()
+size = 0
+buf = None
+buf_p = None
+m = None
+mp = None
+
+VideoLockCb = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))
+
+
+@VideoLockCb
+def _lockcb(opaque, planes):
+    planes[0] = buf_p
+
+
+@vlc.CallbackDecorators.VideoDisplayCb
+def _display(opaque, picture):
+    global current_index, q
+    current_index += 1
+    img = Image.frombuffer("RGBA", (VIDEOWIDTH, VIDEOHEIGHT), buf, "raw", "BGRA", 0, 1)
+    img = cv2.cvtColor(numpy.array(img), cv2.COLOR_RGB2BGR)
+    q.put(img)
+    # cv2.namedWindow('image', cv2.WINDOW_FREERATIO)
+    # cv2.imshow('image', img)
+    # cv2.waitKey(1)
+
+
+def read():
+    try:
+        return True, q.get(timeout=5)
+    except:
+        return -1, None
+
+
+def release():
+    global RUN
+    RUN = False
+
+
+def run(src, shape):
+    global VIDEOHEIGHT, VIDEOWIDTH, buf, buf_p
+    VIDEOWIDTH = shape[1]
+    VIDEOHEIGHT = shape[0]
+    size = VIDEOHEIGHT * VIDEOWIDTH * 4
+    buf = (ctypes.c_ubyte * size)()
+    buf_p = ctypes.cast(buf, ctypes.c_void_p)
+    vlcInstance = vlc.Instance()
+    m = vlcInstance.media_new(src)
+    mp = vlc.libvlc_media_player_new_from_media(m)
+    vlc.libvlc_video_set_callbacks(mp, _lockcb, None, _display, None)
+    mp.video_set_format("BGRA", VIDEOWIDTH, VIDEOHEIGHT, VIDEOWIDTH * 4)
+    while RUN:
+        mp.play()
+        time.sleep(0.5)
