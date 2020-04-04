@@ -18,6 +18,11 @@ import numpy
 from PIL import Image
 import queue
 
+"""
+a simple encapsulation of VLC module for solving packets loss and decoding errors 
+based 4K RTSP streams.
+"""
+
 current_index = -1
 VIDEOWIDTH = -1
 VIDEOHEIGHT = -1
@@ -38,7 +43,13 @@ def _lockcb(opaque, planes):
 
 
 @vlc.CallbackDecorators.VideoDisplayCb
-def _display(opaque, picture):
+def put_queue(opaque, picture):
+    """
+    receive buffer data from bottom layer, convert raw image into a BGR image
+    :param opaque:
+    :param picture:
+    :return:
+    """
     global current_index, q
     current_index += 1
     img = Image.frombuffer("RGBA", (VIDEOWIDTH, VIDEOHEIGHT), buf, "raw", "BGRA", 0, 1)
@@ -50,19 +61,35 @@ def _display(opaque, picture):
 
 
 def read():
+    """
+    read a frame from queue
+    :return:
+    """
+    global q
     try:
         return True, q.get(timeout=5)
     except:
-        return -1, None
+        release()
+        return False, None
 
 
 def release():
+    """
+    release VLC media player instance
+    :return:
+    """
     global RUN
     RUN = False
 
 
 def run(src, shape):
-    global VIDEOHEIGHT, VIDEOWIDTH, buf, buf_p
+    """
+    init VLC media player
+    :param src:
+    :param shape:
+    :return:
+    """
+    global VIDEOHEIGHT, VIDEOWIDTH, buf, buf_p, RUN
     VIDEOWIDTH = shape[1]
     VIDEOHEIGHT = shape[0]
     size = VIDEOHEIGHT * VIDEOWIDTH * 4
@@ -71,7 +98,7 @@ def run(src, shape):
     vlcInstance = vlc.Instance()
     m = vlcInstance.media_new(src)
     mp = vlc.libvlc_media_player_new_from_media(m)
-    vlc.libvlc_video_set_callbacks(mp, _lockcb, None, _display, None)
+    vlc.libvlc_video_set_callbacks(mp, _lockcb, None, put_queue, None)
     mp.video_set_format("BGRA", VIDEOWIDTH, VIDEOHEIGHT, VIDEOWIDTH * 4)
     while RUN:
         mp.play()

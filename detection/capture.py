@@ -497,7 +497,7 @@ class VideoRtspVlcCapture(VideoRtspCallbackCapture):
                          height, delete_post)
 
     def reload_cap(self, src):
-        threading.Thread(target=cap.run, args=(src, self.cfg.shape,))
+        threading.Thread(target=cap.run, args=(src, self.cfg.shape,), daemon=True).start()
 
     def read_frame(self):
         return cap.read()
