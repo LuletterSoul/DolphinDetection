@@ -102,4 +102,4 @@ def run(src, shape):
     mp.video_set_format("BGRA", VIDEOWIDTH, VIDEOHEIGHT, VIDEOWIDTH * 4)
     while RUN:
         mp.play()
-        time.sleep(0.5)
+        time.sleep(1)
