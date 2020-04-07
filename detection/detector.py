@@ -295,7 +295,7 @@ class Detector(object):
                 'Detector [{},{}]: init saliency detector'.format(self.x_index, self.x_index))
             self.saliency = cv2.saliency.MotionSaliencyBinWangApr2014_create()
             self.saliency.setImagesize(frame.shape[1], frame.shape[0])
-            self.saliency.init()
+            self.saliency.run()
             self.shape = frame.shape
             mog = cv2.createBackgroundSubtractorMOG2(detectShadows=False, varThreshold=10)
             adaptive_thresh = None
@@ -721,7 +721,7 @@ def detect(video_path: Path, region_save_path: Path, mq: Queue, cfg: VideoConfig
             if saliency is None:
                 saliency = cv2.saliency.MotionSaliencyBinWangApr2014_create()
                 saliency.setImagesize(frame.shape[1], frame.shape[0])
-                saliency.init()
+                saliency.run()
 
             # convert the input frame to grayscale and compute the saliency
             # map based on the motion classify_model

@@ -115,7 +115,7 @@ def track_service(model_index, video_cfgs, checkpoint,
             # lock the whole model in case it is busy and throw exception if multiple requests post
             with lock:
                 s = time.time()
-                tracker.init(init_frame, to_bbox_wh(req.rect))
+                tracker.run(init_frame, to_bbox_wh(req.rect))
                 end_index = req.frame_index + track_window_size + 1
                 result = []
                 result.append((req.frame_index, req.rect))

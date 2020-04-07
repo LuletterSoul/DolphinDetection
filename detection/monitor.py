@@ -24,7 +24,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 import stream
 from config import VideoConfig, ServerConfig
-from .capture import VideoOfflineCapture, VideoOnlineSampleCapture, VideoRtspCapture
+from .capture import VideoOfflineCapture, VideoOnlineSampleCapture, VideoRtspCapture, VideoRtspVlcCapture
 from pysot.tracker.service import TrackingService
 from stream.rtsp import PushStreamer
 from stream.websocket import websocket_client
@@ -212,7 +212,9 @@ class EmbeddingControlMonitor(DetectionMonitor):
                 self.init_http_caps(c, idx)
             elif c.online == "rtsp":
                 self.init_rtsp_caps(c, idx)
-            else:
+            elif c.online == 'vlc_rtsp':
+                self.init_vlc_rtsp_caps(c, idx)
+            elif c.online == 'offline':
                 self.init_offline_caps(c, idx)
 
     def init_offline_caps(self, c, idx):
@@ -241,6 +243,9 @@ class EmbeddingControlMonitor(DetectionMonitor):
                                      self.pipes[idx],
                                      self.caps_queue[idx],
                                      c, idx, c.sample_rate))
+
+    def init_vlc_rtsp_caps(self, c, idx):
+        pass
 
     def init_rtsp_caps(self, c, idx):
         """
@@ -376,6 +381,19 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             VideoRtspCallbackCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
                                      self.pipes[idx], self.caps_queue[idx], c, idx, self.controllers[idx],
                                      c.sample_rate)
+        )
+
+    def init_vlc_rtsp_caps(self, c, idx):
+        """
+        init online rtsp video stream reciever
+        :param c:
+        :param idx:
+        :return:
+        """
+        self.caps.append(
+            VideoRtspVlcCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
+                                self.pipes[idx], self.caps_queue[idx], c, idx, self.controllers[idx],
+                                c.sample_rate)
         )
 
     def init_offline_caps(self, c, idx):
