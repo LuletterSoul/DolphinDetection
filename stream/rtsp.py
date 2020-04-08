@@ -108,13 +108,13 @@ class FFMPEG_MP4Writer(FFMPEG_VideoWriter):
         if cvt == 'rgb':
             self.write_frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         else:
-             - self.write_frame(frame)
+            self.write_frame(frame)
 
     def release(self):
         self.close()
 
-    def __init__(self, filename, size, fps, codec="libx264", audiofile=None, preset="medium", bitrate=None,
-                 withmask=False, logfile=None, threads=None, ffmpeg_params=None):
+    def __init__(self, filename, size, fps, codec="libx264", audiofile=None, preset="ultrafast", bitrate=None,
+                 withmask=False, logfile=None, threads=2, ffmpeg_params=None):
         if logfile is None:
             logfile = sp.PIPE
 
