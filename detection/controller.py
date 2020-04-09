@@ -482,9 +482,6 @@ class TaskBasedDetectorController(DetectorController):
         self.global_index.set(self.global_index.get() + 1)
         e = 1 / (time.time() - s)
         logger.debug(self.LOG_PREFIX + f'Global Cache Writing Speed: [{round(e, 2)}]/FPS')
-        # cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_FREERATIO)
-        # cv2.imshow(str(self.cfg.index), frame)
-        # cv2.waitKey(1)
 
     def dispatch(self, *args):
         """
@@ -501,7 +498,13 @@ class TaskBasedDetectorController(DetectorController):
             self.ssd_based(args, original_frame.copy())
         elif self.server_cfg.detect_mode == ModelType.FORWARD:  # done nothing
             self.forward(args, original_frame)
-        # self.clear_original_cache()
+
+        if self.cfg.show_window:
+            cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_FREERATIO)
+            cv2.imshow(str(self.cfg.index), original_frame)
+            cv2.waitKey(1)
+
+    # self.clear_original_cache()
 
     def forward(self, args, original_frame):
         """

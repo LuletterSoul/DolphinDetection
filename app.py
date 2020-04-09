@@ -147,6 +147,14 @@ def load_cfg(args):
         for cfg in video_config:
             if cfg.index in enables:
                 cfg.push_stream = True
+
+    if args.show_windows is not None:
+        enables = args.show_windows.split(',')
+        enables = [int(e) for e in enables]
+        for cfg in video_config:
+            if cfg.index in enables:
+                cfg.show_window = True
+
     return server_config, video_config, switcher_options
 
 
@@ -190,6 +198,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_sm', default=None, help='use share memory to cache frames,default uses slower'
                                                        'Queue() as caches')
     parser.add_argument('--push_stream', default=None, help='push stream or not')
+    parser.add_argument('--show_windows', default=None, help='display windows')
     args = parser.parse_args()
     server_config, video_config, switcher_options = load_cfg(args)
     server = DolphinDetectionServer(server_config, video_config, switcher_options, args.cd_id, args.dt_id)
