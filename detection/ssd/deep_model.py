@@ -37,7 +37,6 @@ class SSDDetector(nn.Module):
         # net size
         self.size = size
         self.device_id = device_id
-        print(self.device_id)
         self.device = None
         if self.device_id is not None:
             os.environ['CUDA_VISIBLE_DEVICES'] = str(self.device_id)
