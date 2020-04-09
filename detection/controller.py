@@ -482,6 +482,9 @@ class TaskBasedDetectorController(DetectorController):
         self.global_index.set(self.global_index.get() + 1)
         e = 1 / (time.time() - s)
         logger.debug(self.LOG_PREFIX + f'Global Cache Writing Speed: [{round(e, 2)}]/FPS')
+        # cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_FREERATIO)
+        # cv2.imshow(str(self.cfg.index), frame)
+        # cv2.waitKey(1)
 
     def dispatch(self, *args):
         """

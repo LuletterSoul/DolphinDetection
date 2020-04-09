@@ -134,6 +134,7 @@ class FrameArrivalHandler(object):
                 return
             # occupy the whole window until a sequent task is done
             self.detect_index = msg.current_index
+            self.last_detection = time.time()
             self.task(msg)
         # if current_index - self.detect_index >= self.future_frames and self.write_done:
         #     # release
