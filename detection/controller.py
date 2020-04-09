@@ -430,7 +430,7 @@ class TaskBasedDetectorController(DetectorController):
         # every frame looper will occupy single model instance by now
         # TODO less model instances,but could be shared by all detectors
         if self.server_cfg.detect_mode == ModelType.SSD:
-            ssd_detector = SSDDetector(model_path=self.server_cfg.detect_model_path, device_id=self.server_cfg.cd_id)
+            ssd_detector = SSDDetector(model_path=self.server_cfg.detect_model_path, device_id=int(self.cfg.index) % 4)
             ssd_detector.run()
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
