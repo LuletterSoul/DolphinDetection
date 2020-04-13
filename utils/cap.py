@@ -100,6 +100,4 @@ def run(src, shape):
     mp = vlc.libvlc_media_player_new_from_media(m)
     vlc.libvlc_video_set_callbacks(mp, _lockcb, None, put_queue, None)
     mp.video_set_format("BGRA", VIDEOWIDTH, VIDEOHEIGHT, VIDEOWIDTH * 4)
-    while RUN:
-        mp.play()
-        time.sleep(1)
+    mp.play()
