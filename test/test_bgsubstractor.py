@@ -24,11 +24,11 @@ def mog2(video_path, open_kernel_size=None, dilate_kernel_size=None, gaussian_si
     cap = cv2.VideoCapture(video_path)
     # cap = cv2.VideoCapture(video_path)
     grabbed, blur = cap.read()
-    cv2.namedWindow('Mog', cv2.WINDOW_FREERATIO)
-    cv2.namedWindow('Original', cv2.WINDOW_FREERATIO)
-    cv2.namedWindow('Mask', cv2.WINDOW_FREERATIO)
-    cv2.namedWindow('Blur', cv2.WINDOW_FREERATIO)
-    cv2.namedWindow('Binary', cv2.WINDOW_FREERATIO)
+    cv2.namedWindow('Mog', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    cv2.namedWindow('Original', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    cv2.namedWindow('Mask', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    cv2.namedWindow('Blur', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    cv2.namedWindow('Binary', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
     # kernel_size = (10, 10)
     # gaussian_size = (5, 5)
     open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (open_kernel_size, open_kernel_size))
@@ -46,6 +46,7 @@ def mog2(video_path, open_kernel_size=None, dilate_kernel_size=None, gaussian_si
 def bg(frame, block_size, open_kernel, sp):
     # frame = cv2.GaussianBlur(frame, gaussian_size, sigmaY=0, sigmaX=0)
     s = time.time()
+    frame = frame[370:, :]
     blur = cv2.pyrMeanShiftFiltering(frame, sp, 60)
     global_mean = cv2.mean(blur)
     print(f'Global mean {global_mean}')
@@ -67,8 +68,8 @@ def bg(frame, block_size, open_kernel, sp):
     blocks = np.zeros(frame.shape, dtype=np.uint8)
     for i in range(1, num_labels):
         mask = (label_map == i).astype(np.uint8)
-        if stats[i][cv2.CC_STAT_AREA] < 100:
-            continue
+        # if stats[i][cv2.CC_STAT_AREA] < 100:
+        #     continue
         block_pixels = mask.sum()
         mask = cv2.merge([mask, mask, mask]) * 255
         block = cv2.bitwise_and(frame, mask)
@@ -87,7 +88,7 @@ def bg(frame, block_size, open_kernel, sp):
     cv2.imshow('Mog', binary)
     cv2.imshow('Blur', blur)
     cv2.imshow('Original', frame)
-    cv2.waitKey(0)
+    cv2.waitKey(1)
 
 
 if __name__ == '__main__':
@@ -105,6 +106,7 @@ if __name__ == '__main__':
     # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/candidates/0325110728_0.mp4'
     # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/candidates/0325151208_303.mp4'
     # video_path = '/Users/luvletteru/Downloads/20200221/15点14分  23 2.58-3.03近.mp4'
-    video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/16/1.mp4'
+    # video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/offline/16/1.mp4'
+    video_path = '/Users/luvletteru/Documents/GitHub/DolphinDetection/data/test/0415/11.mp4'
     # mog2(video_path, open_kernel_size=3, dilate_kernel_size=5, block_size=51, width=1000, sp=10)
     mog2(video_path, open_kernel_size=3, dilate_kernel_size=5, block_size=101, width=1000, sp=20)

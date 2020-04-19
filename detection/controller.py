@@ -663,6 +663,10 @@ class TaskBasedDetectorController(DetectorController):
             # logger.debug('Controller [{}]: Dispatch frame to all detectors....'.format(self.cfg.index))
             async_futures = []
             frame, original_frame = preprocess(original_frame, self.cfg)
+            if self.cfg.show_window:
+                cv2.namedWindow('Preprocess', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+                cv2.imshow('Preprocess', frame)
+                cv2.waitKey(0)
             s = time.time()
             for d in self.detect_params:
                 block = DispatchBlock(crop_by_se(frame, d.start, d.end),

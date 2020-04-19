@@ -162,7 +162,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', type=str, default='dev',
                         help='System environment.')
-    parser.add_argument('--log_level', default='DEBUG', help='control log output level')
+    parser.add_argument('--log_level', default='INFO', help='control log output level')
     parser.add_argument('--cfg', type=str, default='vcfg/server-dev.json',
                         help='Server configuration file represented by json format.')
     parser.add_argument('--vcfg', type=str, default='vcfg/video-dev.json',

@@ -31,11 +31,7 @@ from stream.websocket import creat_packaged_msg_json
 from utils import logger, bbox_points, generate_time_stamp, crop_by_se
 from utils import preprocess, paint_chinese_opencv
 from typing import List
-from threading import Event
-
 from utils.cache import SharedMemoryFrameCache
-
-m = Manager()
 
 
 class ArrivalMsgType:
