@@ -3,8 +3,8 @@ name: video6_hungred_million
 camera_id: camera_bp_yz
 channel: 0
 shape:
-  - 2160
-  - 3840
+  - 1080
+  - 1920
   - 3
 ip: 222.190.243.176
 dip: 'http://10.196.122.94:8080'

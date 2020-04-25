@@ -467,64 +467,29 @@ class Obj(object):
         return w * h
 
     @staticmethod
-    def func(param, x):
+    def quadratic_func(param, x):
         a, b, c = param
         return a * x * x + b * x + c
 
-    def error(self, param, x, y):
-        return self.func(param, x) - y
+    def quadratic_error(self, param, x, y):
+        return self.quadratic_func(param, x) - y
 
-    def solve_lsq(self, x, y):
-        p0 = [10, 10, 10]
-        param = leastsq(self.error, p0, args=(x, y))
+    def solve_quadratic_lsq(self, x, y):
+        p0 = np.array([10, 10, 10])
+        param = leastsq(self.quadratic_error, p0, args=(x, y))
         return param
 
-    def print_obj(self):
-        print(f'Obj:')
-        print(f'index={self.index}')
-        print(f'category={self.category}')
-        print(f'status={self.status}')
-        print(f'{self.trace[0]}--', end='')
-        dst_list = []
-        avg_dst_list = []
-        dst_sum = 0
-        continue_idx_sum = 0
-        area_list = [self.cal_area(self.trace[0][1])]
-        for i in range(1, len(self.trace)):
-            pre_idx, pre_rect = self.trace[i - 1]
-            current_idx, current_rect = self.trace[i]
-            area_list.append(self.cal_area(current_rect))
-            continue_idx_sum += abs(pre_idx - current_idx)
-            dst = self.cal_dst(pre_rect, current_rect)
-            dst_sum += dst
-            avg_dst = dst / abs(pre_idx - current_idx)
-            dst_list.append(dst)
-            avg_dst_list.append(avg_dst)
-            print(f'{dst}, {avg_dst}--{self.trace[i]}--', end='')
-        if len(area_list) > 3:
-            x = np.array(range(len(area_list)))
-            y = np.array(area_list)
-            param = self.solve_lsq(x, y)
-            a, b, c = param[0]
-            cost = param[1]
+    def is_quadratic_with_negative_a(self, area_list):
+        if len(area_list) < 3:
+            return False
+        x = np.array(range(len(area_list)))
+        y = np.array(area_list)
+        param = self.solve_quadratic_lsq(x, y)
+        a, b, c = param[0]
+        if a < 0:
+            return True
         else:
-            a, b, c = 0, 0, 0
-            cost = 0
-        print()
-        print(f'len trace={len(self.trace)}')
-        print(f'continue idx sum={continue_idx_sum}')
-        print(f'area list={area_list}')
-        print(f'start area={area_list[0]}, med area={area_list[int(len(area_list) / 2)]}, '
-              f'end area={area_list[len(area_list) - 1]}')
-        print(f'a={a}, b={b}, c={c}, cost={cost}')
-        print(f'dst list={dst_list}')
-        print(f'avg dst list={avg_dst_list}')
-        print(f'mid_dst={self.get_median(dst_list)}, mid_avg_dst={self.get_median(avg_dst_list)}')
-        print(f'dst sum={dst_sum}')
-        _, start_rect = self.trace[0]
-        _, end_rect = self.get_last_rect()
-        print(f'start-end dst={self.cal_dst(start_rect, end_rect)}')
-        print()
+            return False
 
     def get_last_rect(self):
         return self.trace[len(self.trace) - 1]
@@ -573,7 +538,7 @@ class Obj(object):
         avg_speed_list = []
         continue_idx_sum = 0
         dst_sum = 0
-        area_list = []
+        area_list = [self.cal_area(self.trace[0][1])]
         for i in range(1, len(self.trace)):
             pre_idx, pre_rect = self.trace[i - 1]
             current_idx, current_rect = self.trace[i]
@@ -584,16 +549,11 @@ class Obj(object):
             avg_speed = dst / abs(pre_idx - current_idx)
             avg_speed_list.append(avg_speed)
         mid_avg_speed = self.get_median(avg_speed_list)
-        # 拟合面积变化曲线
-        x = np.array(range(len(area_list)))
-        y = np.array(area_list)
-        param = self.solve_lsq(x, y)
-        a, b, c = param[0]
         if mid_avg_speed > self.cfg.alg['speed_x_thresh']:
             self.category = 'bird'
         elif continue_idx_sum > self.cfg.alg['continuous_time_thresh']:
             self.category = 'float'
-        elif a < 0:
+        elif self.is_quadratic_with_negative_a(area_list):
             self.category = 'dolphin'
         else:
             self.category = None
@@ -616,10 +576,12 @@ class Filter(object):
         self.disappear_frames_thresh = self.cfg.alg['disappear_frames_thresh']
 
     def set_detect_params(self):
-        x_num = 1
-        y_num = 1
-        x_step = int(self.cfg.shape[1] / x_num)
-        y_step = int(self.cfg.shape[0] / y_num)
+        x_num = self.cfg.routine['col']
+        y_num = self.cfg.routine['row']
+        empty = np.zeros(self.cfg.shape).astype(np.uint8)
+        frame, _ = preprocess(empty, self.cfg)
+        x_step = int(frame.shape[1] / x_num)
+        y_step = int(frame.shape[0] / y_num)
 
         detect_params = []
         for i in range(x_num):
@@ -692,7 +654,7 @@ class Filter(object):
         return result_set
 
     @staticmethod
-    def get_median(self, data):
+    def get_median(data):
         if len(data) == 0:
             return 0
         data.sort()
