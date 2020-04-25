@@ -11,53 +11,55 @@
 @desc:
 """
 from multiprocessing.managers import SharedMemoryManager
-from multiprocessing import Pool, Manager, cpu_count, Queue
+from multiprocessing import Pool, Manager, cpu_count, Queue, Value,RLock
 from utils.cache import SharedMemoryFrameCache
 import cv2
 import time
 import imutils
+import numpy as np
 
 
-def blur(cache: SharedMemoryFrameCache, type):
-    index = 0
-    while True:
-        frame = cache[index]
+def blur(cache: SharedMemoryFrameCache, global_index, type):
+    cap = cv2.VideoCapture("/Users/luvletteru/Documents/GitHub/DolphinDetection/data/candidates/0325_cvam_21.mp4")
+    grabbed, frame = cap.read()
+    while grabbed:
         frame = cv2.GaussianBlur(frame, (3, 3), sigmaX=0, sigmaY=0)
         start = time.time()
+        index = global_index.get()
         cache[index] = frame
         end = time.time()
         print(f'Write Into {type} cache: [{1 / (end - start)}]/FPS')
-        index += 1
+        global_index.set(index + 1)
+        grabbed, frame = cap.read()
 
 
-def receive(cache: SharedMemoryFrameCache, type):
+def receive(cache: SharedMemoryFrameCache, global_index, type):
     index = 0
+    time.sleep(2)
     while True:
         start = time.time()
+        index = global_index.get() - 5
+        cache.lock_cache(index, index + 5)
         frame = cache[index]
+        time.sleep(2)
         end = time.time()
         print(f'Get from {type} Cache: [{1 / (end - start)}]/FPS')
-        frame = imutils.resize(frame, width=1000)
-        # cv2.imshow('Blur', frame)
-        # cv2.waitKey(1)
-        index += 1
+        frame = imutils.resize(frame, width=1080)
+        cv2.imshow('Blur', frame)
+        cv2.waitKey(1)
+        cache.release()
 
 
 def test_share_memory_rw():
-    frame = cv2.imread("/Users/luvletteru/Documents/GitHub/DolphinDetection/data/test/0312/1.jpg")
-    print(frame.dtype)
-    cache_size = 300
-    s1 = SharedMemoryFrameCache(smm, cache_size, frame.nbytes, frame.shape)
-    q1 = Manager().list([None] * cache_size)
-    for i in range(cache_size):
-        start = time.time()
-        s1[i] = frame
-        end = time.time()
-        print(f'Write Into {type} cache: [{1 / (end - start)}]/FPS')
-        # q1[i] = frame
-    with Pool(cpu_count() - 1) as pool:
-        r1 = pool.apply_async(blur, args=(s1, 'Shared Memory',))
-        r2 = pool.apply_async(receive, args=(s1, 'Shared Memory',))
+    cache_size = 10
+    init_frame = np.zeros((2160, 3840, 3), dtype=np.uint8)
+    global_index = Manager().Value('i', 1)
+    smm = SharedMemoryManager()
+    smm.start()
+    s1 = SharedMemoryFrameCache(smm, cache_size, init_frame.nbytes, init_frame.shape)
+    with Pool(2) as pool:
+        r1 = pool.apply_async(blur, args=(s1, global_index, 'Shared Memory',))
+        r2 = pool.apply_async(receive, args=(s1, global_index, 'Shared Memory',))
         r1.get()
         r2.get()
         # r3 = pool.apply_async(blur, args=(q1, 'List',))
@@ -70,22 +72,4 @@ def test_share_memory_rw():
 
 
 if __name__ == '__main__':
-    smm = SharedMemoryManager()
-    manager = Manager()
-    smm.start()
-    share_list = smm.ShareableList([1, 2, 3, 4])
-    one, two, three, four = share_list[0:3]
-    print(one)
-    print(two)
-    print(three)
-    print(four)
-    one = 4
-    two = 3
-    three = 2
-    four = 1
-    share_list[:] = [one, two, three, four]
-    print(one)
-    print(two)
-    print(three)
-    print(four)
-# test_share_memory_rw()
+    test_share_memory_rw()

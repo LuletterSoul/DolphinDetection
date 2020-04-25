@@ -18,7 +18,7 @@ from multiprocessing import Pool
 from classfy.model import DolphinClassifier
 from . import Detector
 from .params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
-from .render import ArriveMsgType
+from .render import ArrivalMsgType, ArrivalMessage
 from stream.websocket import *
 from utils.cache import SharedMemoryFrameCache
 # from utils import NoDaemonPool as Pool
@@ -394,8 +394,9 @@ class TaskBasedDetectorController(DetectorController):
                                                          camera_id=self.cfg.camera_id)
                         logger.info(f'put detect message in msg_queue...')
                         self.msg_queue.put(json_msg)
-                        self.render_rect_cache[current_index % self.cache_size] = r.rects
-                        self.forward_filter(current_index)
+                        if self.cfg.render:
+                            self.render_rect_cache[current_index % self.cache_size] = r.rects
+                        self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
                     else:
                         if not self.dol_gone:
@@ -433,7 +434,7 @@ class TaskBasedDetectorController(DetectorController):
             ssd_detector.run()
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
-        elif self.server_cfg.detect_mode == ModelType.CLASSIFY:
+        elif self.server_cfg.detect_mode == ModelType.CLASSIFY and not self.cfg.cv_only:
             classifier = DolphinClassifier(model_path=self.server_cfg.classify_model_path,
                                            device_id=self.server_cfg.dt_id)
             classifier.run()
@@ -525,7 +526,7 @@ class TaskBasedDetectorController(DetectorController):
             if len(frames_results):
                 for frame_result in frames_results:
                     if len(frame_result):
-                        rects = [r for r in frame_result if r[4] > 0.8]
+                        rects = [r for r in frame_result if r[4] > self.cfg.alg['ssd_confidence']]
                         if len(rects):
                             self.result_queue.put((current_index, rects))
                             if len(rects) >= 3:
@@ -543,8 +544,9 @@ class TaskBasedDetectorController(DetectorController):
                         self.msg_queue.put(json_msg)
                         logger.debug(f'put detect message in msg_queue {json_msg}...')
                         # self.render_frame_cache[current_index % self.cache_size] = render_frame
-                        self.render_rect_cache[current_index % self.cache_size] = rects
-                        self.forward_filter(current_index)
+                        if self.cfg.render:
+                            self.render_rect_cache[current_index % self.cache_size] = rects
+                        self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
                     else:
                         if not self.dol_gone:
@@ -573,7 +575,7 @@ class TaskBasedDetectorController(DetectorController):
         :return:
         """
         if self.cfg.forward_filter:
-            self.detect_handler.reset(current_index)
+            self.detect_handler.reset(ArrivalMessage(current_index, ArrivalMsgType.UPDATE))
 
     def update_render(self, current_index):
         """
@@ -581,8 +583,10 @@ class TaskBasedDetectorController(DetectorController):
         :param current_index:
         :return:
         """
-        if self.cfg.render:
-            self.render_notify_queue.put((current_index, ArriveMsgType.UPDATE))
+
+        # if forward filtering is enabled, video render notification is under control by DetectionSignalHandler
+        if self.cfg.render and not self.cfg.forward_filter:
+            self.render_notify_queue.put(ArrivalMessage(current_index, ArrivalMsgType.UPDATE))
 
     def notify_render(self, current_index):
         """
@@ -590,18 +594,20 @@ class TaskBasedDetectorController(DetectorController):
         :param current_index: arrival frame index
         :return:
         """
-        if self.cfg.render:
-            self.render_notify_queue.put((current_index, ArriveMsgType.DETECTION))
+        # if forward filtering is enabled, video render notification is under control by DetectionSignalHandler
+        if self.cfg.render and not self.cfg.forward_filter:
+            self.render_notify_queue.put(ArrivalMessage(current_index, ArrivalMsgType.DETECTION))
 
-    def forward_filter(self, current_index):
+    def forward_filter(self, current_index, rects):
         """
         forward filter
+        :param rects:
         :param current_index:
         :return:
         """
         if self.cfg.forward_filter:
-            self.detect_handler.notify(current_index)
-        # TODO control detection message pushing
+            self.detect_handler.notify(ArrivalMessage(current_index, ArrivalMsgType.DETECTION, rects=rects))
+        # TODO control instant detection signal commit
 
     def get_ssd_result(self, original_frame, ssd_model):
         """
@@ -687,10 +693,14 @@ class TaskBasedDetectorController(DetectorController):
     #     return True
 
     def start(self, pool: Pool):
-        self.status.set(SystemStatus.RUNNING)
-        threading.Thread(target=self.listen, daemon=True).start()
-        threading.Thread(target=self.write_frame_work, daemon=True).start()
-        # threading.Thread(target=self.display, daemon=True).start()
-        # threading.Thread(target=self.loop_stack, daemon=True).start()
-        self.control()
-        return True
+        try:
+            self.status.set(SystemStatus.RUNNING)
+            threading.Thread(target=self.listen, daemon=True).start()
+            threading.Thread(target=self.write_frame_work, daemon=True).start()
+            # threading.Thread(target=self.display, daemon=True).start()
+            # threading.Thread(target=self.loop_stack, daemon=True).start()
+            self.control()
+            return True
+        except Exception as e:
+            logger.error(e)
+            traceback.print_exc()

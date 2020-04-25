@@ -17,11 +17,12 @@ import time
 from multiprocessing import Manager
 from multiprocessing.queues import Queue
 from pathlib import Path
+import traceback
 
 import cv2
 
 from config import VideoConfig, SystemStatus
-from utils import logger
+from utils import logger, cap
 
 
 class VideoCaptureThreading:
@@ -134,7 +135,7 @@ class VideoCaptureThreading:
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
             s = time.time()
-            grabbed, frame = self.cap.read()
+            grabbed, frame = self.read_frame()
             e = 1 / (time.time() - s)
             logger.debug(f'Video capture [{self.cfg.index}]: Receive Speed Rate [{round(e, 2)}]/FPS')
             s = time.time()
@@ -159,6 +160,9 @@ class VideoCaptureThreading:
                 self.cfg.index))
         # logger.info('Video Capture [{}]: cancel..'.format(self.cfg.index))
 
+    def read_frame(self):
+        return self.cap.read()
+
     def pass_frame(self, *args):
         self.frame_queue.put(args[0], block=True)
         # logger.info('Passed frame...')
@@ -181,11 +185,13 @@ class VideoCaptureThreading:
                 continue
             else:
                 break
+        self.reload_cap(src)
+        return True
+
+    def reload_cap(self, src):
         if self.cap is not None:
             self.cap.release()
-
         self.cap = cv2.VideoCapture(src)
-        return True
 
     def handle_history(self):
         if self.posix.exists() and self.delete_post:
@@ -199,9 +205,13 @@ class VideoCaptureThreading:
         :param args:
         :return:
         """
-        if self.status.get() == SystemStatus.SHUT_DOWN:
-            self.__start__(*args)
-        return True
+        try:
+            if self.status.get() == SystemStatus.SHUT_DOWN:
+                self.__start__(*args)
+            return True
+        except Exception as e:
+            logger.error(e)
+            traceback.print_exc()
         # with self.read_lock:
         # frame = self.frame.copy()
         # grabbed = self.grabbed
@@ -419,7 +429,7 @@ class VideoRtspCapture(VideoOnlineSampleCapture):
         while self.status.get() == SystemStatus.RUNNING:
             # with self.read_lock:
             s = time.time()
-            grabbed, frame = self.cap.read()
+            grabbed, frame = self.read_frame()
             e = 1 / (time.time() - s)
             # logger.info(self.cap.get(cv2.CAP_PROP_POS_MSEC))
             # logger.info(self.cap.getRTPTimeStampTs())
@@ -478,3 +488,20 @@ class VideoRtspCallbackCapture(VideoRtspCapture):
         assert len(args) >= 2
         # self.controller.dispatch_frame(*args)
         self.controller.put_cache(*args)
+
+
+class VideoRtspVlcCapture(VideoRtspCallbackCapture):
+    def __init__(self, video_path: Path, sample_path: Path, index_pool: Queue, frame_queue: Queue, cfg: VideoConfig,
+                 idx, controller, sample_rate=5, width=640, height=480, delete_post=True):
+        super().__init__(video_path, sample_path, index_pool, frame_queue, cfg, idx, controller, sample_rate, width,
+                         height, delete_post)
+
+    def reload_cap(self, src):
+        threading.Thread(target=cap.run, args=(src, self.cfg.shape,), daemon=True).start()
+
+    def read_frame(self):
+        return cap.read()
+
+    def cancel(self):
+        super().cancel()
+        cap.release()

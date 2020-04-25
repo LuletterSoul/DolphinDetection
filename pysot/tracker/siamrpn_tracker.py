@@ -161,7 +161,7 @@ class SiamRPNTracker(SiameseTracker):
         bbox_p1_x = cx - width / 2
         bbox_p1_y = cy - height / 2
         bbox_p2_x = bbox_p1_x + width
-        bbox_p2_y = bbox_p2_x + height
+        bbox_p2_y = bbox_p1_y + height
         bbox = [bbox_p1_x, bbox_p1_y, bbox_p2_x, bbox_p2_y]
         return {
             'bbox': bbox,
