@@ -12,6 +12,9 @@
 """
 
 import traceback
+import os.path as osp
+import yaml
+import re
 
 import detection
 import stream
@@ -71,16 +74,39 @@ def read_frame(input_path: Path, output_path: Path):
     return stream.process_video(input_path, output_path)
 
 
-def load_video_config(cfg_path: Path) -> List[VideoConfig]:
+def get_video_cfgs(env: str) -> List:
+    """
+    get the video config path depend on ENV
+    """
+    if env == Environment.TEST:
+        path_add = 'vcfg/test/'
+    elif env == Environment.PROD:
+        path_add = 'vcfg/prod/'
+    elif env == Environment.DEV:
+        path_add = 'vcfg/dev/'
+    video_path = osp.join(PROJECT_DIR, path_add)
+    file_names = os.listdir(video_path)
+    video_cfgs = []
+    for file_name in file_names:
+        if re.match(r'video-', file_name):
+            file_name = path_add + file_name
+            video_cfgs.append(file_name)
+    return video_cfgs
+
+
+def load_video_config(video_cfg_path: Path) -> List[VideoConfig]:
     """
     load video configuration into a dict object from json file
     :param cfg_path:
     :return:
     """
-    with open(cfg_path) as f:
-        cfg_objs = json.load(f)['videos']
-        cfgs = [VideoConfig.from_json(c) for c in cfg_objs]
-        return cfgs
+    cfgs = []
+    for cfg_path in video_cfg_path:
+        with open(cfg_path) as f:
+            cfg_obj = yaml.load(f)
+            cfg = VideoConfig.from_yaml(cfg_obj)
+            cfgs.append(cfg)
+    return cfgs
 
 
 def load_server_config(server_cfg_path: Path) -> ServerConfig:
@@ -90,8 +116,17 @@ def load_server_config(server_cfg_path: Path) -> ServerConfig:
     :return: 
     """
     with open(server_cfg_path) as f:
-        cfg_obj = json.load(f)
-        return ServerConfig.from_json(cfg_obj)
+        cfg_obj = yaml.load(f)
+        return ServerConfig.from_yaml(cfg_obj)
+
+
+def load_yaml_config(yaml_path: Path):
+    """
+    load yaml configuration
+    """
+    with open(yaml_path) as f:
+        cfg_obj = yaml.load(f)
+        return cfg_obj
 
 
 def load_json_config(json_path: Path):
