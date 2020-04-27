@@ -17,6 +17,7 @@ from __future__ import unicode_literals
 
 import os
 import time
+import cv2
 import traceback
 from queue import Empty
 
@@ -115,7 +116,7 @@ def track_service(model_index, video_cfgs, checkpoint,
             # lock the whole model in case it is busy and throw exception if multiple requests post
             with lock:
                 s = time.time()
-                tracker.run(init_frame, to_bbox_wh(req.rect))
+                tracker.init(init_frame, to_bbox_wh(req.rect))
                 end_index = req.frame_index + track_window_size + 1
                 result = []
                 result.append((req.frame_index, req.rect))
@@ -132,6 +133,13 @@ def track_service(model_index, video_cfgs, checkpoint,
                     track_res = tracker.track(frame)
                     best_score = track_res['best_score']
                     if best_score > track_confidence:
+                        frame = cv2.rectangle(frame.copy(),
+                                              (int(track_res['bbox'][0]), int(track_res['bbox'][1])),
+                                              (int(track_res['bbox'][2]), int(track_res['bbox'][3])),
+                                              color=(0, 0, 255),thickness=3)
+                        cv2.namedWindow(f'Track Result {model_index}', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+                        cv2.imshow(f'Track Result {model_index}', frame)
+                        cv2.waitKey(1)
                         result.append((i, track_res['bbox']))
                 # output results into the corresponding pipe of each monitor
                 output_pipes[req.monitor_index].put(TrackResult(req.rect_id, result))
@@ -141,7 +149,8 @@ def track_service(model_index, video_cfgs, checkpoint,
             # task service will timeout if track request is empty in pipe
             # ignore
             pass
-        except:
+        except Exception as e:
+            traceback.print_exc()
             # catch Broken pipe exception possibly
             return
 

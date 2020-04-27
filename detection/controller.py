@@ -664,8 +664,8 @@ class TaskBasedDetectorController(DetectorController):
             async_futures = []
             frame, original_frame = preprocess(original_frame, self.cfg)
             if self.cfg.show_window:
-                cv2.namedWindow('Preprocess', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
-                cv2.imshow('Preprocess', frame)
+                cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+                cv2.imshow(str(self.cfg.index), frame)
                 cv2.waitKey(0)
             s = time.time()
             for d in self.detect_params:
