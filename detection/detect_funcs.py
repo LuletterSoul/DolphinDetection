@@ -138,9 +138,6 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     # construct kernel element
     dk_size = params.cfg.alg['dk_size']
     ok_size = params.cfg.alg['ok_size']
-    open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ok_size, ok_size))
-
-    # smooth frame regions whose color is similar
     frame = cv2.pyrMeanShiftFiltering(frame, params.cfg.alg['sp'], params.cfg.alg['sr'])
 
     # adaptive thresh by size
@@ -148,7 +145,11 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
                                          C=params.cfg.alg['mean'])
     # TODO using multiple scales thresh to filter small object or noises
     # remove small objects
-    binary = cv2.morphologyEx(thresh_binary, cv2.MORPH_OPEN, open_kernel)
+    if ok_size != -1:
+        open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ok_size, ok_size))
+        binary = cv2.morphologyEx(thresh_binary, cv2.MORPH_OPEN, open_kernel)
+    else:
+        binary = thresh_binary
 
     # enlarge candidates a little
     if dk_size != -1:

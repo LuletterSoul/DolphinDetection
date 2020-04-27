@@ -423,7 +423,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         # blocked until original video generation is done.
         post_filter_event.wait()
         # execute post filter
-        is_contain_dolphin = self.post_filter.post_filter_video(str(target), task_cnt)
+        is_contain_dolphin, dol_rects = self.post_filter.post_filter_video(str(target), task_cnt)
         if is_contain_dolphin:
             """
             post filter think it is a video clip with dolphin
@@ -750,13 +750,16 @@ class Filter(object):
     def filter_by_obj_match_analyze(self, result_set, task_cnt, video_path=None):
         obj_list = self.get_obj_list_from_result_set(result_set)
         flag = False
+        traces = []
+        i = 0
         for obj in obj_list:
             obj.predict_category()
             logger.info(
                 f'Post filter [{self.cfg.index}, {task_cnt}]:[{obj.index}th] obj is [{obj.category}] in [{video_path}]')
             if obj.category == 'dolphin':
                 flag = True
-        return flag
+                traces.append(obj.trace)
+        return flag, traces
 
     @staticmethod
     def cal_dst(rect1, rect2):
@@ -866,30 +869,31 @@ class DetectionSignalHandler(FrameArrivalHandler):
         if rects is not None:
             result_sets, _ = self.track_requester.request(self.cfg.index, current_index, rects)
             # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
-            is_contain_dolphin = self.post_filter.filter_by_obj_match_analyze(result_sets, task_cnt)
+            is_contain_dolphin, traces = self.post_filter.filter_by_obj_match_analyze(result_sets, task_cnt)
             logger.info(f'{self.LOG_PREFIX}: Detection Filter Result {is_contain_dolphin}')
             if is_contain_dolphin:
-                self.trigger_rendering(current_index, result_sets)
+                self.trigger_rendering(current_index, traces)
                 self.task_cnt += 1
 
-    def trigger_rendering(self, current_index, result_sets):
+    def trigger_rendering(self, current_index, traces):
         """
         trigger rendering and ignores the window lock without waits.
         :param current_index:
-        :param result_sets:
+        :param traces:
         :return:
         """
-        self.write_bbox(result_sets)
+        self.write_bbox(traces)
         # send message via message pipe
         self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.DETECTION, True))
         self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.UPDATE))
 
-    def write_bbox(self, result_sets):
-        cnt = 0
-        self.render_rect_cache[:] = [None] * self.cfg.cache_size
-        for frame_idx, rects in result_sets:
+    def write_bbox(self, traces):
+        # cnt = 0
+        self.render_rect_cache[:] = [[]] * self.cfg.cache_size
+        for trace in traces:
             # bbox rendering is post to render
-            self.render_rect_cache[frame_idx % self.cache_size] = rects
-            cnt += 1
-            if cnt >= self.cfg.future_frames:
-                break
+            for frame_idx, rect in trace:
+                self.render_rect_cache[frame_idx % self.cache_size].append(rect)
+            # cnt += 1
+            # if cnt >= self.cfg.future_frames:
+            #     break
