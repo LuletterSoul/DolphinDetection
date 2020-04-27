@@ -19,6 +19,8 @@ from multiprocessing.queues import Queue
 
 import cv2
 import numpy as np
+import math
+from scipy.optimize import leastsq
 
 from config import SystemStatus
 from config import VideoConfig, ServerConfig, ModelType
@@ -421,15 +423,137 @@ class DetectionStreamRender(FrameArrivalHandler):
         # blocked until original video generation is done.
         post_filter_event.wait()
         # execute post filter
-        is_filter = self.post_filter.post_filter_video(str(target), task_cnt)
-        if not is_filter:
+        is_contain_dolphin = self.post_filter.post_filter_video(str(target), task_cnt)
+        if is_contain_dolphin:
             """
             post filter think it is a video clip with dolphin
             """
-        msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
-                                           camera_id=self.cfg.camera_id, channel=self.cfg.channel)
-        self.msg_queue.put(msg_json)
-        logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+            msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
+                                               camera_id=self.cfg.camera_id, channel=self.cfg.channel)
+            self.msg_queue.put(msg_json)
+            logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+
+
+class Obj(object):
+    def __init__(self, index, cfg: VideoConfig):
+        self.index = index  # 当前物体编号
+        self.category = None  # 当前物体类别
+        self.status = True  # True：仍需要追踪， False:停止追踪
+        self.trace = []  # 用来存储当前物体的轨迹rect，每个rect=(idx, [x1, y1, x2, y2])
+        self.cfg = cfg
+
+    @staticmethod
+    def cal_dst(rect1, rect2):
+        rect1_center_x = (rect1[0] + rect1[2]) / 2.0
+        rect1_center_y = (rect1[1] + rect1[3]) / 2.0
+        rect2_center_x = (rect2[0] + rect2[2]) / 2.0
+        rect2_center_y = (rect2[1] + rect2[3]) / 2.0
+        return math.sqrt(math.pow(rect1_center_x - rect2_center_x, 2) + math.pow(rect1_center_y - rect2_center_y, 2))
+
+    @staticmethod
+    def get_median(data):
+        if len(data) == 0:
+            return 0
+        data.sort()
+        half = len(data) // 2
+        return (data[half] + data[~half]) / 2
+
+    @staticmethod
+    def cal_area(rect):
+        w, h = abs(rect[0] - rect[2]), abs(rect[1] - rect[3])
+        return w * h
+
+    @staticmethod
+    def quadratic_func(param, x):
+        a, b, c = param
+        return a * x * x + b * x + c
+
+    def quadratic_error(self, param, x, y):
+        return self.quadratic_func(param, x) - y
+
+    def solve_quadratic_lsq(self, x, y):
+        p0 = np.array([10, 10, 10])
+        param = leastsq(self.quadratic_error, p0, args=(x, y))
+        return param
+
+    def is_quadratic_with_negative_a(self, area_list):
+        if len(area_list) < 3:
+            return False
+        x = np.array(range(len(area_list)))
+        y = np.array(area_list)
+        param = self.solve_quadratic_lsq(x, y)
+        a, b, c = param[0]
+        if a < 0:
+            return True
+        else:
+            return False
+
+    def get_last_rect(self):
+        return self.trace[len(self.trace) - 1]
+
+    def append_with_rules(self, idx, rect):
+        """
+         根据现有轨迹判断找到的最近邻rect是否应该加入轨迹中
+        """
+        if not self.status:
+            # 此物体已停止追踪，不加入
+            return False
+        if len(self.trace) == 0:
+            # 初始化
+            self.trace.append((idx, rect))
+            return True
+        else:
+            idx1, rect1 = self.get_last_rect()
+            if abs(idx1 - idx) > self.cfg.alg['disappear_frames_thresh']:
+                # 超过3帧未出现，停止追踪此物体
+                self.status = False
+                # self.print_obj()
+                # print(f'append idx={idx}, rect={rect}, idx1-idx>3')
+                return False
+            avg_dst = self.cal_dst(rect1, rect) / abs(idx1 - idx)
+            if avg_dst <= 200:
+                # 防止追踪剧烈闪屏
+                self.trace.append((idx, rect))
+                return True
+            else:
+                # self.print_obj()
+                # print(f'append idx={idx}, rect={rect}, dst={dst}, dst>200')
+                return False
+
+    def predict_category(self):
+        """
+        通过分析当前物体轨迹，预测当前物体类别，分析准则有：
+        1、物体速度  速度过快是飞鸟
+        2、物体持续时间  持续时间过长是漂浮物
+        3、物体面积变化曲线 江豚面积变化曲线大致为开口向下的抛物线
+        :return:
+        """
+        if len(self.trace) < 4:
+            # 轨迹长度过短，无法分析物体类别
+            self.category = None
+            return
+        avg_speed_list = []
+        continue_idx_sum = 0
+        dst_sum = 0
+        area_list = [self.cal_area(self.trace[0][1])]
+        for i in range(1, len(self.trace)):
+            pre_idx, pre_rect = self.trace[i - 1]
+            current_idx, current_rect = self.trace[i]
+            continue_idx_sum += abs(current_idx - pre_idx)
+            area_list.append(self.cal_area(current_rect))
+            dst = self.cal_dst(pre_rect, current_rect)
+            dst_sum += dst
+            avg_speed = dst / abs(pre_idx - current_idx)
+            avg_speed_list.append(avg_speed)
+        mid_avg_speed = self.get_median(avg_speed_list)
+        if mid_avg_speed > self.cfg.alg['speed_x_thresh']:
+            self.category = 'bird'
+        elif continue_idx_sum > self.cfg.alg['continuous_time_thresh']:
+            self.category = 'float'
+        elif self.is_quadratic_with_negative_a(area_list):
+            self.category = 'dolphin'
+        else:
+            self.category = None
 
 
 class Filter(object):
@@ -449,10 +573,12 @@ class Filter(object):
         self.disappear_frames_thresh = self.cfg.alg['disappear_frames_thresh']
 
     def set_detect_params(self):
-        x_num = 1
-        y_num = 1
-        x_step = int(self.cfg.shape[1] / x_num)
-        y_step = int(self.cfg.shape[0] / y_num)
+        x_num = self.cfg.routine['col']
+        y_num = self.cfg.routine['row']
+        empty = np.zeros(self.cfg.shape).astype(np.uint8)
+        frame, _ = preprocess(empty, self.cfg)
+        x_step = int(frame.shape[1] / x_num)
+        y_step = int(frame.shape[0] / y_num)
 
         detect_params = []
         for i in range(x_num):
@@ -524,14 +650,16 @@ class Filter(object):
         video_capture.release()
         return result_set
 
-    def get_median(self, data):
+    @staticmethod
+    def get_median(data):
         if len(data) == 0:
             return 0
         data.sort()
         half = len(data) // 2
         return (data[half] + data[~half]) / 2
 
-    def get_max_continuous_time(self, data):
+    @staticmethod
+    def get_max_continuous_time(data):
         if len(data) == 0:
             return 0
         return max(data)
@@ -551,7 +679,8 @@ class Filter(object):
         result_set = self.detect_video(video_path)
         if len(result_set) <= 1:
             return False
-        return self.filter_by_speed_and_continuous_time(result_set, task_cnt, video_path)
+        # return self.filter_by_speed_and_continuous_time(result_set, task_cnt, video_path)
+        return self.filter_by_obj_match_analyze(result_set, task_cnt, video_path)
 
     def filter_by_speed_and_continuous_time(self, result_set, task_cnt, video_path=None):
         """
@@ -618,6 +747,69 @@ class Filter(object):
         else:
             return False
 
+    def filter_by_obj_match_analyze(self, result_set, task_cnt, video_path=None):
+        obj_list = self.get_obj_list_from_result_set(result_set)
+        flag = False
+        for obj in obj_list:
+            obj.predict_category()
+            logger.info(
+                f'Post filter [{self.cfg.index}, {task_cnt}]:[{obj.index}th] obj is [{obj.category}] in [{video_path}]')
+            if obj.category == 'dolphin':
+                flag = True
+        return flag
+
+    @staticmethod
+    def cal_dst(rect1, rect2):
+        rect1_center_x = (rect1[0] + rect1[2]) / 2.0
+        rect1_center_y = (rect1[1] + rect1[3]) / 2.0
+        rect2_center_x = (rect2[0] + rect2[2]) / 2.0
+        rect2_center_y = (rect2[1] + rect2[3]) / 2.0
+        return math.sqrt(
+            math.pow(rect1_center_x - rect2_center_x, 2) + math.pow(rect1_center_y - rect2_center_y, 2))
+
+    def find_nearest_rect(self, obj_last_rect, rects):
+        min_pos = 0
+        min_dst = self.cal_dst(obj_last_rect, rects[0])
+        for i in range(1, len(rects)):
+            dst = self.cal_dst(obj_last_rect, rects[i])
+            if dst < min_dst:
+                min_pos = i
+                min_dst = dst
+        return min_pos
+
+    def get_obj_list_from_result_set(self, result_set):
+        obj_list = []
+        if len(result_set) == 0:
+            return obj_list
+        elif len(result_set) == 1:
+            idx, rects = result_set[0]
+            for rect in rects:
+                obj = Obj(len(obj_list), self.cfg)
+                obj.append_with_rules(idx, rect)
+                obj_list.append(obj)
+            return obj_list
+        else:
+            idx, rects = result_set[0]
+            for rect in rects:
+                obj = Obj(len(obj_list), self.cfg)
+                obj.append_with_rules(idx, rect)
+                obj_list.append(obj)
+            for i in range(1, len(result_set)):
+                idx, rects = result_set[i]
+                flag_list = [False] * len(rects)
+                for obj in obj_list:
+                    idx_obj, rect_obj = obj.get_last_rect()
+                    min_pos = self.find_nearest_rect(rect_obj, rects)
+                    if obj.append_with_rules(idx, rects[min_pos]):
+                        flag_list[min_pos] = True
+                for j in range(len(flag_list)):
+                    if not flag_list[j]:
+                        rect = rects[j]
+                        obj = Obj(len(obj_list), self.cfg)
+                        obj.append_with_rules(idx, rect)
+                        obj_list.append(obj)
+            return obj_list
+
 
 class DetectionSignalHandler(FrameArrivalHandler):
     """
@@ -673,9 +865,10 @@ class DetectionSignalHandler(FrameArrivalHandler):
         task_cnt = self.task_cnt
         if rects is not None:
             result_sets, _ = self.track_requester.request(self.cfg.index, current_index, rects)
-            is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
-            logger.info(f'{self.LOG_PREFIX}: Detection Filter Result {is_filter}')
-            if not is_filter:
+            # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
+            is_contain_dolphin = self.post_filter.filter_by_obj_match_analyze(result_sets, task_cnt)
+            logger.info(f'{self.LOG_PREFIX}: Detection Filter Result {is_contain_dolphin}')
+            if is_contain_dolphin:
                 self.trigger_rendering(current_index, result_sets)
                 self.task_cnt += 1
 
