@@ -15,7 +15,7 @@ m3u8_url: ''
 url: ''
 roi:
   x: 0
-  y: 750
+  y: 741
   width: -1
   height: -1
 resize:
@@ -67,18 +67,18 @@ alg:
   sp: 10
   sr: 60
   dk_size: -1
-  ok_size: 3
+  ok_size: 1
   mean: 40
-  block_size: 51
+  block_size: 5=21
   filtered_by_wh: false
   rwt: 0
   rht: 0
   area: 10
   area_ratio: 0.03
   color_range:
-    - 100
-    - 100
-    - 100
+    - 80
+    - 80
+    - 80
   color_scale: -1
   speed_x_thresh: 15
   speed_y_thresh: 15
