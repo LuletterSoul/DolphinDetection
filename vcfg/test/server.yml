@@ -21,7 +21,7 @@ classify_model_path: model/bc-model-0314.pth
 detect_model_path: model/0403-ssd.pth
 track_cfg_path: pysot/configs/config.yaml
 track_model_path: model/0315-track.pth
-detect_mode: ssd
+detect_mode: classify
 root: ''
 stream_save_path: data/videos
 sample_save_dir: data/samples
