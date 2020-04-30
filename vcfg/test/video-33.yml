@@ -38,8 +38,8 @@ max_streams_cache: 5000
 online: offline
 cap_loop: false
 sample_internal: 15
-save_box: true
-show_box: true
+save_box: false
+show_box: false
 cv_only: true
 ssd_divide_four: false
 rtsp: rtsp://10.196.122.98/cvcam/21/stream1

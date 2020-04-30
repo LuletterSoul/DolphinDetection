@@ -15,7 +15,7 @@ m3u8_url: ''
 url: ''
 roi:
   x: 0
-  y: 741
+  y: 700
   width: -1
   height: -1
 resize:
@@ -38,8 +38,8 @@ max_streams_cache: 5000
 online: offline
 cap_loop: false
 sample_internal: 15
-save_box: true
-show_box: true
+save_box: false
+show_box: false
 cv_only: true
 ssd_divide_four: false
 rtsp: rtsp://10.196.122.98/cvcam/21/stream1
@@ -69,7 +69,7 @@ alg:
   dk_size: -1
   ok_size: 1
   mean: 40
-  block_size: 5=21
+  block_size: 21
   filtered_by_wh: false
   rwt: 0
   rht: 0
@@ -82,7 +82,7 @@ alg:
   color_scale: -1
   speed_x_thresh: 15
   speed_y_thresh: 15
-  continuous_time_thresh: 36
+  continuous_time_thresh: 65
   disappear_frames_thresh: 3
-  track_confidence: 0.95
+  track_confidence: 0.85
   ssd_confidence: 0.50

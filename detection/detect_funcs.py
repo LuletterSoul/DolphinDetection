@@ -138,6 +138,7 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     # construct kernel element
     dk_size = params.cfg.alg['dk_size']
     ok_size = params.cfg.alg['ok_size']
+
     frame = cv2.pyrMeanShiftFiltering(frame, params.cfg.alg['sp'], params.cfg.alg['sr'])
 
     cv2.namedWindow(str(params.cfg.index) + '-' + 'Smooth', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)

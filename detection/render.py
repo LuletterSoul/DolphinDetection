@@ -34,6 +34,7 @@ from utils import logger, bbox_points, generate_time_stamp, crop_by_se
 from utils import preprocess, paint_chinese_opencv
 from typing import List
 from utils.cache import SharedMemoryFrameCache
+import queue
 
 
 class ArrivalMsgType:
@@ -85,7 +86,9 @@ class FrameArrivalHandler(object):
         self.notify_queue = notify_queue
         self.LOG_PREFIX = f'Frame Arrival Handler [{self.cfg.index}]: '
         self.post_filter = Filter(self.cfg, region_path, detect_params)
-        self.last_detection = time.time()
+        self.last_detection = time.time()  # record the last task triggered time.
+        self.pre_candidate_rect = []  # record the last rects seed for detection or tracking
+        self.task_msg_queue = Manager().Queue()
 
     def is_window_reach(self, detect_index):
         return detect_index - self.detect_index > self.future_frames
@@ -102,6 +105,11 @@ class FrameArrivalHandler(object):
             # self.lock_window = False
             if not self.lock_window.is_set():
                 self.lock_window.set()
+                # some messages may be cached when new candidates appear, will be post to task handler when
+                # current window released(all future frames have arrive.)
+                while not self.task_msg_queue.empty():
+                    msg = self.task_msg_queue.get()
+                    self.task(msg)
             # logger.info(self.LOG_PREFIX + 'Release window lock')
 
     def next_st(self, detect_index):
@@ -131,15 +139,35 @@ class FrameArrivalHandler(object):
                 self.last_detection = time.time()
                 return
             # occupy the whole window until a sequent task is done
-            self.detect_index = msg.current_index
-            self.last_detection = time.time()
+            self.update_record(msg)
             self.task(msg)
-        # if current_index - self.detect_index >= self.future_frames and self.write_done:
-        #     # release
-        #     if not self.lock_window.is_set():
-        #         self.lock_window.set()
-        #         logger.info(
-        #             f'Notify detection stream writer.Current frame index [{current_index}],Previous detected frame index [{self.detect_index}]...')
+        # new candidate may appear during a window
+        else:
+            new_rects = self.cal_potential_new_candidate(msg)
+            if len(new_rects):
+                self.update_record(msg)
+                msg.rects = new_rects
+                # self.task(msg)
+                # put into msg queue, waiting processed until window released.
+                self.task_msg_queue.put(msg)
+                logger.info(
+                    self.LOG_PREFIX + f'Appear new candidate during a window, frame index: {msg.current_index}, {new_rects}.')
+
+    def cal_potential_new_candidate(self, msg):
+        if msg.rects is None:
+            return []
+        else:
+            new_rects = []
+            for old in self.pre_candidate_rect:
+                for new in msg.rects:
+                    if Obj.cal_dst(old, new) > 100:
+                        new_rects.append(new)
+            return new_rects
+
+    def update_record(self, msg):
+        self.detect_index = msg.current_index
+        self.last_detection = time.time()
+        self.pre_candidate_rect = msg.rects
 
     def task(self, msg: ArrivalMessage):
         """
@@ -253,9 +281,10 @@ class DetectionStreamRender(FrameArrivalHandler):
             tmp_rects = self.render_rect_cache[index % self.cache_size]
             self.render_rect_cache[index % self.cache_size] = None
             # if current frame has bbox, just update the bbox position, and clear counting
-            if tmp_rects is not None:
+            if tmp_rects is not None and len(tmp_rects):
                 render_cnt = 0
                 rects = tmp_rects
+                print(tmp_rects)
             # each bbox will last 1.5s in 25FPS video
             is_render = render_cnt <= 36
             if is_render:
@@ -750,7 +779,7 @@ class Filter(object):
     def filter_by_obj_match_analyze(self, result_set, task_cnt, video_path=None):
         obj_list = self.get_obj_list_from_result_set(result_set)
         flag = False
-        traces = []
+        traces = {}
         i = 0
         for obj in obj_list:
             obj.predict_category()
@@ -758,7 +787,11 @@ class Filter(object):
                 f'Post filter [{self.cfg.index}, {task_cnt}]:[{obj.index}th] obj is [{obj.category}] in [{video_path}]')
             if obj.category == 'dolphin':
                 flag = True
-                traces.append(obj.trace)
+                for frame_idx, rect in obj.trace:
+                    if frame_idx not in traces:
+                        traces[frame_idx] = [rect]
+                    else:
+                        traces[frame_idx].append(rect)
         return flag, traces
 
     @staticmethod
@@ -889,11 +922,11 @@ class DetectionSignalHandler(FrameArrivalHandler):
 
     def write_bbox(self, traces):
         # cnt = 0
-        self.render_rect_cache[:] = [[]] * self.cfg.cache_size
-        for trace in traces:
+        self.render_rect_cache[:] = [None] * self.cfg.cache_size
+        for frame_idx, rects in traces.items():
             # bbox rendering is post to render
-            for frame_idx, rect in trace:
-                self.render_rect_cache[frame_idx % self.cache_size].append(rect)
+            # print(rects)
+            self.render_rect_cache[frame_idx % self.cache_size] = rects
             # cnt += 1
             # if cnt >= self.cfg.future_frames:
             #     break

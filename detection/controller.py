@@ -369,7 +369,7 @@ class TaskBasedDetectorController(DetectorController):
                 if len(r.rects):
                     self.result_queue.put((r.frame_index, r.rects))
                     rects = []
-                    if len(r.rects) >= 3:
+                    if len(r.rects) >= 5:
                         logger.info(f'To many rect candidates: [{len(r.rects)}].Abandoned..... ')
                         return ConstructResult(original_frame, None, None, frame_index=current_index)
                     for rect in r.rects:

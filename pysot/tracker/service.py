@@ -20,6 +20,7 @@ import time
 import cv2
 import traceback
 from queue import Empty
+from multiprocessing import Value
 
 from pysot.core.config import cfg
 from pysot.models.model_builder import ModelBuilder
@@ -37,11 +38,12 @@ class TrackRequest(object):
     Post a tracking request
     """
 
-    def __init__(self, monitor_index, frame_index, rect, rect_id) -> None:
+    def __init__(self, request_id, monitor_index, frame_index, rect, rect_id) -> None:
         self.monitor_index = monitor_index
         self.frame_index = frame_index
         self.rect = rect
         self.rect_id = rect_id
+        self.request_id = request_id
 
 
 class TrackResult(object):
@@ -136,13 +138,13 @@ def track_service(model_index, video_cfgs, checkpoint,
                         frame = cv2.rectangle(frame.copy(),
                                               (int(track_res['bbox'][0]), int(track_res['bbox'][1])),
                                               (int(track_res['bbox'][2]), int(track_res['bbox'][3])),
-                                              color=(0, 0, 255),thickness=3)
+                                              color=(0, 0, 255), thickness=3)
                         cv2.namedWindow(f'Track Result {model_index}', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
                         cv2.imshow(f'Track Result {model_index}', frame)
                         cv2.waitKey(1)
                         result.append((i, track_res['bbox']))
                 # output results into the corresponding pipe of each monitor
-                output_pipes[req.monitor_index].put(TrackResult(req.rect_id, result))
+                output_pipes[req.monitor_index][req.request_id] = TrackResult(req.rect_id, result)
                 e = time.time() - s
                 logger.info(f'{LOGGER_PREFIX} tracking consumes: {round(e, 2)} seconds')
         except Empty as e:
@@ -161,6 +163,7 @@ class TrackRequester(object):
         super().__init__()
         self.rec_pipe = recv_pipe
         self.output_pipes = output_pipes
+        self.r_id = Manager().Value('i', 0)
 
     def request(self, monitor_index, frame_index, rects):
         """
@@ -175,16 +178,23 @@ class TrackRequester(object):
         res = []
         organize = {}
         seq = [[]] * len(rects)
+        req_ids = []
         if not len(rects):
             return [], []
         else:
             for rect_id, rect in enumerate(rects):
+                c_id = self.r_id.get()
+                self.r_id.set(c_id + 1)
+                req_ids.append(c_id)
                 # post to a single
-                self.rec_pipe.put(TrackRequest(monitor_index, frame_index, rect, rect_id))
+                self.rec_pipe.put(TrackRequest(c_id, monitor_index, frame_index, rect, rect_id))
             for i in range(len(rects)):
                 # frames of each monitor arrival in order, track request is also in order
                 # in corresponding receive pipe
-                track_result: TrackResult = self.output_pipes[monitor_index].get()
+                while req_ids[i] not in self.output_pipes[monitor_index]:
+                    logger.info(f'Wait for tracking result for request id [{req_ids[i]}]')
+                    time.sleep(1)
+                track_result: TrackResult = self.output_pipes[monitor_index][req_ids[i]]
                 # but track result may be out of order at each request, should sort by original rect id
                 seq[track_result.rect_id] = track_result.result
                 frame_seq = track_result.result
@@ -227,7 +237,7 @@ class TrackingService(object):
         for idx, c in enumerate(video_configs):
             self.frame_caches[c.index] = frame_caches[idx]
             self.video_configs[c.index] = c
-            self.output_pipes[c.index] = self.pipe_manager.Queue()
+            self.output_pipes[c.index] = self.pipe_manager.dict()
             # self.video_configs = video_configs
         self.checkpoint = checkpoint
         # if torch.cuda.is_available():
