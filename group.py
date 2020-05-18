@@ -41,6 +41,8 @@ for f in folders:
         for c in classes:
             cls, extention = os.path.splitext(c)
             out = f'{output_dir}/{cls}'
+            if not os.path.exists(out):
+                os.mkdir(out)
             num = len(os.listdir(out))
             out_file = f'{output_dir}/{cls}/{cls}_{num}.mp4'
             mymovefile(f'{input_dir}/{f}/main/{c}', out_file)

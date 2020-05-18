@@ -89,6 +89,7 @@ class FrameArrivalHandler(object):
         self.last_detection = time.time()  # record the last task triggered time.
         self.pre_candidate_rect = []  # record the last rects seed for detection or tracking
         self.task_msg_queue = Manager().Queue()
+        self.dis_thresh = max(self.cfg.shape[0], self.cfg.shape[1]) * 1 / 4
 
     def is_window_reach(self, detect_index):
         return detect_index - self.detect_index > self.future_frames
@@ -160,7 +161,8 @@ class FrameArrivalHandler(object):
             new_rects = []
             for old in self.pre_candidate_rect:
                 for new in msg.rects:
-                    if Obj.cal_dst(old, new) > 100:
+                    if Obj.cal_dst(old, new) > self.dis_thresh:
+                        logger.info(f'Distance betweent new rect and old rect: [{Obj.cal_dst(old, new)}]')
                         new_rects.append(new)
             return new_rects
 
@@ -284,7 +286,6 @@ class DetectionStreamRender(FrameArrivalHandler):
             if tmp_rects is not None and len(tmp_rects):
                 render_cnt = 0
                 rects = tmp_rects
-                print(tmp_rects)
             # each bbox will last 1.5s in 25FPS video
             is_render = render_cnt <= 36
             if is_render:
@@ -470,6 +471,8 @@ class Obj(object):
         self.status = True  # True：仍需要追踪， False:停止追踪
         self.trace = []  # 用来存储当前物体的轨迹rect，每个rect=(idx, [x1, y1, x2, y2])
         self.cfg = cfg
+        self.mid_avg_speed = -1
+        self.continue_idx_sum = 0
 
     @staticmethod
     def cal_dst(rect1, rect2):
@@ -575,6 +578,8 @@ class Obj(object):
             avg_speed = dst / abs(pre_idx - current_idx)
             avg_speed_list.append(avg_speed)
         mid_avg_speed = self.get_median(avg_speed_list)
+        self.mid_avg_speed = mid_avg_speed
+        self.continue_idx_sum = continue_idx_sum
         if mid_avg_speed > self.cfg.alg['speed_x_thresh']:
             self.category = 'bird'
         elif continue_idx_sum > self.cfg.alg['continuous_time_thresh']:
@@ -784,7 +789,8 @@ class Filter(object):
         for obj in obj_list:
             obj.predict_category()
             logger.info(
-                f'Post filter [{self.cfg.index}, {task_cnt}]:[{obj.index}th] obj is [{obj.category}] in [{video_path}]')
+                f'Post filter [{self.cfg.index}, {task_cnt}]:[{obj.index}th] obj is '
+                f'[{obj.category}],avg speed [{obj.mid_avg_speed}], continuous time [{obj.continue_idx_sum}], category [{obj.category}]')
             if obj.category == 'dolphin':
                 flag = True
                 for frame_idx, rect in obj.trace:
@@ -888,7 +894,6 @@ class DetectionSignalHandler(FrameArrivalHandler):
         :param current_time:
         :return:
         """
-        logger.info(f'{self.LOG_PREFIX} receive msg {msg.current_index},{msg.type},{msg.rects}')
         current_index = msg.current_index
         if not self.cfg.forward_filter:
             logger.info(self.LOG_PREFIX + f'The signal forward operation is disabled by configuration.')
@@ -903,7 +908,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
             result_sets, _ = self.track_requester.request(self.cfg.index, current_index, rects)
             # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
             is_contain_dolphin, traces = self.post_filter.filter_by_obj_match_analyze(result_sets, task_cnt)
-            logger.info(f'{self.LOG_PREFIX}: Detection Filter Result {is_contain_dolphin}')
+            logger.info(f'{self.LOG_PREFIX}: Filter result: contain dolphin: {is_contain_dolphin}')
             if is_contain_dolphin:
                 self.trigger_rendering(current_index, traces)
                 self.task_cnt += 1

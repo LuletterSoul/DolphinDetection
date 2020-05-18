@@ -382,7 +382,7 @@ class TaskBasedDetectorController(DetectorController):
                             logger.debug(
                                 self.LOG_PREFIX + f'Model Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
                         if detect_result:
-                            logger.info(
+                            logger.debug(
                                 f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
                             self.dol_gone = False
                             push_flag = True
@@ -392,7 +392,6 @@ class TaskBasedDetectorController(DetectorController):
                         json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                                          timestamp=current_index, rects=r.rects, dol_id=self.dol_id,
                                                          camera_id=self.cfg.camera_id)
-                        logger.info(f'put detect message in msg_queue...')
                         self.msg_queue.put(json_msg)
                         if self.cfg.render:
                             self.render_rect_cache[current_index % self.cache_size] = r.rects

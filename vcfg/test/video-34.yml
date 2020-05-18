@@ -15,7 +15,7 @@ m3u8_url: ''
 url: ''
 roi:
   x: 0
-  y: 700
+  y: 795
   width: -1
   height: -1
 resize:
@@ -45,7 +45,7 @@ ssd_divide_four: false
 rtsp: rtsp://10.196.122.98/cvcam/21/stream1
 push_to: rtsp://192.168.0.116/yz
 write_timestamp: false
-enable_sample_frame: false
+enable_sample_frame: falseww
 rtsp_saved_per_frame: 240
 future_frames: 76
 detect_internal: 72
@@ -83,6 +83,6 @@ alg:
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 65
-  disappear_frames_thresh: 3
+  disappear_frames_thresh: 24
   track_confidence: 0.85
   ssd_confidence: 0.50

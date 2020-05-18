@@ -138,6 +138,11 @@ class VideoCaptureThreading:
             grabbed, frame = self.read_frame()
             e = 1 / (time.time() - s)
             logger.debug(f'Video capture [{self.cfg.index}]: Receive Speed Rate [{round(e, 2)}]/FPS')
+            #if e > 25:
+            #    sleep_time = 1 / (e / 25) / 2
+            #    time.sleep(sleep_time)
+            #    logger.info(
+            #        f'Video capture [{self.cfg.index}]: too quick receive speed rate [{e}/FPS],sleep [{sleep_time}] seconds.')
             s = time.time()
             if not grabbed:
                 # if current video source is end,load the next video sources

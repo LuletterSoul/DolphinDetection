@@ -192,8 +192,9 @@ class TrackRequester(object):
                 # frames of each monitor arrival in order, track request is also in order
                 # in corresponding receive pipe
                 while req_ids[i] not in self.output_pipes[monitor_index]:
-                    logger.info(f'Wait for tracking result for request id [{req_ids[i]}]')
+                    logger.debug(f'Wait for tracking result for request id [{req_ids[i]}]')
                     time.sleep(1)
+                logger.info(f'Tracking result done for request id [{req_ids[i]}]')
                 track_result: TrackResult = self.output_pipes[monitor_index][req_ids[i]]
                 # but track result may be out of order at each request, should sort by original rect id
                 seq[track_result.rect_id] = track_result.result
