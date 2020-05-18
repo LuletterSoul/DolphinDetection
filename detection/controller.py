@@ -422,15 +422,16 @@ class TaskBasedDetectorController(DetectorController):
         which can reach 60FPS+ speed when processing 4K video frames
         :return:
         """
+        from mmdetection import init_detector
         classifier = None
-        ssd_detector = None
+        model = None
 
         # init different detection models according configuration inside the SUB-PROCESS
         # every frame looper will occupy single model instance by now
         # TODO less model instances,but could be shared by all detectors
         if self.server_cfg.detect_mode == ModelType.SSD:
-            ssd_detector = SSDDetector(model_path=self.server_cfg.detect_model_path, device_id=int(self.cfg.index) % 4)
-            ssd_detector.run()
+            model = SSDDetector(model_path=self.server_cfg.detect_model_path, device_id=int(self.cfg.index) % 4)
+            model.run()
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
         elif self.server_cfg.detect_mode == ModelType.CLASSIFY and not self.cfg.cv_only:
@@ -439,6 +440,12 @@ class TaskBasedDetectorController(DetectorController):
             classifier.run()
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
+        elif self.server_cfg.detect_mode == ModelType.CASCADE:
+            model = init_detector(self.server_cfg.cascade_model_cfg, self.server_cfg.cascade_model_path,
+                                  device=f'cuda:{int(self.cfg.index) % 4}')
+            logger.info(
+                f'*******************************Capture [{self.cfg.index}]: Running Cascade-RCNN Model********************************')
+
         logger.info(
             '*******************************Controller [{}]: Init Loop Stack********************************'.format(
                 self.cfg.index))
@@ -456,7 +463,7 @@ class TaskBasedDetectorController(DetectorController):
                 # logger.info(f'Current index: {current_index}')
                 frame = self.original_frame_cache[current_index]
                 s = time.time()
-                self.dispatch(frame, None, ssd_detector, classifier, current_index)
+                self.dispatch(frame, None, model, classifier, current_index)
                 e = 1 / (time.time() - s)
                 logger.debug(self.LOG_PREFIX + f'Detection Process Speed: [{round(e, 2)}]/FPS')
             except Exception as e:
@@ -493,15 +500,11 @@ class TaskBasedDetectorController(DetectorController):
         # select different detection methods according the configuration
         if self.server_cfg.detect_mode == ModelType.CLASSIFY:  # using classifier
             self.classify_based(args, original_frame.copy())
-        elif self.server_cfg.detect_mode == ModelType.SSD:  # using SSD
-            self.ssd_based(args, original_frame.copy())
+        # using SSD or Cascade-RCNN
+        elif self.server_cfg.detect_mode == ModelType.SSD or self.server_cfg.detect_mode == ModelType.CASCADE:
+            self.model_based(args, original_frame.copy())
         elif self.server_cfg.detect_mode == ModelType.FORWARD:  # done nothing
             self.forward(args, original_frame)
-
-        if self.cfg.show_window:
-            cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_FREERATIO)
-            cv2.imshow(str(self.cfg.index), original_frame)
-            cv2.waitKey(1)
 
     # self.clear_original_cache()
 
@@ -516,11 +519,11 @@ class TaskBasedDetectorController(DetectorController):
 
         # self.push_stream_queue.append((original_frame, None, self.pre_cnt))
 
-    def ssd_based(self, args, original_frame):
-        ssd_model = args[2]
+    def model_based(self, args, original_frame):
+        model_instance = args[2]
         if self.pre_cnt % self.cfg.sample_rate == 0:
             start = time.time()
-            frames_results = self.get_ssd_result(original_frame, ssd_model)
+            frames_results = self.get_model_result(original_frame, model_instance, self.server_cfg)
             logger.debug(
                 self.LOG_PREFIX + f'Model Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
             # render_frame = original_frame.copy()
@@ -528,9 +531,27 @@ class TaskBasedDetectorController(DetectorController):
             detect_flag = False
             current_index = self.pre_cnt
             rects = []
+            if self.cfg.show_window:
+                cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
+                frame = original_frame
+                if len(frames_results):
+                    for rect in frames_results[0]:
+                        color = np.random.randint(0, 255, size=(3,))
+                        color = [int(c) for c in color]
+                        # get a square bbox, the real bbox of width and height is universal as 224 * 224 or 448 * 448
+                        p1, p2 = bbox_points(self.cfg, rect, original_frame.shape)
+                        # write text
+                        frame = paint_chinese_opencv(frame, '江豚', p1)
+                        cv2.rectangle(frame, p1, p2, color, 2)
+                        cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
+                cv2.imshow(str(self.cfg.index), frame)
+                cv2.waitKey(1)
+
             if len(frames_results):
                 for frame_result in frames_results:
                     if len(frame_result):
+                        print(frame_result)
                         rects = [r for r in frame_result if r[4] > self.cfg.alg['ssd_confidence']]
                         if len(rects):
                             self.result_queue.put((current_index, rects))
@@ -614,11 +635,11 @@ class TaskBasedDetectorController(DetectorController):
             self.detect_handler.notify(ArrivalMessage(current_index, ArrivalMsgType.DETECTION, rects=rects))
         # TODO control instant detection signal commit
 
-    def get_ssd_result(self, original_frame, ssd_model):
+    def get_model_result(self, original_frame, model, server_cfg: ServerConfig, inference_detector=None):
         """
         get detection result from ssd model
         :param original_frame: numpy frame
-        :param ssd_model: model instance
+        :param model: model instance
         :return:
         """
         if self.cfg.ssd_divide_four:
@@ -627,7 +648,8 @@ class TaskBasedDetectorController(DetectorController):
             """
             # TODO bug to be fixed
             b1, b2, b3, b4 = split_img_to_four(original_frame)
-            block_res = ssd_model([b1, b2, b3, b4])
+            if server_cfg.detect_mode == 'ssd':
+                block_res = model([b1, b2, b3, b4])
             if len(block_res):
                 decode(original_frame, block_res, 0)
                 decode(original_frame, block_res, 1)
@@ -635,7 +657,16 @@ class TaskBasedDetectorController(DetectorController):
                 decode(original_frame, block_res, 3)
             return block_res
         else:
-            return ssd_model([original_frame])
+            if server_cfg.detect_mode == 'ssd':
+
+                return model([original_frame])
+            elif server_cfg.detect_mode == 'cascade':
+                from mmdetection import inference_detector
+                result_cascade = inference_detector(model, original_frame)
+                if len(result_cascade[0]):
+                    return result_cascade
+                else:
+                    return []
 
     def post_stream_req(self, construct_result, original_frame):
         """

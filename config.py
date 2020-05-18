@@ -32,6 +32,7 @@ class LogLevel(object):
 class ModelType(object):
     SSD = 'ssd'
     CLASSIFY = 'classify'
+    CASCADE = 'cascade'
     FORWARD = 'fwd'
 
 
@@ -85,6 +86,8 @@ class ServerConfig(Config):
     def __init__(self, env, log_level, http_ip, http_port, wc_ip, wc_port, send_msg, run_direct, cron, root,
                  classify_model_path,
                  detect_model_path,
+                 cascade_model_path,
+                 cascade_model_cfg,
                  track_cfg_path,
                  track_model_path,
                  detect_mode,
@@ -106,6 +109,8 @@ class ServerConfig(Config):
         self.track_cfg_path = track_cfg_path
         self.classify_model_path = classify_model_path
         self.detect_model_path = Path(os.path.join(PROJECT_DIR, detect_model_path))
+        self.cascade_model_path = cascade_model_path
+        self.cascade_model_cfg = cascade_model_cfg
         self.track_model_path = track_model_path
         self.stream_save_path = stream_save_path
         self.sample_save_dir = sample_save_dir

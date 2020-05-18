@@ -19,9 +19,11 @@ cron:
     minute: '30'
 classify_model_path: model/bc-model-0314.pth
 detect_model_path: model/0403-ssd.pth
+cascade_model_path: mmdetection/work_dirs/cascade_rcnn_r50_caffe_fpn_1x_coco/latest.pth
+cascade_model_cfg:  mmdetection/configs/cascade_rcnn/cascade_rcnn_r50_caffe_fpn_1x_coco.py
 track_cfg_path: pysot/configs/config.yaml
 track_model_path: model/0315-track.pth
-detect_mode: classify
+detect_mode: cascade
 root: ''
 stream_save_path: data/videos
 sample_save_dir: data/samples
