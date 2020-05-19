@@ -42,7 +42,7 @@ save_box: false
 show_box: false
 cv_only: true
 ssd_divide_four: false
-rtsp: rtsp://10.196.122.98/cvcam/21/stream1
+rtsp: rtsp://admin:HuaWei123@221.226.158.114:554/LiveMedia/ch1/Media1
 push_to: rtsp://192.168.0.116/yz
 write_timestamp: false
 enable_sample_frame: false
@@ -85,4 +85,4 @@ alg:
   continuous_time_thresh: 36
   disappear_frames_thresh: 3
   track_confidence: 0.95
-  ssd_confidence: 0.50
+  ssd_confidence: 0.80

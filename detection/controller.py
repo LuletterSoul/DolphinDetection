@@ -551,7 +551,6 @@ class TaskBasedDetectorController(DetectorController):
             if len(frames_results):
                 for frame_result in frames_results:
                     if len(frame_result):
-                        print(frame_result)
                         rects = [r for r in frame_result if r[4] > self.cfg.alg['ssd_confidence']]
                         if len(rects):
                             self.result_queue.put((current_index, rects))

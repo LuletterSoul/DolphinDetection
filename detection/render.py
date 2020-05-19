@@ -297,7 +297,7 @@ class DetectionStreamRender(FrameArrivalHandler):
                     # write text
                     frame = paint_chinese_opencv(frame, '江豚', p1)
                     cv2.rectangle(frame, p1, p2, color, 2)
-                    if self.scfg.detect_mode == ModelType.SSD:
+                    if self.scfg.detect_mode != ModelType.CLASSIFY:
                         cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
                                     cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
                 render_cnt += 1

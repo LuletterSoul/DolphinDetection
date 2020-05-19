@@ -27,10 +27,12 @@ from pysot.models.model_builder import ModelBuilder
 from pysot.tracker.tracker_builder import build_tracker
 from multiprocessing import Pool, Manager, Queue, Process, Lock
 from utils.cache import SharedMemoryFrameCache
+from stream.rtsp import FFMPEG_MP4Writer
 from typing import List
 import torch
 from utils import logger, to_bbox_wh
 from config import SystemStatus, VideoConfig
+import cv2
 
 
 class TrackRequest(object):
@@ -107,6 +109,7 @@ def track_service(model_index, video_cfgs, checkpoint,
             track_confidence = video_cfgs[req.monitor_index].alg['track_confidence']
             # frame number of each tracking request
             track_window_size = video_cfgs[req.monitor_index].search_window_size
+            show_windows = video_cfgs[req.monitor_index].show_window
             logger.info(
                 f'Tracker [{model_index}]: From monitor [{req.monitor_index}] track request, track confidence '
                 f'[{track_confidence}, track window size [{track_window_size}]')
@@ -131,18 +134,29 @@ def track_service(model_index, video_cfgs, checkpoint,
                     frames.append((i, frame))
 
                 # track in a slice windows
+                video_writer = None
+                if show_windows:
+                    video_writer = FFMPEG_MP4Writer(f'track_{req.monitor_index}_{req.request_id}.mp4',
+                                                    (init_frame.shape[1], init_frame.shape[0]),
+                                                    25)
+
                 for i, frame in frames:
                     track_res = tracker.track(frame)
                     best_score = track_res['best_score']
                     if best_score > track_confidence:
-                        frame = cv2.rectangle(frame.copy(),
-                                              (int(track_res['bbox'][0]), int(track_res['bbox'][1])),
-                                              (int(track_res['bbox'][2]), int(track_res['bbox'][3])),
-                                              color=(0, 0, 255), thickness=3)
-                        cv2.namedWindow(f'Track Result {model_index}', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
-                        cv2.imshow(f'Track Result {model_index}', frame)
-                        cv2.waitKey(1)
                         result.append((i, track_res['bbox']))
+                        if show_windows:
+                            frame = cv2.rectangle(frame.copy(),
+                                                  (int(track_res['bbox'][0]), int(track_res['bbox'][1])),
+                                                  (int(track_res['bbox'][2]), int(track_res['bbox'][3])),
+                                                  color=(0, 0, 255), thickness=3)
+                            cv2.namedWindow(f'Track Result {model_index}', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+                            cv2.imshow(f'Track Result {model_index}', frame)
+                            cv2.waitKey(1)
+                            video_writer.write(frame, cvt='rgb')
+
+                if show_windows and video_writer is not None:
+                    video_writer.release()
                 # output results into the corresponding pipe of each monitor
                 output_pipes[req.monitor_index][req.request_id] = TrackResult(req.rect_id, result)
                 e = time.time() - s

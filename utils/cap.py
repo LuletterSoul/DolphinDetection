@@ -10,6 +10,8 @@
 @version 1.0
 @desc:
 """
+import os
+
 import vlc
 import ctypes
 import time
@@ -53,8 +55,9 @@ def put_queue(opaque, picture):
     global current_index, q
     current_index += 1
     img = Image.frombuffer("RGBA", (VIDEOWIDTH, VIDEOHEIGHT), buf, "raw", "BGRA", 0, 1)
-    img = cv2.cvtColor(numpy.array(img), cv2.COLOR_RGB2BGR)
-    q.put(img)
+    # img = cv2.cvtColor(numpy.array(img), cv2.COLOR_RGB2BGR)
+    q.put(numpy.array(img))
+    # print(os.getpid())
     # cv2.namedWindow('image', cv2.WINDOW_FREERATIO)
     # cv2.imshow('image', img)
     # cv2.waitKey(1)
