@@ -191,16 +191,16 @@ class FrameArrivalHandler(object):
         :return:
         """
         if not self.lock_window.is_set():
-            logger.info(
+            logger.debug(
                 f'{self.LOG_PREFIX} {task_type} [{task_cnt}] wait frames arrival....')
             start = time.time()
             # wait the future frames prepared,if trigger time out, give up waits
             if not msg.no_wait:
                 self.lock_window.wait(30)
-            logger.info(
+            logger.debug(
                 f"{self.LOG_PREFIX} {task_type} " +
                 f"[{task_cnt}] wait [{round(time.time() - start, 2)}] seconds")
-            logger.info(f'{self.LOG_PREFIX} Rect Render Task [{task_cnt}] frames accessible...')
+            logger.debug(f'{self.LOG_PREFIX} Rect Render Task [{task_cnt}] frames accessible...')
 
     def listen(self):
         if self.quit.wait():
@@ -273,7 +273,6 @@ class DetectionStreamRender(FrameArrivalHandler):
         :param end_cnt:
         :return:
         """
-        print(f'Start index: [{next_cnt}], end index [{end_cnt}]')
         if next_cnt < 1:
             next_cnt = 1
         render_cnt = 0
@@ -286,7 +285,6 @@ class DetectionStreamRender(FrameArrivalHandler):
 
             tmp_rects = self.render_rect_cache[index % self.cache_size]
             self.render_rect_cache[index % self.cache_size] = None
-            logger.info(f'Rect rect [{index}]: {tmp_rects}')
             # if current frame has bbox, just update the bbox position, and clear counting
             if tmp_rects is not None and len(tmp_rects):
                 render_cnt = 0
@@ -368,7 +366,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         task_cnt = self.task_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
         target = self.rect_stream_path / (current_time + str(task_cnt) + '.mp4')
-        logger.info(
+        logger.debug(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # fourcc = cv2.VideoWriter_fourcc(*'avc1')
         # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
@@ -409,7 +407,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         task_cnt = self.task_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
         target = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
-        logger.info(
+        logger.debug(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
         video_write = FFMPEG_MP4Writer(str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
@@ -422,7 +420,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         end_cnt = next_cnt + self.future_frames
         next_cnt = self.write_original_video_work(video_write, next_cnt, end_cnt)
         video_write.release()
-        logger.info(
+        logger.debug(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: ' +
             f'Consume [{round(time.time() - start, 2)}] seconds.Done write detection stream frame into: [{str(target)}]')
         # notify post filter can begin its job

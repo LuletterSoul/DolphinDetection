@@ -422,6 +422,9 @@ class TaskBasedDetectorController(DetectorController):
         which can reach 60FPS+ speed when processing 4K video frames
         :return:
         """
+        import os
+        os.environ["CUDA_VISIBLE_DEVICES"] = f'{int(self.cfg.index) % 4}'
+
         from mmdetection import init_detector
         classifier = None
         model = None
@@ -430,7 +433,7 @@ class TaskBasedDetectorController(DetectorController):
         # every frame looper will occupy single model instance by now
         # TODO less model instances,but could be shared by all detectors
         if self.server_cfg.detect_mode == ModelType.SSD:
-            model = SSDDetector(model_path=self.server_cfg.detect_model_path, device_id=int(self.cfg.index) % 4)
+            model = SSDDetector(model_path=self.server_cfg.detect_model_path, device_id='0')
             model.run()
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
@@ -441,13 +444,13 @@ class TaskBasedDetectorController(DetectorController):
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         elif self.server_cfg.detect_mode == ModelType.CASCADE:
+            os.environ["CUDA_VISIBLE_DEVICES"] = f'{int(self.cfg.index) % 4}'
             cascade_model_cfg = self.server_cfg.cascade_model_cfg
             cascade_model_path = self.server_cfg.cascade_model_path
             if self.cfg.alg['cascade_model_cfg'] != '':
                 cascade_model_cfg = self.cfg.alg['cascade_model_cfg']
                 cascade_model_path = self.cfg.alg['cascade_model_path']
-            model = init_detector(cascade_model_cfg, cascade_model_path,
-                                  device=f'cuda:{int(self.cfg.index) % 4}')
+            model = init_detector(cascade_model_cfg, cascade_model_path)
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running Cascade-RCNN Model********************************')
 
