@@ -5,7 +5,7 @@ channel: 1
 shape:
   - 1080
   - 1920
-  - 3
+  - 4
 ip: 222.190.243.176
 dip: http://10.196.122.94:8080
 port: '8081'
@@ -85,4 +85,4 @@ alg:
   continuous_time_thresh: 36
   disappear_frames_thresh: 3
   track_confidence: 0.95
-  ssd_confidence: 0.86
+  ssd_confidence: 0.95

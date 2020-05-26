@@ -20,7 +20,7 @@ roi:
   height: -1
 resize:
   width: 1000
-  height: -1
+  height: -14
   scale: -1
 show_window: false
 push_stream: false
@@ -85,4 +85,4 @@ alg:
   continuous_time_thresh: 36
   disappear_frames_thresh: 3
   track_confidence: 0.95
-  ssd_confidence: 0.86
+  ssd_confidence: 0.95

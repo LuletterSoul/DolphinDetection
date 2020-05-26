@@ -12,24 +12,24 @@
 """
 
 import os.path as osp
-from typing import List
+import time
+import traceback
 from multiprocessing import Pool
 
+import imutils
+import numpy as np
+
 from classfy.model import DolphinClassifier
-from . import Detector
-from .params import DispatchBlock, ConstructResult, BlockInfo, ConstructParams, DetectorParams
-from .render import ArrivalMsgType, ArrivalMessage
+from config import ModelType
+from render import ArrivalMessage, ArrivalMsgType
 from stream.websocket import *
 from utils.cache import SharedMemoryFrameCache
-# from utils import NoDaemonPool as Pool
-from .ssd import SSDDetector
+from . import Detector
 from .capture import *
 from .detect_funcs import *
-from config import ModelType
-import time
-import imutils
-import traceback
-import numpy as np
+from .params import DispatchBlock
+# from utils import NoDaemonPool as Pool
+from .ssd import SSDDetector
 
 
 # from pynput.keyboard import Key, Controller, Listener
@@ -441,7 +441,12 @@ class TaskBasedDetectorController(DetectorController):
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running Classifier Model********************************')
         elif self.server_cfg.detect_mode == ModelType.CASCADE:
-            model = init_detector(self.server_cfg.cascade_model_cfg, self.server_cfg.cascade_model_path,
+            cascade_model_cfg = self.server_cfg.cascade_model_cfg
+            cascade_model_path = self.server_cfg.cascade_model_path
+            if self.cfg.alg['cascade_model_cfg'] != '':
+                cascade_model_cfg = self.cfg.alg['cascade_model_cfg']
+                cascade_model_path = self.cfg.alg['cascade_model_path']
+            model = init_detector(cascade_model_cfg, cascade_model_path,
                                   device=f'cuda:{int(self.cfg.index) % 4}')
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running Cascade-RCNN Model********************************')
@@ -536,22 +541,27 @@ class TaskBasedDetectorController(DetectorController):
                 frame = original_frame
                 if len(frames_results):
                     for rect in frames_results[0]:
-                        color = np.random.randint(0, 255, size=(3,))
-                        color = [int(c) for c in color]
-                        # get a square bbox, the real bbox of width and height is universal as 224 * 224 or 448 * 448
-                        p1, p2 = bbox_points(self.cfg, rect, original_frame.shape)
-                        # write text
-                        frame = paint_chinese_opencv(frame, '江豚', p1)
-                        cv2.rectangle(frame, p1, p2, color, 2)
-                        cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
+                        if rect[4] > self.cfg.alg['ssd_confidence']:
+                            cv2.imwrite(f'data/frames/{self.cfg.index}_{current_index}.png',
+                                        cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
+                            color = np.random.randint(0, 255, size=(3,))
+                            color = [int(c) for c in color]
+                            # get a square bbox, the real bbox of width and height is universal as 224 * 224 or 448 * 448
+                            p1, p2 = bbox_points(self.cfg, rect, original_frame.shape)
+                            # write text
+                            frame = paint_chinese_opencv(frame, '江豚', p1)
+                            cv2.rectangle(frame, (rect[0], rect[1]), (rect[2], rect[3]), color, 2)
+                            cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
                 cv2.imshow(str(self.cfg.index), frame)
                 cv2.waitKey(1)
 
             if len(frames_results):
                 for frame_result in frames_results:
                     if len(frame_result):
-                        rects = [r for r in frame_result if r[4] > self.cfg.alg['ssd_confidence']]
+                        rects = [r for r in frame_result if
+                                 r[4] > self.cfg.alg['ssd_confidence'] and ((r[2] - r[0]) * (r[3] - r[1]) >
+                                                                            self.cfg.alg['area'])]
                         if len(rects):
                             self.result_queue.put((current_index, rects))
                             if len(rects) >= 3:
@@ -561,7 +571,7 @@ class TaskBasedDetectorController(DetectorController):
                             detect_flag = True
                             self.dol_gone = False
                             logger.info(
-                                f'============================Controller [{self.cfg.index}]: Dolphin Detected============================')
+                                f'============================Controller [{self.cfg.index}]: Dolphin Detected in frame [{current_index}]============================')
                     if detect_flag:
                         json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                                          timestamp=current_index, rects=rects, dol_id=self.dol_id,

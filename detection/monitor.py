@@ -189,7 +189,7 @@ class EmbeddingControlMonitor(DetectionMonitor):
 
     def init_caches(self):
         for idx, cfg in enumerate(self.cfgs):
-            template = np.zeros((cfg.shape[1], cfg.shape[0], 3), dtype=np.uint8)
+            template = np.zeros((cfg.shape[1], cfg.shape[0], cfg.shape[2]), dtype=np.uint8)
             if cfg.use_sm:
                 frame_cache = SharedMemoryFrameCache(self.frame_cache_manager, cfg.cache_size,
                                                      template.nbytes,
@@ -468,8 +468,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                 self.task_futures.append(
                     self.process_pool.apply_async(self.caps[i].read, (self.scfg,)))
                 # self.task_futures[-1].get()
-                self.task_futures.append(
-                    self.process_pool.apply_async(self.push_streamers[i].push_stream, ()))
+                #self.task_futures.append(
+                #    self.process_pool.apply_async(self.push_streamers[i].push_stream, ()))
                 self.task_futures.append(self.process_pool.apply_async(self.stream_renders[i].
                                                                        loop, ()))
                 # self.task_futures[-1].get()

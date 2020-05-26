@@ -10,31 +10,33 @@
 @version 1.0
 @desc:
 """
+
+import math
 import os
 import threading
 import time
 from dataclasses import dataclass
 from multiprocessing import Manager
 from multiprocessing.queues import Queue
+from typing import List
 
 import cv2
 import numpy as np
-import math
 from scipy.optimize import leastsq
 
+from config import ServerConfig, ModelType
 from config import SystemStatus
-from config import VideoConfig, ServerConfig, ModelType
-from detection.detect_funcs import adaptive_thresh_with_rules
-from detection.params import DispatchBlock, DetectorParams
+from config import VideoConfig
+from detect_funcs import adaptive_thresh_with_rules
+from params import DetectorParams, DispatchBlock
 from pysot.tracker.service import TrackRequester
 from stream.rtsp import FFMPEG_MP4Writer
 # from .manager import DetectorController
 from stream.websocket import creat_packaged_msg_json
-from utils import logger, bbox_points, generate_time_stamp, crop_by_se
-from utils import preprocess, paint_chinese_opencv
-from typing import List
+from utils import bbox_points, generate_time_stamp
+from utils import paint_chinese_opencv
+from utils import preprocess, crop_by_se, logger
 from utils.cache import SharedMemoryFrameCache
-import queue
 
 
 class ArrivalMsgType:
@@ -127,7 +129,7 @@ class FrameArrivalHandler(object):
         """
         # if not self.lock_window:
         # continuous arrival signal in current window will be ignored
-        if self.lock_window.is_set():
+        if self.lock_window.is_set() or msg.no_wait:
             self.lock_window.clear()
             # skipped this detection if it is closed enough to the previous one
             # avoid generating videos frequently
@@ -271,6 +273,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         :param end_cnt:
         :return:
         """
+        print(f'Start index: [{next_cnt}], end index [{end_cnt}]')
         if next_cnt < 1:
             next_cnt = 1
         render_cnt = 0
@@ -278,10 +281,12 @@ class DetectionStreamRender(FrameArrivalHandler):
         for index in range(next_cnt, end_cnt + 1):
             frame = self.original_frame_cache[index]
             if frame is None:
+                print(f'Frame is none for [{index}]')
                 continue
 
             tmp_rects = self.render_rect_cache[index % self.cache_size]
             self.render_rect_cache[index % self.cache_size] = None
+            logger.info(f'Rect rect [{index}]: {tmp_rects}')
             # if current frame has bbox, just update the bbox position, and clear counting
             if tmp_rects is not None and len(tmp_rects):
                 render_cnt = 0
@@ -297,7 +302,7 @@ class DetectionStreamRender(FrameArrivalHandler):
                     # write text
                     frame = paint_chinese_opencv(frame, '江豚', p1)
                     cv2.rectangle(frame, p1, p2, color, 2)
-                    if self.scfg.detect_mode != ModelType.CLASSIFY:
+                    if self.scfg.detect_mode != ModelType.CLASSIFY and len(rect) >= 5:
                         cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
                                     cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
                 render_cnt += 1
@@ -562,7 +567,7 @@ class Obj(object):
         """
         if len(self.trace) < 4:
             # 轨迹长度过短，无法分析物体类别
-            self.category = None
+            self.category = 'Unknown'
             return
         avg_speed_list = []
         continue_idx_sum = 0
@@ -584,10 +589,95 @@ class Obj(object):
             self.category = 'bird'
         elif continue_idx_sum > self.cfg.alg['continuous_time_thresh']:
             self.category = 'float'
-        elif self.is_quadratic_with_negative_a(area_list):
-            self.category = 'dolphin'
+        # elif self.is_quadratic_with_negative_a(area_list):
+        #    self.category = 'dolphin'
+        # else:
         else:
-            self.category = None
+            self.category = 'dolphin'
+
+
+class DetectionSignalHandler(FrameArrivalHandler):
+    """
+    track object from a batch of frames, and decides if let system
+    send detection notification,generate render video or not
+    """
+
+    def __init__(self, cfg: VideoConfig, scfg: ServerConfig, detect_index, future_frames, msg_queue: Queue,
+                 rect_stream_path,
+                 original_stream_path, render_frame_cache, original_frame_cache, notify_queue,
+                 region_path, track_requester: TrackRequester, render_queue: Queue,
+                 detect_params=None) -> None:
+        super().__init__(cfg, scfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
+                         render_frame_cache, original_frame_cache, notify_queue, region_path,
+                         detect_params)
+        self.track_requester = track_requester
+        self.LOG_PREFIX = f'Detection Signal Handler [{self.cfg.index}]: '
+        self.render_queue = render_queue
+
+    def task(self, msg: ArrivalMessage):
+        """
+        generate a video in fixed window,if detection signal is triggered in a window internal,the rest detection
+        frame will be merged into a video instead of producing multiple videos.
+        :param msg: arrival msg
+        :return:
+        """
+        current_idx = msg.current_index
+        current_time = generate_time_stamp('%m%d%H%M%S') + '_'
+        # use two independent threads to execute video generation sub-tasks
+        handle_thread = threading.Thread(
+            target=self.handle,
+            args=(msg, current_time,), daemon=True)
+        handle_thread.start()
+        return True
+
+    def handle(self, msg: ArrivalMessage, current_time):
+        """
+        handle detection signal
+        :param msg:
+        :param current_time:
+        :return:
+        """
+        current_index = msg.current_index
+        if not self.cfg.forward_filter:
+            logger.info(self.LOG_PREFIX + f'The signal forward operation is disabled by configuration.')
+        self.wait(self.task_cnt, 'Detection Signal Handle', msg)
+        # rects = self.render_rect_cache[current_index % self.cache_size]
+        # lock the whole window in case cached was covered by the future arrival frames.
+        # self.original_frame_cache.lock_cache(current_index - self.cfg.future_frames,
+        #                                      current_index + self.cfg.search_window_size)
+        rects = msg.rects
+        task_cnt = self.task_cnt
+        if rects is not None:
+            result_sets, _ = self.track_requester.request(self.cfg.index, current_index, rects)
+            # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
+            is_contain_dolphin, traces = self.post_filter.filter_by_obj_match_analyze(result_sets, task_cnt)
+            logger.info(f'{self.LOG_PREFIX}: Filter result: contain dolphin: {is_contain_dolphin}')
+            if is_contain_dolphin:
+                self.trigger_rendering(current_index, traces)
+                self.task_cnt += 1
+
+    def trigger_rendering(self, current_index, traces):
+        """
+        trigger rendering and ignores the window lock without waits.
+        :param current_index:
+        :param traces:
+        :return:
+        """
+        self.write_bbox(traces)
+        # send message via message pipe
+        self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.DETECTION, True))
+        self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.UPDATE))
+
+    def write_bbox(self, traces):
+        # cnt = 0
+        self.render_rect_cache[:] = [None] * self.cfg.cache_size
+        for frame_idx, rects in traces.items():
+            # bbox rendering is post to render
+            # print(rects)
+            self.render_rect_cache[frame_idx % self.cache_size] = rects
+            # cnt += 1
+            # if cnt >= self.cfg.future_frames:
+            #     break
 
 
 class Filter(object):
@@ -664,10 +754,10 @@ class Filter(object):
             if not init:
                 dirname = os.path.dirname(video_path)
                 filename, extention = os.path.splitext(os.path.basename(video_path))
-                fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-                out_path = os.path.join(dirname, f'{filename}_binary.mp4')
-                shape = sub_results.binary.shape
-                video_writer = cv2.VideoWriter(out_path, fourcc, 25, (shape[1], shape[0]))
+                # fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+                # out_path = os.path.join(dirname, f'{filename}_binary.mp4')
+                # shape = sub_results.binary.shape
+                # video_writer = cv2.VideoWriter(out_path, fourcc, 25, (shape[1], shape[0]))
                 init = True
             if video_writer is not None:
                 video_writer.write(cv2.cvtColor(sub_results.binary, cv2.COLOR_GRAY2BGR))
@@ -851,87 +941,3 @@ class Filter(object):
                         obj.append_with_rules(idx, rect)
                         obj_list.append(obj)
             return obj_list
-
-
-class DetectionSignalHandler(FrameArrivalHandler):
-    """
-    track object from a batch of frames, and decides if let system
-    send detection notification,generate render video or not
-    """
-
-    def __init__(self, cfg: VideoConfig, scfg: ServerConfig, detect_index, future_frames, msg_queue: Queue,
-                 rect_stream_path,
-                 original_stream_path, render_frame_cache, original_frame_cache, notify_queue,
-                 region_path, track_requester: TrackRequester, render_queue: Queue,
-                 detect_params=None) -> None:
-        super().__init__(cfg, scfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
-                         render_frame_cache, original_frame_cache, notify_queue, region_path,
-                         detect_params)
-        self.track_requester = track_requester
-        self.LOG_PREFIX = f'Detection Signal Handler [{self.cfg.index}]: '
-        self.render_queue = render_queue
-
-    def task(self, msg: ArrivalMessage):
-        """
-        generate a video in fixed window,if detection signal is triggered in a window internal,the rest detection
-        frame will be merged into a video instead of producing multiple videos.
-        :param msg: arrival msg
-        :return:
-        """
-        current_idx = msg.current_index
-        current_time = generate_time_stamp('%m%d%H%M%S') + '_'
-        # use two independent threads to execute video generation sub-tasks
-        handle_thread = threading.Thread(
-            target=self.handle,
-            args=(msg, current_time,), daemon=True)
-        handle_thread.start()
-        return True
-
-    def handle(self, msg: ArrivalMessage, current_time):
-        """
-        handle detection signal
-        :param msg:
-        :param current_time:
-        :return:
-        """
-        current_index = msg.current_index
-        if not self.cfg.forward_filter:
-            logger.info(self.LOG_PREFIX + f'The signal forward operation is disabled by configuration.')
-        self.wait(self.task_cnt, 'Detection Signal Handle', msg)
-        # rects = self.render_rect_cache[current_index % self.cache_size]
-        # lock the whole window in case cached was covered by the future arrival frames.
-        # self.original_frame_cache.lock_cache(current_index - self.cfg.future_frames,
-        #                                      current_index + self.cfg.search_window_size)
-        rects = msg.rects
-        task_cnt = self.task_cnt
-        if rects is not None:
-            result_sets, _ = self.track_requester.request(self.cfg.index, current_index, rects)
-            # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
-            is_contain_dolphin, traces = self.post_filter.filter_by_obj_match_analyze(result_sets, task_cnt)
-            logger.info(f'{self.LOG_PREFIX}: Filter result: contain dolphin: {is_contain_dolphin}')
-            if is_contain_dolphin:
-                self.trigger_rendering(current_index, traces)
-                self.task_cnt += 1
-
-    def trigger_rendering(self, current_index, traces):
-        """
-        trigger rendering and ignores the window lock without waits.
-        :param current_index:
-        :param traces:
-        :return:
-        """
-        self.write_bbox(traces)
-        # send message via message pipe
-        self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.DETECTION, True))
-        self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.UPDATE))
-
-    def write_bbox(self, traces):
-        # cnt = 0
-        self.render_rect_cache[:] = [None] * self.cfg.cache_size
-        for frame_idx, rects in traces.items():
-            # bbox rendering is post to render
-            # print(rects)
-            self.render_rect_cache[frame_idx % self.cache_size] = rects
-            # cnt += 1
-            # if cnt >= self.cfg.future_frames:
-            #     break

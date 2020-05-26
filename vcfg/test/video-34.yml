@@ -86,3 +86,5 @@ alg:
   disappear_frames_thresh: 24
   track_confidence: 0.85
   ssd_confidence: 0.50
+  cascade_model_path: mmdetection/work_dirs/cascade_rcnn_r50_caffe_fpn_1x_coco_Yuzhui/latest.pth
+  cascade_model_cfg:  mmdetection/configs/cascade_rcnn/cascade_rcnn_r50_caffe_fpn_1x_coco.py
