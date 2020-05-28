@@ -32,8 +32,8 @@ from .params import DetectorParams, DispatchBlock
 from pysot.tracker.service import TrackRequester
 from stream.rtsp import FFMPEG_MP4Writer
 # from .manager import DetectorController
-from stream.websocket import creat_packaged_msg_json
-from utils import bbox_points, generate_time_stamp
+from stream.websocket import creat_packaged_msg_json, creat_detect_msg_json, creat_detect_empty_msg_json
+from utils import bbox_points, generate_time_stamp, get_local_time
 from utils import paint_chinese_opencv
 from utils import preprocess, crop_by_se, logger
 from utils.cache import SharedMemoryFrameCache
@@ -611,6 +611,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
         self.track_requester = track_requester
         self.LOG_PREFIX = f'Detection Signal Handler [{self.cfg.index}]: '
         self.render_queue = render_queue
+        self.dol_id = 10000
 
     def task(self, msg: ArrivalMessage):
         """
@@ -646,36 +647,49 @@ class DetectionSignalHandler(FrameArrivalHandler):
         rects = msg.rects
         task_cnt = self.task_cnt
         if rects is not None:
+            track_start = time.time()
             result_sets, _ = self.track_requester.request(self.cfg.index, current_index, rects)
             # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
             is_contain_dolphin, traces = self.post_filter.filter_by_obj_match_analyze(result_sets, task_cnt)
+            track_end = time.time()
+            track_consume = track_end - track_start
             logger.info(f'{self.LOG_PREFIX}: Filter result: contain dolphin: {is_contain_dolphin}')
             if is_contain_dolphin:
-                self.trigger_rendering(current_index, traces)
+                self.trigger_rendering(current_index, traces, track_consume)
                 self.task_cnt += 1
 
-    def trigger_rendering(self, current_index, traces):
+    def trigger_rendering(self, current_index, traces, time_consume):
         """
         trigger rendering and ignores the window lock without waits.
         :param current_index:
         :param traces:
         :return:
         """
-        self.write_bbox(traces)
+        self.write_bbox(traces, time_consume)
         # send message via message pipe
         self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.DETECTION, True))
         self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.UPDATE))
 
-    def write_bbox(self, traces):
+    def write_bbox(self, traces, time_consume):
         # cnt = 0
         self.render_rect_cache[:] = [None] * self.cfg.cache_size
+        # logger.debug(f'put detect message in msg_queue {json_msg}...')
+        # self.render_frame_cache[current_index % self.cache_size] = render_frame
         for frame_idx, rects in traces.items():
+            json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
+                                             timestamp=get_local_time(time_consume), rects=rects, dol_id=self.dol_id,
+                                             camera_id=self.cfg.camera_id)
+            self.msg_queue.put(json_msg)
             # bbox rendering is post to render
+            logger.debug(f'put detect message in msg_queue {json_msg}...')
             # print(rects)
             self.render_rect_cache[frame_idx % self.cache_size] = rects
-            # cnt += 1
-            # if cnt >= self.cfg.future_frames:
-            #     break
+        self.dol_id += 1
+        empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
+                                                channel=self.cfg.channel,
+                                                timestamp=get_local_time(time_consume), dol_id=self.dol_id,
+                                                camera_id=self.cfg.camera_id)
+        self.msg_queue.put(empty_msg)
 
 
 class Filter(object):
