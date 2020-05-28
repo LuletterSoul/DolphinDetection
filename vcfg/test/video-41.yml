@@ -1,0 +1,88 @@
+index: 41
+name: video6_hungred_million
+camera_id: camera_bp_1
+channel: 1
+shape:
+  - 2160
+  - 3840
+  - 3
+ip: 222.190.243.176
+dip: http://221.226.81.54:1211
+port: '8081'
+suffix: ''
+headers: {}
+m3u8_url: ''
+url: ''
+roi:
+  x: 0
+  y: 0
+  width: -1
+  height: -1
+resize:
+  width: 1000
+  height: -1
+  scale: -1
+show_window: false
+push_stream: false
+window_position:
+  x: 100
+  y: 100
+routine:
+  row: 1
+  col: 1
+sample_rate: 1
+draw_boundary: false
+enable: false
+filtered_ratio: 0.5
+max_streams_cache: 5000
+online: offline
+cap_loop: false
+sample_internal: 15
+save_box: false
+show_box: false
+cv_only: true
+ssd_divide_four: false
+rtsp: rtsp://admin:HuaWei123@221.226.158.114:554/LiveMedia/ch1/Media1
+push_to: rtsp://192.168.0.116/yz
+write_timestamp: false
+enable_sample_frame: false
+rtsp_saved_per_frame: 240
+future_frames: 76
+detect_internal: 72
+search_window_size: 125
+use_sm: false
+cache_size: 700
+similarity_thresh: 0.05
+pre_cache: 48
+render: true
+post_filter: false
+forward_filter: false
+limit_freq: false
+freq_thresh: 60
+bbox:
+  w: 448
+  h: 448
+alg:
+  type: thresh
+  sp: 10
+  sr: 60
+  dk_size: 5
+  ok_size: 1
+  mean: 40
+  block_size: 21
+  filtered_by_wh: false
+  rwt: 0
+  rht: 0
+  area: 10
+  area_ratio: 0.03
+  color_range:
+    - 80
+    - 80
+    - 80
+  color_scale: -1
+  speed_x_thresh: 15
+  speed_y_thresh: 15
+  continuous_time_thresh: 36
+  disappear_frames_thresh: 3
+  track_confidence: 0.80
+  ssd_confidence: 0.80
