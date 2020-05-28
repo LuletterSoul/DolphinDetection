@@ -391,7 +391,7 @@ class TaskBasedDetectorController(DetectorController):
                     if push_flag:
                         json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                                          timestamp=current_index, rects=r.rects, dol_id=self.dol_id,
-                                                         camera_id=self.cfg.camera_id)
+                                                         camera_id=self.cfg.camera_id, cfg=self.cfg)
                         self.msg_queue.put(json_msg)
                         if self.cfg.render:
                             self.render_rect_cache[current_index % self.cache_size] = r.rects
@@ -578,7 +578,7 @@ class TaskBasedDetectorController(DetectorController):
                             logger.info(
                                 f'============================Controller [{self.cfg.index}]: Dolphin Detected in frame [{current_index}]============================')
                     if detect_flag:
-                        #json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
+                        # json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                         #                                 timestamp=current_index, rects=rects, dol_id=self.dol_id,
                         #                                 camera_id=self.cfg.camera_id)
                         # self.msg_queue.put(json_msg)
@@ -588,14 +588,14 @@ class TaskBasedDetectorController(DetectorController):
                             self.render_rect_cache[current_index % self.cache_size] = rects
                         self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
-                    #else:
+                    # else:
                     #    if not self.dol_gone:
-                            #empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
-                            #                                        channel=self.cfg.channel,
-                            #                                        timestamp=current_index, dol_id=self.dol_id,
-                            #                                        camera_id=self.cfg.camera_id)
-                            #self.dol_id += 1
-                            #self.msg_queue.put(empty_msg)
+                    # empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
+                    #                                        channel=self.cfg.channel,
+                    #                                        timestamp=current_index, dol_id=self.dol_id,
+                    #                                        camera_id=self.cfg.camera_id)
+                    # self.dol_id += 1
+                    # self.msg_queue.put(empty_msg)
                     #        self.dol_gone = True
             self.update_render(current_index)
             self.update_detect_handler(current_index)

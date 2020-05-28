@@ -678,7 +678,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
         for frame_idx, rects in traces.items():
             json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                              timestamp=get_local_time(time_consume), rects=rects, dol_id=self.dol_id,
-                                             camera_id=self.cfg.camera_id)
+                                             camera_id=self.cfg.camera_id, cfg=self.cfg)
             self.msg_queue.put(json_msg)
             # bbox rendering is post to render
             logger.debug(f'put detect message in msg_queue {json_msg}...')

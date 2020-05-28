@@ -54,7 +54,7 @@ def put_queue(opaque, picture):
     """
     global current_index, q
     current_index += 1
-    img = Image.frombuffer("RGBA", (VIDEOWIDTH, VIDEOHEIGHT), buf, "raw", "BGRA", 0, 1)
+    img = Image.frombuffer("RGBA", (VIDEOWIDTH, VIDEOHEIGHT), buf, "raw", "RGBA", 0, 1)
     # img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
     q.put(np.array(img)[:, :, :3])
     # q.put(img)
