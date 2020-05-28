@@ -15,7 +15,7 @@ cron:
   end:
     month: '*'
     day: '*'
-    hour: '15'
+    hour: '18'
     minute: '00'
 classify_model_path: model/bc-model-0314.pth
 detect_model_path: model/0403-ssd.pth

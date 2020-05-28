@@ -27,8 +27,8 @@ from scipy.optimize import leastsq
 from config import ServerConfig, ModelType
 from config import SystemStatus
 from config import VideoConfig
-from detect_funcs import adaptive_thresh_with_rules
-from params import DetectorParams, DispatchBlock
+from .detect_funcs import adaptive_thresh_with_rules
+from .params import DetectorParams, DispatchBlock
 from pysot.tracker.service import TrackRequester
 from stream.rtsp import FFMPEG_MP4Writer
 # from .manager import DetectorController

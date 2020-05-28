@@ -21,7 +21,7 @@ import numpy as np
 
 from classfy.model import DolphinClassifier
 from config import ModelType
-from render import ArrivalMessage, ArrivalMsgType
+from .render import ArrivalMessage, ArrivalMsgType
 from stream.websocket import *
 from utils.cache import SharedMemoryFrameCache
 from . import Detector
@@ -426,6 +426,8 @@ class TaskBasedDetectorController(DetectorController):
         os.environ["CUDA_VISIBLE_DEVICES"] = f'{int(self.cfg.index) % 4}'
 
         from mmdetection import init_detector
+        import torch
+        torch.set_num_threads(1)
         classifier = None
         model = None
 
@@ -533,7 +535,7 @@ class TaskBasedDetectorController(DetectorController):
             start = time.time()
             frames_results = self.get_model_result(original_frame, model_instance, self.server_cfg)
             logger.debug(
-                self.LOG_PREFIX + f'Model Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
+                self.LOG_PREFIX + f'Model [{self.cfg.index}]: Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
             # render_frame = original_frame.copy()
             detect_results = []
             detect_flag = False

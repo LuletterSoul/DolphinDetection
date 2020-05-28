@@ -24,7 +24,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 import stream
 from config import VideoConfig, ServerConfig
-from .capture import VideoOfflineCapture, VideoOnlineSampleCapture, VideoRtspCapture, VideoRtspVlcCapture
+from .capture import VideoOfflineCapture, VideoOnlineSampleCapture, VideoRtspCapture, VideoRtspVlcCapture, \
+    VideoOfflineVlcCapture
 from pysot.tracker.service import TrackingService
 from stream.rtsp import PushStreamer
 from stream.websocket import websocket_client
@@ -214,6 +215,8 @@ class EmbeddingControlMonitor(DetectionMonitor):
                 self.init_rtsp_caps(c, idx)
             elif c.online == 'vlc_rtsp':
                 self.init_vlc_rtsp_caps(c, idx)
+            elif c.online == 'vlc_offline':
+                self.init_vlc_offline_caps(c, idx)
             elif c.online == 'offline':
                 self.init_offline_caps(c, idx)
 
@@ -245,6 +248,9 @@ class EmbeddingControlMonitor(DetectionMonitor):
                                      c, idx, c.sample_rate))
 
     def init_vlc_rtsp_caps(self, c, idx):
+        pass
+
+    def init_vlc_offline_caps(self, c, idx):
         pass
 
     def init_rtsp_caps(self, c, idx):
@@ -396,6 +402,23 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                 c.sample_rate)
         )
 
+    def init_vlc_offline_caps(self, c, idx):
+        """
+
+        init offline vlc video stream reciever
+        Args:
+            c:
+            idx:
+        Returns:
+        """
+        self.caps.append(
+            VideoOfflineVlcCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
+                                   self.offline_path / str(c.index),
+                                   self.pipes[idx],
+                                   self.caps_queue[idx], c, idx, self.controllers[idx], self.shut_down_event,
+                                   c.sample_rate,
+                                   delete_post=False))
+
     def init_offline_caps(self, c, idx):
         """
         init offline rtsp video stream reciever
@@ -468,7 +491,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                 self.task_futures.append(
                     self.process_pool.apply_async(self.caps[i].read, (self.scfg,)))
                 # self.task_futures[-1].get()
-                #self.task_futures.append(
+                # self.task_futures.append(
                 #    self.process_pool.apply_async(self.push_streamers[i].push_stream, ()))
                 self.task_futures.append(self.process_pool.apply_async(self.stream_renders[i].
                                                                        loop, ()))

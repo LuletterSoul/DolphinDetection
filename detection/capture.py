@@ -138,7 +138,7 @@ class VideoCaptureThreading:
             grabbed, frame = self.read_frame()
             e = 1 / (time.time() - s)
             logger.debug(f'Video capture [{self.cfg.index}]: Receive Speed Rate [{round(e, 2)}]/FPS')
-            #if e > 25:
+            # if e > 25:
             #    sleep_time = 1 / (e / 25) / 2
             #    time.sleep(sleep_time)
             #    logger.info(
@@ -286,6 +286,24 @@ class VideoOfflineCallbackCapture(VideoOfflineCapture):
 
     def cancel(self):
         super().cancel()
+        if not self.shut_down_event.is_set():
+            self.shut_down_event.set()
+
+
+class VideoOfflineVlcCapture(VideoOfflineCallbackCapture):
+    """
+    Read video frames from a offline video file,
+    """
+
+    def reload_cap(self, src):
+        threading.Thread(target=cap.run, args=(src, self.cfg.shape,), daemon=True).start()
+
+    def read_frame(self):
+        return cap.read()
+
+    def cancel(self):
+        super().cancel()
+        cap.release()
         if not self.shut_down_event.is_set():
             self.shut_down_event.set()
 

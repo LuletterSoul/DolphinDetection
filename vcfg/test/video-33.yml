@@ -35,7 +35,7 @@ draw_boundary: false
 enable: false
 filtered_ratio: 0.5
 max_streams_cache: 5000
-online: offline
+online: vlc_offline
 cap_loop: false
 sample_internal: 15
 save_box: false

@@ -15,10 +15,10 @@ from typing import List
 
 import imutils
 
-from component import mog2_dict
+from .component import mog2_dict
 from detection.params import ConstructResult, ConstructParams, BlockInfo, DetectorParams
 from utils import *
-from detector import DetectionResult
+from .detector import DetectionResult
 
 
 # import ray
