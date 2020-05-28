@@ -153,7 +153,7 @@ def track_service(model_index, video_cfgs, checkpoint,
                             cv2.namedWindow(f'Track Result {model_index}', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
                             cv2.imshow(f'Track Result {model_index}', frame)
                             cv2.waitKey(1)
-                            video_writer.write(frame, cvt='rgb')
+                            video_writer.write(frame)
 
                 if show_windows and video_writer is not None:
                     video_writer.release()
