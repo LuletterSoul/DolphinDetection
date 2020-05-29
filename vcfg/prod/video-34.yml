@@ -57,7 +57,7 @@ pre_cache: 48
 render: true
 post_filter: false
 forward_filter: false
-limit_freq: true
+limit_freq: false
 freq_thresh: 60
 bbox:
   w: 224

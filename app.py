@@ -155,6 +155,12 @@ def load_cfg(args):
             if cfg.index in enables:
                 cfg.show_window = True
 
+    if args.limit_freq is not None:
+        enables = args.limit_freq.split(',')
+        enables = [int(e) for e in enables]
+        for cfg in video_config:
+            if cfg.index in enables:
+                cfg.limit_freq = True
     return server_config, video_config, switcher_options
 
 
@@ -199,6 +205,7 @@ if __name__ == '__main__':
                                                        'Queue() as caches')
     parser.add_argument('--push_stream', default=None, help='push stream or not')
     parser.add_argument('--show_windows', default=None, help='display windows')
+    parser.add_argument('--limit_freq', default=None, help='enable frequency of gerneration control')
     args = parser.parse_args()
     server_config, video_config, switcher_options = load_cfg(args)
     server = DolphinDetectionServer(server_config, video_config, switcher_options, args.cd_id, args.dt_id)
