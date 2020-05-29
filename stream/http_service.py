@@ -152,7 +152,7 @@ class HttpServer(object):
 
     @staticmethod
     @app.route('/preview/<date>/<channel>/<preview_folder>/<p_id>', methods=['GET'])
-    def video_by_type(date, channel, preview_folder, p_id: str):
+    def preview(date, channel, preview_folder, p_id: str):
         """
         can choose different video types
         :param date:
