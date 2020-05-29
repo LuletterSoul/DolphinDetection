@@ -508,6 +508,19 @@ class Obj(object):
         return w * h
 
     @staticmethod
+    def linear_func(param, x):
+        a, b = param
+        return a * x + b
+
+    def linear_error(self, param, x, y):
+        return self.linear_func(param, x) - y
+
+    def solve_linear_lsq(self, x, y):
+        p0 = np.array([0, 0])
+        param = leastsq(self.linear_error, p0, args=(x, y))
+        return param
+
+    @staticmethod
     def quadratic_func(param, x):
         a, b, c = param
         return a * x * x + b * x + c
@@ -564,18 +577,56 @@ class Obj(object):
                 # print(f'append idx={idx}, rect={rect}, dst={dst}, dst>200')
                 return False
 
-    def predict_category(self):
+    def fitting_horizontal_line(self, float_trace):
+        """
+        self.trace 与 float trace拟合直线，判断直线是否是近似的水平线
+        :param float_trace: 与self.trace格式相同,[(idx1, rect1), (idx2, rect2), ...]
+        :return: True->拟合出了近似水平线，False->没有拟合出近似水平线
+        """
+        x = []
+        y = []
+        for idx, rect in float_trace:
+            x.append((rect[0] + rect[2]) / 2.0)
+            y.append((rect[1] + rect[3]) / 2.0)
+        for idx, rect in self.trace:
+            x.append((rect[0] + rect[2]) / 2.0)
+            y.append((rect[1] + rect[3]) / 2.0)
+        if len(x) <= 1:
+            # 数据太少，无法拟合
+            return False
+        x = np.array(x)
+        y = np.array(y)
+        param = self.solve_linear_lsq(x, y)
+        a, b = param[0]
+        # 转化斜率为角度
+        radian = math.atan(a)  # 弧度
+        angle = (180 * radian) / math.pi  # 角度
+        if abs(angle) < self.cfg.alg['angle_thresh']:
+            return True
+        else:
+            return False
+
+    def is_match_with_history_float(self, float_trace_list):
+        if len(float_trace_list) == 0:
+            return False
+        for float_trace in float_trace_list:
+            if self.fitting_horizontal_line(float_trace):
+                return True
+        return False
+
+    def predict_category(self, float_trace_list):
         """
         通过分析当前物体轨迹，预测当前物体类别，分析准则有：
         1、物体速度  速度过快是飞鸟
         2、物体持续时间  持续时间过长是漂浮物
-        3、物体面积变化曲线 江豚面积变化曲线大致为开口向下的抛物线
+        # 3、物体面积变化曲线 江豚面积变化曲线大致为开口向下的抛物线
+        4、物体与前一个滑动窗口中的漂浮物拟合直线，如近似拟合出一条水平线，则认为是漂浮物
         :return:
         """
-        if len(self.trace) < 4:
-            # 轨迹长度过短，无法分析物体类别
-            self.category = 'Unknown'
-            return
+        # if len(self.trace) < 4:
+        #     # 轨迹长度过短，无法分析物体类别
+        #     self.category = 'Unknown'
+        #     return
         avg_speed_list = []
         continue_idx_sum = 0
         dst_sum = 0
@@ -599,6 +650,8 @@ class Obj(object):
         # elif self.is_quadratic_with_negative_a(area_list):
         #    self.category = 'dolphin'
         # else:
+        elif self.is_match_with_history_float(float_trace_list):
+            self.category = 'float'
         else:
             self.category = 'dolphin'
 
@@ -716,6 +769,7 @@ class Filter(object):
         self.speed_thresh_y = self.cfg.alg['speed_y_thresh']
         self.continuous_time_thresh = self.cfg.alg['continuous_time_thresh']
         self.disappear_frames_thresh = self.cfg.alg['disappear_frames_thresh']
+        self.float_trace_list = []
 
     def set_detect_params(self):
         x_num = self.cfg.routine['col']
@@ -897,8 +951,11 @@ class Filter(object):
         flag = False
         traces = {}
         i = 0
+        new_float_trace = []
         for obj in obj_list:
-            obj.predict_category()
+            obj.predict_category(self.float_trace_list)
+            if obj.category == 'float':
+                new_float_trace.append(obj.trace)
             logger.info(
                 f'Post filter [{self.cfg.index}, {task_cnt}]:[{obj.index}th] obj is '
                 f'[{obj.category}],avg speed [{obj.mid_avg_speed}], continuous time [{obj.continue_idx_sum}], category [{obj.category}]')
@@ -909,6 +966,7 @@ class Filter(object):
                         traces[frame_idx] = [rect]
                     else:
                         traces[frame_idx].append(rect)
+        self.float_trace_list = new_float_trace.copy()
         return flag, traces
 
     @staticmethod
