@@ -160,8 +160,6 @@ class HttpServer(object):
         :param p_id:
         :return:
         """
-        if not p_id.endswith('.jpg') or not p_id.endswith('.png'):
-            return 'Not supported file format.Must be mp4 file.'
         url = "{}/{}/preview/{}".format(date, channel, p_id)
         return app.send_static_file(url)
 
