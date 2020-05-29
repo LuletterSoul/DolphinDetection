@@ -556,23 +556,6 @@ class Obj(object):
                 # print(f'append idx={idx}, rect={rect}, dst={dst}, dst>200')
                 return False
 
-    def is_float_at_boundary(self):
-        """
-        判断是否从左边出现或者在右边界消失的漂浮物
-        :return: True->是漂浮物，False->不是漂浮物
-        """
-        start_idx, start_rect = self.trace[0]
-        end_idx, end_rect = self.get_last_rect()
-        dst = self.cal_dst(start_rect, end_rect)
-        width = self.cfg.shape[1]
-        start_x_min = start_rect[0]
-        end_x_max = end_rect[2]
-        if abs(width - end_x_max) < 10 and dst > 65:
-            return True
-        if start_x_min < 10 and dst > 65:
-            return True
-        return False
-
     def predict_category(self):
         """
         通过分析当前物体轨迹，预测当前物体类别，分析准则有：
@@ -608,8 +591,6 @@ class Obj(object):
         # elif self.is_quadratic_with_negative_a(area_list):
         #    self.category = 'dolphin'
         # else:
-        elif self.is_float_at_boundary():
-            self.category = 'float'
         else:
             self.category = 'dolphin'
 
