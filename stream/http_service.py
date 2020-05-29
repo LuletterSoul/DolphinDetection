@@ -151,19 +151,18 @@ class HttpServer(object):
         return app.send_static_file(url)
 
     @staticmethod
-    @app.route('/preview/<date>/<channel>/<preview_folder>/<p_id>', methods=['GET'])
-    def preview(date, channel, preview_folder, p_id: str):
+    @app.route('/preview/<date>/<channel>/<p_id>', methods=['GET'])
+    def preview(date, channel, p_id: str):
         """
         can choose different video types
         :param date:
         :param channel:
-        :param preview_folder:
         :param p_id:
         :return:
         """
         if not p_id.endswith('.jpg') or not p_id.endswith('.png'):
             return 'Not supported file format.Must be mp4 file.'
-        url = "{}/{}/{}/preview/{}".format(date, channel, preview_folder, p_id)
+        url = "{}/{}/preview/{}".format(date, channel, p_id)
         return app.send_static_file(url)
 
     @staticmethod
