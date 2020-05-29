@@ -172,8 +172,9 @@ def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id, camer
     return msg_json
 
 
-def creat_packaged_msg_json(filename, path, cfg: VideoConfig, camera_id, channel):
+def creat_packaged_msg_json(filename, path, cfg: VideoConfig, camera_id, channel, preview_name):
     url = os.path.join(cfg.dip, 'video', cfg.date, str(cfg.index), filename)
+    preview = os.path.join(cfg.dip, 'preview', cfg.date, str(cfg.index), preview_name)
     msg = {
         'cmdType': 'notify',
         'clientId': 'jt001',
@@ -183,7 +184,8 @@ def creat_packaged_msg_json(filename, path, cfg: VideoConfig, camera_id, channel
             'notifyType': 'packagedNotify',
             'filename': filename,
             'path': path,
-            'url': url
+            'url': url,
+            'preview': preview
         }
     }
     msg_json = json.dumps(msg)

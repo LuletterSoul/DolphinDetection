@@ -60,6 +60,7 @@ class DetectorController(object):
         self.rect_stream_path = self.candidate_path / 'render-streams'
         self.original_stream_path = self.candidate_path / 'original-streams'
         self.test_path = self.candidate_path / 'tests'
+        self.preview_path = self.candidate_path / 'preview'
         self.create_workspace()
 
         self.result_cnt = 0
@@ -124,6 +125,7 @@ class DetectorController(object):
         self.original_stream_path.mkdir(exist_ok=True, parents=True)
         self.block_path.mkdir(exist_ok=True, parents=True)
         self.test_path.mkdir(exist_ok=True, parents=True)
+        self.preview_path.mkdir(exist_ok=True, parents=True)
 
     def start(self, pool):
         self.status.set(SystemStatus.RUNNING)

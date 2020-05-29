@@ -339,6 +339,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                   self.controllers[idx].original_stream_path,
                                   self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
                                   self.render_notify_queues[idx], self.region_path / str(c.index),
+                                  self.controllers[idx].preview_path,
                                   self.controllers[idx].detect_params) for idx, c
             in
             enumerate(self.cfgs)]
@@ -354,6 +355,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                    self.controllers[idx].original_stream_path,
                                    self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
                                    self.render_notify_queues[idx], self.region_path / str(c.index),
+                                   self.controllers[idx].preview_path,
                                    self.track_requester, self.render_notify_queues[idx],
                                    self.controllers[idx].detect_params) for idx, c
             in
