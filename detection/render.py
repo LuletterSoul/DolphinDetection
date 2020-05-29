@@ -640,6 +640,17 @@ class DetectionSignalHandler(FrameArrivalHandler):
         self.LOG_PREFIX = f'Detection Signal Handler [{self.cfg.index}]: '
         self.render_queue = render_queue
         self.dol_id = 10000
+        self.detect_num = 0
+        self.post_num = 0
+        self.LOG_PREFIX = f'Detection Signal Handler [{self.cfg.index}]: '
+
+    def listen(self):
+        if self.quit.wait():
+            self.lock_window.set()
+            self.status.set(SystemStatus.SHUT_DOWN)
+            logger.info(
+                f'{self.LOG_PREFIX}: All Statistic: detection number: {self.detect_num}, post number: {self.post_num}, '
+                f'filter rate: {round((abs(self.detect_num - self.post_num) / self.detect_num), 4) * 100}%')
 
     def task(self, msg: ArrivalMessage):
         """
@@ -678,6 +689,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
             track_start = time.time()
             result_sets, _ = self.track_requester.request(self.cfg.index, current_index, rects)
             # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
+            self.detect_num += 1
             is_contain_dolphin, traces = self.post_filter.filter_by_obj_match_analyze(result_sets, task_cnt)
             track_end = time.time()
             track_consume = track_end - track_start
@@ -685,6 +697,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
             if is_contain_dolphin:
                 self.trigger_rendering(current_index, traces, track_consume)
                 self.task_cnt += 1
+                self.post_num += 1
 
     def trigger_rendering(self, current_index, traces, time_consume):
         """
@@ -701,8 +714,6 @@ class DetectionSignalHandler(FrameArrivalHandler):
     def write_bbox(self, traces, time_consume):
         # cnt = 0
         self.render_rect_cache[:] = [None] * self.cfg.cache_size
-        # logger.debug(f'put detect message in msg_queue {json_msg}...')
-        # self.render_frame_cache[current_index % self.cache_size] = render_frame
         for frame_idx, rects in traces.items():
             json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                              timestamp=get_local_time(time_consume), rects=rects, dol_id=self.dol_id,
