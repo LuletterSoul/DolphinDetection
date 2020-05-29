@@ -62,13 +62,14 @@ class FrameArrivalHandler(object):
 
     def __init__(self, cfg: VideoConfig, scfg: ServerConfig, detect_index, future_frames, msg_queue: Queue,
                  rect_stream_path, original_stream_path, render_rect_cache, original_frame_cache,
-                 notify_queue, region_path, detect_params=None) -> None:
+                 notify_queue, region_path, preview_path=None, detect_params=None) -> None:
         super().__init__()
         self.cfg = cfg
         self.scfg = scfg
         self.detect_index = detect_index
         self.rect_stream_path = rect_stream_path
         self.original_stream_path = original_stream_path
+        self.preview_path = preview_path
         self.task_cnt = 0
         self.index = cfg.index
         self.cache_size = cfg.cache_size
@@ -237,9 +238,9 @@ class DetectionStreamRender(FrameArrivalHandler):
     def __init__(self, cfg: VideoConfig, scfg: ServerConfig, detect_index, future_frames, msg_queue: Queue,
                  rect_stream_path,
                  original_stream_path, render_frame_cache, original_frame_cache, notify_queue,
-                 region_path, detect_params=None) -> None:
+                 region_path, preview_path=None, detect_params=None) -> None:
         super().__init__(cfg, scfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
-                         render_frame_cache, original_frame_cache, notify_queue, region_path,
+                         render_frame_cache, original_frame_cache, notify_queue, region_path, preview_path,
                          detect_params)
 
     def task(self, msg: ArrivalMessage):
@@ -388,7 +389,10 @@ class DetectionStreamRender(FrameArrivalHandler):
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
-        self.post_handle(current_time, post_filter_event, target, task_cnt)
+        preview_photo = self.original_frame_cache[current_idx]
+        preview_photo_path = self.preview_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
+        cv2.imwrite(str(preview_photo_path), cv2.cvtColor(preview_photo, cv2.COLOR_RGB2BGR))
+        self.post_handle(current_time, post_filter_event, target, task_cnt, preview_photo_path)
         # if msg.no_wait:
         # release lock status
         # self.original_frame_cache.release()
@@ -427,27 +431,30 @@ class DetectionStreamRender(FrameArrivalHandler):
         # notify post filter can begin its job
         post_filter_event.set()
 
-    def post_handle(self, current_time, post_filter_event, target, task_cnt):
+    def post_handle(self, current_time, post_filter_event, target, task_cnt, preview):
         """
         post process for each generated video.Can do post filter according its timing information
         :param current_time:
         :param post_filter_event: sync original video generation event
         :param target: video path
+        :param preview: preview photo path
         :param task_cnt: current video counting
         :return:
         """
         origin_video_path = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
         if self.cfg.post_filter:
-            self.do_post_filter(origin_video_path, task_cnt, post_filter_event)
+            self.do_post_filter(origin_video_path, preview, task_cnt, post_filter_event)
         else:
             msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
-                                               camera_id=self.cfg.camera_id, channel=self.cfg.channel)
+                                               camera_id=self.cfg.camera_id, channel=self.cfg.channel,
+                                               preview_name=str(preview.name))
             self.msg_queue.put(msg_json)
             logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
-    def do_post_filter(self, target, task_cnt, post_filter_event):
+    def do_post_filter(self, target, preview, task_cnt, post_filter_event):
         """
         execute post filter
+        :param preview:
         :param target:
         :param task_cnt:
         :param post_filter_event:
@@ -463,7 +470,8 @@ class DetectionStreamRender(FrameArrivalHandler):
             post filter think it is a video clip with dolphin
             """
             msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
-                                               camera_id=self.cfg.camera_id, channel=self.cfg.channel)
+                                               camera_id=self.cfg.camera_id, channel=self.cfg.channel,
+                                               preview_name=preview.name)
             self.msg_queue.put(msg_json)
             logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
 
@@ -604,10 +612,10 @@ class DetectionSignalHandler(FrameArrivalHandler):
     def __init__(self, cfg: VideoConfig, scfg: ServerConfig, detect_index, future_frames, msg_queue: Queue,
                  rect_stream_path,
                  original_stream_path, render_frame_cache, original_frame_cache, notify_queue,
-                 region_path, track_requester: TrackRequester, render_queue: Queue,
+                 region_path, preview_path, track_requester: TrackRequester, render_queue: Queue,
                  detect_params=None) -> None:
         super().__init__(cfg, scfg, detect_index, future_frames, msg_queue, rect_stream_path, original_stream_path,
-                         render_frame_cache, original_frame_cache, notify_queue, region_path,
+                         render_frame_cache, original_frame_cache, notify_queue, region_path, preview_path,
                          detect_params)
         self.track_requester = track_requester
         self.LOG_PREFIX = f'Detection Signal Handler [{self.cfg.index}]: '

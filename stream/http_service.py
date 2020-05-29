@@ -76,6 +76,21 @@ def query_directory(dir_name):
             os.path.isdir(os.path.join(dir_name, d))]
 
 
+def query_directory_child_list(dir_name):
+    """
+    return a directory folder tree recursively, exit if meet a file endpoint.
+    :param dir_name:
+    :return:
+    """
+    sun_dir_names = [l for l in os.listdir(dir_name) if not l.startswith('.')]
+    if not len(sun_dir_names):
+        return []
+    sun_dir_names = sort_humanly(sun_dir_names)
+    return [{'content': d, 'label': sort_humanly([str(ls) for ls in list(Path(os.path.join(dir_name, d)).glob('*'))])}
+            for d in
+            sun_dir_names]
+
+
 def tryint(s):  # 将元素中的数字转换为int后再排序
     try:
         return int(s)
@@ -133,6 +148,19 @@ class HttpServer(object):
         if not v_id.endswith('.mp4'):
             return 'Not supported file format.Must be mp4 file.'
         url = "{}/{}/{}/{}".format(date, channel, video_type, v_id)
+        return app.send_static_file(url)
+
+    @staticmethod
+    @app.route('/preview/<date>/<channel>/<p_id>', methods=['GET'])
+    def preview(date, channel, p_id: str):
+        """
+        can choose different video types
+        :param date:
+        :param channel:
+        :param p_id:
+        :return:
+        """
+        url = "{}/{}/preview/{}".format(date, channel, p_id)
         return app.send_static_file(url)
 
     @staticmethod
