@@ -211,7 +211,7 @@ class DetectorController(object):
                 save_file[key] = self.save_cache[key]
 
             fw = open(bbox_path, 'w')
-            fw.write(json.dumps(self.save_cache, indent=4))
+            fw.write(json.dumps(save_file, indent=4))
             fw.close()
 
             self.save_cache = {}

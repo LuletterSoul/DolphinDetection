@@ -250,7 +250,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         :return:
         """
         current_idx = msg.current_index
-        current_time = generate_time_stamp('%m%d%H%M%S') + '_'
+        current_time = generate_time_stamp('%m%d%H%M%S')
         post_filter_event = threading.Event()
         post_filter_event.clear()
         # use two independent threads to execute video generation sub-tasks
@@ -365,7 +365,8 @@ class DetectionStreamRender(FrameArrivalHandler):
         start = time.time()
         task_cnt = self.task_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
-        target = self.rect_stream_path / (current_time + str(task_cnt) + '.mp4')
+        # target = self.rect_stream_path / (current_time + str(task_cnt) + '.mp4')
+        target = self.rect_stream_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
         logger.debug(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # fourcc = cv2.VideoWriter_fourcc(*'avc1')
@@ -406,7 +407,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         post_filter_event.clear()
         task_cnt = self.task_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
-        target = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
+        target = self.original_stream_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
         logger.debug(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
