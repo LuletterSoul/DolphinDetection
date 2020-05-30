@@ -10,7 +10,7 @@ cron:
   start:
     month: '*'
     day: '*'
-    hour: '9'
+    hour: '8'
     minute: '00'
   end:
     month: '*'

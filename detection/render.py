@@ -601,7 +601,9 @@ class Obj(object):
         # 转化斜率为角度
         radian = math.atan(a)  # 弧度
         angle = (180 * radian) / math.pi  # 角度
+        logger.info(f'Line fitting: a: {a}, b: {b}, angle: {round(angle,2)}')
         if abs(angle) < self.cfg.alg['angle_thresh']:
+            logger.info(f'Line fitting: angle is below the thresold, fitting successful.')
             return True
         else:
             return False
@@ -652,6 +654,8 @@ class Obj(object):
         # else:
         elif self.is_match_with_history_float(float_trace_list):
             self.category = 'float'
+        elif continue_idx_sum <= 1:
+            self.category = 'Unknown'
         else:
             self.category = 'dolphin'
 
@@ -757,11 +761,11 @@ class DetectionSignalHandler(FrameArrivalHandler):
             logger.debug(f'put detect message in msg_queue {json_msg}...')
             # print(rects)
             self.render_rect_cache[frame_idx % self.cache_size] = rects
-        self.dol_id += 1
         empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
                                                 channel=self.cfg.channel,
                                                 timestamp=get_local_time(time_consume), dol_id=self.dol_id,
                                                 camera_id=self.cfg.camera_id)
+        self.dol_id += 1
         self.msg_queue.put(empty_msg)
 
 
@@ -969,7 +973,7 @@ class Filter(object):
                 new_float_trace.append(obj.trace)
             logger.info(
                 f'Post filter [{self.cfg.index}, {task_cnt}]:[{obj.index}th] obj is '
-                f'[{obj.category}],avg speed [{obj.mid_avg_speed}], continuous time [{obj.continue_idx_sum}], category [{obj.category}]')
+                f'[{obj.category}],avg speed [{obj.mid_avg_speed}], continuous time [{obj.continue_idx_sum}], category [{obj.category}], trace {obj.trace}')
             if obj.category == 'dolphin':
                 flag = True
                 for frame_idx, rect in obj.trace:
