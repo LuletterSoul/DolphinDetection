@@ -88,6 +88,7 @@ alg:
   speed_y_thresh: 15
   continuous_time_thresh: 36
   disappear_frames_thresh: 12
+  angle_thresh: 3
   track_confidence: 0.85
   ssd_confidence: 0.95
   cascade_model_path: mmdetection/work_dirs/cascade_rcnn_r50_caffe_fpn_1x_coco/latest.pth
