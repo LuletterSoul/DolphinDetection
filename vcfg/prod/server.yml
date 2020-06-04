@@ -10,12 +10,12 @@ cron:
   start:
     month: '*'
     day: '*'
-    hour: '8'
+    hour: '9'
     minute: '00'
   end:
     month: '*'
     day: '*'
-    hour: '18'
+    hour: '15'
     minute: '00'
 classify_model_path: model/bc-model-0314.pth
 detect_model_path: model/0403-ssd.pth

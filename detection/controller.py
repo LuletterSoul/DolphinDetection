@@ -567,8 +567,7 @@ class TaskBasedDetectorController(DetectorController):
                 for frame_result in frames_results:
                     if len(frame_result):
                         rects = [r for r in frame_result if
-                                 r[4] > self.cfg.alg['ssd_confidence'] and ((r[2] - r[0]) * (r[3] - r[1]) >
-                                                                            self.cfg.alg['area'])]
+                                 r[4] > self.cfg.alg['ssd_confidence']]
                         if len(rects):
                             self.result_queue.put((current_index, rects))
                             if len(rects) >= 3:

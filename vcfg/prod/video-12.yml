@@ -87,6 +87,6 @@ alg:
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36
-  disappear_frames_thresh: 3
+  disappear_frames_thresh: 12
   track_confidence: 0.95
   ssd_confidence: 0.86
