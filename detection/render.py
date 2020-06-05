@@ -289,7 +289,7 @@ class DetectionStreamRender(FrameArrivalHandler):
             # if current frame has bbox, just update the bbox position, and clear counting
             if tmp_rects is not None and len(tmp_rects):
                 render_cnt = 0
-                rects = tmp_rects
+                # rects = tmp_rects
             # each bbox will last 1.5s in 25FPS video
             is_render = render_cnt <= 36
             if is_render:
@@ -299,7 +299,7 @@ class DetectionStreamRender(FrameArrivalHandler):
                     # get a square bbox, the real bbox of width and height is universal as 224 * 224 or 448 * 448
                     p1, p2 = bbox_points(self.cfg, rect, frame.shape)
                     # write text
-                    frame = paint_chinese_opencv(frame, '江豚', p1)
+                    # frame = paint_chinese_opencv(frame, '江豚', p1)
                     cv2.rectangle(frame, p1, p2, color, 2)
                     if self.scfg.detect_mode != ModelType.CLASSIFY and len(rect) >= 5:
                         cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
@@ -751,7 +751,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
 
     def write_bbox(self, traces, time_consume):
         # cnt = 0
-        self.render_rect_cache[:] = [None] * self.cfg.cache_size
+        # self.render_rect_cache[:] = [None] * self.cfg.cache_size
         for frame_idx, rects in traces.items():
             json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                              timestamp=get_local_time(time_consume), rects=rects, dol_id=self.dol_id,
