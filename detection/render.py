@@ -289,8 +289,9 @@ class DetectionStreamRender(FrameArrivalHandler):
             # if current frame has bbox, just update the bbox position, and clear counting
             if tmp_rects is not None and len(tmp_rects):
                 render_cnt = 0
-                # rects = tmp_rects
+                rects = tmp_rects
             # each bbox will last 1.5s in 25FPS video
+            logger.debug(self.LOG_PREFIX + f'Render rect frame idx {index}, rects {rects}')
             is_render = render_cnt <= 36
             if is_render:
                 for rect in rects:
@@ -601,7 +602,7 @@ class Obj(object):
         # 转化斜率为角度
         radian = math.atan(a)  # 弧度
         angle = (180 * radian) / math.pi  # 角度
-        logger.info(f'Line fitting: a: {a}, b: {b}, angle: {round(angle,2)}')
+        logger.info(f'Line fitting: a: {a}, b: {b}, angle: {round(angle, 2)}')
         if abs(angle) < self.cfg.alg['angle_thresh']:
             logger.info(f'Line fitting: angle is below the thresold, fitting successful.')
             return True
@@ -753,6 +754,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
         # cnt = 0
         # self.render_rect_cache[:] = [None] * self.cfg.cache_size
         for frame_idx, rects in traces.items():
+            self.render_rect_cache[frame_idx % self.cache_size] = rects
             json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                              timestamp=get_local_time(time_consume), rects=rects, dol_id=self.dol_id,
                                              camera_id=self.cfg.camera_id, cfg=self.cfg)
@@ -760,7 +762,6 @@ class DetectionSignalHandler(FrameArrivalHandler):
             # bbox rendering is post to render
             logger.debug(f'put detect message in msg_queue {json_msg}...')
             # print(rects)
-            self.render_rect_cache[frame_idx % self.cache_size] = rects
         empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
                                                 channel=self.cfg.channel,
                                                 timestamp=get_local_time(time_consume), dol_id=self.dol_id,

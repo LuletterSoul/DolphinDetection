@@ -116,6 +116,7 @@ def creat_position_json(rects, cfg: VideoConfig):
     Args:
         cfg:
     """
+    new_rects = rects.copy()
     if 'real_shape' in cfg.alg:
         # recover original size such as 1080P position back to 4K
         real_shape = cfg.alg['real_shape']
@@ -125,9 +126,8 @@ def creat_position_json(rects, cfg: VideoConfig):
         for rect in rects:
             r = [rect[0] * ratio, rect[1] * ratio, rect[2] * ratio, rect[3] * ratio]
             new_rects.append(r)
-        rects = new_rects
     position = []
-    for rect in rects:
+    for rect in new_rects:
         position.append({'lx': int(rect[0]), 'ly': int(rect[1]), 'rx': int(rect[2]), 'ry': int(rect[3])})
     position_json = json.dumps(position)
     return position_json
