@@ -279,7 +279,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         render_cnt = 0
         rects = []
         for index in range(next_cnt, end_cnt + 1):
-            frame = self.original_frame_cache[index]
+            frame = self.original_frame_cache[index].copy()
             if frame is None:
                 print(f'Frame is none for [{index}]')
                 continue
