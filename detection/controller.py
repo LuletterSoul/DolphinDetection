@@ -545,7 +545,7 @@ class TaskBasedDetectorController(DetectorController):
             rects = []
             if self.cfg.show_window:
                 cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
-                frame = original_frame
+                frame = original_frame.copy()
                 if len(frames_results):
                     for rect in frames_results[0]:
                         if rect[4] > self.cfg.alg['ssd_confidence']:
@@ -585,8 +585,8 @@ class TaskBasedDetectorController(DetectorController):
                         # self.msg_queue.put(json_msg)
                         # logger.debug(f'put detect message in msg_queue {json_msg}...')
                         # self.render_frame_cache[current_index % self.cache_size] = render_frame
-                        if self.cfg.render:
-                            self.render_rect_cache[current_index % self.cache_size] = rects
+                        #if self.cfg.render:
+                        #    self.render_rect_cache[current_index % self.cache_size] = rects
                         self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
                     # else:
