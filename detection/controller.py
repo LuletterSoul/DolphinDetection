@@ -545,7 +545,7 @@ class TaskBasedDetectorController(DetectorController):
             rects = []
             if self.cfg.show_window:
                 cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
-                frame = original_frame.copy()
+                frame = original_frame
                 if len(frames_results):
                     for rect in frames_results[0]:
                         if rect[4] > self.cfg.alg['ssd_confidence']:
