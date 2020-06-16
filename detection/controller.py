@@ -237,7 +237,7 @@ class TaskBasedDetectorController(DetectorController):
 
     def __init__(self, server_cfg: ServerConfig, cfg: VideoConfig, stream_path: Path, candidate_path: Path,
                  frame_path: Path, frame_queue: Queue, index_pool: Queue, msg_queue: Queue, streaming_queue: List,
-                 render_notify_queue, frame_cache: SharedMemoryFrameCache) -> None:
+                 render_notify_queue, frame_cache: SharedMemoryFrameCache,recoder) -> None:
         super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool, msg_queue, frame_cache)
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
@@ -257,6 +257,7 @@ class TaskBasedDetectorController(DetectorController):
         # self.stream_render = stream_render
         self.global_index = Manager().Value('i', 0)
         self.render_notify_queue = render_notify_queue
+        self.recorder = recoder
         self.init_control_range()
         self.init_detectors()
 
@@ -589,6 +590,7 @@ class TaskBasedDetectorController(DetectorController):
                         #    self.render_rect_cache[current_index % self.cache_size] = rects
                         self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
+                        self.recorder.record()
                     # else:
                     #    if not self.dol_gone:
                     # empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,

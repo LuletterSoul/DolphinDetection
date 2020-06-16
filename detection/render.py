@@ -754,7 +754,11 @@ class DetectionSignalHandler(FrameArrivalHandler):
         # cnt = 0
         # self.render_rect_cache[:] = [None] * self.cfg.cache_size
         for frame_idx, rects in traces.items():
-            self.render_rect_cache[frame_idx % self.cache_size] = rects
+            old_rects = self.render_rect_cache[frame_idx % self.cache_size]
+            if old_rects is not None:
+                self.render_rect_cache[frame_idx % self.cache_size] = old_rects + rects
+            else:
+                self.render_rect_cache[frame_idx % self.cache_size] = rects
             json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                              timestamp=get_local_time(time_consume), rects=rects, dol_id=self.dol_id,
                                              camera_id=self.cfg.camera_id, cfg=self.cfg)

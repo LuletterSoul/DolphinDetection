@@ -1,7 +1,7 @@
 index: 41
 name: xiaguan_point
 camera_id: camera_bp_1
-channel: 0
+channel: 7
 shape:
   - 1080
   - 1920

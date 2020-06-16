@@ -19,6 +19,7 @@ from multiprocessing.managers import SharedMemoryManager
 from pathlib import Path
 from typing import List
 import numpy as np
+import os
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -169,6 +170,18 @@ class DetectionMonitor(object):
         clean_dir(self.region_path)
 
 
+class DetectionRecorder(object):
+    def __init__(self, save_dir, timestamp):
+        self.save_dir = save_dir
+        self.timestamp = timestamp
+        self.detect_time = Manager().Value('i', 0)
+
+    def record(self):
+        self.detect_time.set(self.detect_time.get() + 1)
+        with open(f'{self.save_dir}/{self.timestamp}.txt', 'w') as f:
+            f.write(str(self.detect_time.get()))
+
+
 class EmbeddingControlMonitor(DetectionMonitor):
     """
     add controller embedding
@@ -184,9 +197,9 @@ class EmbeddingControlMonitor(DetectionMonitor):
         self.init_caches()
         self.push_streamers = [PushStreamer(cfg, self.stream_stacks[idx]) for idx, cfg in enumerate(self.cfgs)]
         # self.stream_stacks = [Manager().list() for c in self.cfgs]
-
         self.caps = []
         self.controllers = []
+        self.recorder = DetectionRecorder(self.region_path, self.time_stamp)
 
     def init_caches(self):
         for idx, cfg in enumerate(self.cfgs):
@@ -373,8 +386,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                         self.region_path / str(cfg.index), self.frame_path / str(cfg.index),
                                         self.caps_queue[idx], self.pipes[idx], self.msg_queue[idx],
                                         self.stream_stacks[idx],
-                                        self.render_notify_queues[idx], self.frame_caches[idx]
-                                        )
+                                        self.render_notify_queues[idx], self.frame_caches[idx],
+                                        self.recorder)
             for
             idx, cfg in enumerate(self.cfgs)]
 
