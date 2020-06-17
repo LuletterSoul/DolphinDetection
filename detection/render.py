@@ -283,13 +283,16 @@ class DetectionStreamRender(FrameArrivalHandler):
             if frame is None:
                 print(f'Frame is none for [{index}]')
                 continue
-
-            tmp_rects = self.render_rect_cache[index % self.cache_size]
-            self.render_rect_cache[index % self.cache_size] = None
+            # tmp_rects = self.render_rect_cache[index % self.cache_size]
+            # self.render_rect_cache[index % self.cache_size] = None
             # if current frame has bbox, just update the bbox position, and clear counting
-            if tmp_rects is not None and len(tmp_rects):
+            #if tmp_rects is not None and len(tmp_rects):
+            #    render_cnt = 0
+            #    rects = tmp_rects
+            if index in self.render_rect_cache:
                 render_cnt = 0
-                rects = tmp_rects
+                # rects = self.render_rect_cache[index]
+
             # each bbox will last 1.5s in 25FPS video
             logger.debug(self.LOG_PREFIX + f'Render rect frame idx {index}, rects {rects}')
             is_render = render_cnt <= 36
@@ -754,11 +757,12 @@ class DetectionSignalHandler(FrameArrivalHandler):
         # cnt = 0
         # self.render_rect_cache[:] = [None] * self.cfg.cache_size
         for frame_idx, rects in traces.items():
-            old_rects = self.render_rect_cache[frame_idx % self.cache_size]
-            if old_rects is not None:
-                self.render_rect_cache[frame_idx % self.cache_size] = old_rects + rects
+            #old_rects = self.render_rect_cache[frame_idx % self.cache_size]
+            if frame_idx in self.render_rect_cache:
+                old_rects = self.render_rect_cache[frame_idx]
+                self.render_rect_cache[frame_idx] = old_rects + rects
             else:
-                self.render_rect_cache[frame_idx % self.cache_size] = rects
+                self.render_rect_cache[frame_idx] = rects
             json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                              timestamp=get_local_time(time_consume), rects=rects, dol_id=self.dol_id,
                                              camera_id=self.cfg.camera_id, cfg=self.cfg)

@@ -88,8 +88,9 @@ class DetectorController(object):
         self.original_frame_cache = frame_cache
 
         # bbox cache, retrieval by frame index,none represent this frame don't exist bbox
-        self.render_rect_cache = Manager().list()
-        self.render_rect_cache[:] = [None] * self.cache_size
+        # self.render_rect_cache = Manager().list()
+        self.render_rect_cache = Manager().dict()
+        # self.render_rect_cache[:] = [None] * self.cache_size
         self.LOG_PREFIX = f'Controller [{self.cfg.index}]: '
         self.save_cache = {}
 
@@ -397,7 +398,8 @@ class TaskBasedDetectorController(DetectorController):
                                                          camera_id=self.cfg.camera_id, cfg=self.cfg)
                         self.msg_queue.put(json_msg)
                         if self.cfg.render:
-                            self.render_rect_cache[current_index % self.cache_size] = r.rects
+                            # self.render_rect_cache[current_index % self.cache_size] = r.rects
+                            self.render_rect_cache[current_index] = r.rects
                         self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
                     else:
