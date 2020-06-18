@@ -96,10 +96,10 @@ def bbox_points(cfg: VideoConfig, rect, shape, delta_x=0, delta_y=0):
         start_x = 0
     if start_y < 0:
         start_y = 0
-    if end_x > shape[1]:
-        end_x = shape[1]
-    if end_y > shape[0]:
-        end_y = shape[0]
+    if end_x >= shape[1]:
+        end_x = shape[1] - 1
+    if end_y >= shape[0]:
+        end_y = shape[0] - 1
     p1 = (int(start_x), int(start_y))
     p2 = (int(end_x), int(end_y))
     return p1, p2

@@ -291,7 +291,7 @@ class DetectionStreamRender(FrameArrivalHandler):
             #    rects = tmp_rects
             if index in self.render_rect_cache:
                 render_cnt = 0
-                # rects = self.render_rect_cache[index]
+                rects = self.render_rect_cache[index]
 
             # each bbox will last 1.5s in 25FPS video
             logger.debug(self.LOG_PREFIX + f'Render rect frame idx {index}, rects {rects}')
