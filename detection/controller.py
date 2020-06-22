@@ -75,7 +75,9 @@ class DetectorController(object):
         self.result_queue = Manager().Queue(self.cfg.max_streams_cache)
         self.quit = Manager().Event()
         self.quit.clear()
+
         self.status = Manager().Value('i', SystemStatus.SHUT_DOWN)
+        self.global_index = Manager().Value('i', 0)
 
         self.next_prepare_event = Manager().Event()
         self.next_prepare_event.clear()
@@ -256,7 +258,6 @@ class TaskBasedDetectorController(DetectorController):
         self.frame_stack = Manager().list()
         self.detect_handler = None
         # self.stream_render = stream_render
-        self.global_index = Manager().Value('i', 0)
         self.render_notify_queue = render_notify_queue
         self.recorder = recoder
         self.init_control_range()

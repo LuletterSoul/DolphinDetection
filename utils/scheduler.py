@@ -24,4 +24,5 @@ class ClosableBlockingScheduler(BlockingScheduler):
 
     def listen(self):
         if self.stop_event.wait():
-            self.shutdown()
+            if self.running:
+                self.shutdown()

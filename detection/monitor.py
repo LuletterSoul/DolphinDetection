@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import List
 import numpy as np
 import os
+import traceback
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -450,15 +451,25 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                         delete_post=False))
 
     def cancel(self):
-        for idx, cap in enumerate(self.caps):
-            cap.quit.set()
-            self.controllers[idx].quit.set()
-            self.push_streamers[idx].quit.set()
-            self.stream_renders[idx].quit.set()
-            if self.cfgs[idx].use_sm:
-                self.frame_caches[idx].close()
-                self.stream_stacks[idx][0].close()
+        total_detection_cnt = 0
+        try:
+            for idx, cap in enumerate(self.caps):
+                total_detection_cnt += self.controllers[idx].global_index.get()
+                print(total_detection_cnt)
+                cap.quit.set()
+                self.controllers[idx].quit.set()
+                self.push_streamers[idx].quit.set()
+                self.stream_renders[idx].quit.set()
+                if self.cfgs[idx].use_sm:
+                    self.frame_caches[idx].close()
+                    # self.stream_stacks[idx][0].close()
             self.track_service.cancel()
+        except Exception as e:
+            traceback.print_exc()
+        # persist the number of  total detection frames
+        print(f'Write total detection cnt: {total_detection_cnt}')
+        with open(f'{self.region_path}/{self.time_stamp}_total_cnt.txt', 'w') as f:
+            f.write(str(total_detection_cnt))
 
     def init_websocket_clients(self):
         """
