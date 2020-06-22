@@ -22,6 +22,7 @@ from typing import List
 
 import cv2
 import numpy as np
+from queue import Empty
 from scipy.optimize import leastsq
 
 from config import ServerConfig, ModelType
@@ -224,6 +225,10 @@ class FrameArrivalHandler(object):
                     self.notify(msg)
                 if msg.type == ArrivalMsgType.UPDATE:
                     self.reset(msg)
+            except Empty as e:
+                # task service will timeout if track request is empty in pipe
+                # ignore
+                pass
             except Exception as e:
                 logger.error(e)
         logger.info(
@@ -286,7 +291,7 @@ class DetectionStreamRender(FrameArrivalHandler):
             # tmp_rects = self.render_rect_cache[index % self.cache_size]
             # self.render_rect_cache[index % self.cache_size] = None
             # if current frame has bbox, just update the bbox position, and clear counting
-            #if tmp_rects is not None and len(tmp_rects):
+            # if tmp_rects is not None and len(tmp_rects):
             #    render_cnt = 0
             #    rects = tmp_rects
             if index in self.render_rect_cache:
@@ -757,7 +762,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
         # cnt = 0
         # self.render_rect_cache[:] = [None] * self.cfg.cache_size
         for frame_idx, rects in traces.items():
-            #old_rects = self.render_rect_cache[frame_idx % self.cache_size]
+            # old_rects = self.render_rect_cache[frame_idx % self.cache_size]
             if frame_idx in self.render_rect_cache:
                 old_rects = self.render_rect_cache[frame_idx]
                 self.render_rect_cache[frame_idx] = old_rects + rects

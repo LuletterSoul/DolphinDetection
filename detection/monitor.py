@@ -534,7 +534,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                         logger.info(
                             '*******************************Controller [{}]: waiting process canceled********************************'.format(
                                 self.cfgs[idx].index))
-                        r.get()
+                        # r.get()
                         logger.info(
                             '*******************************Controller [{}]: exit********************************'.format(
                                 self.cfgs[idx].index))
