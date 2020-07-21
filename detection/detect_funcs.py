@@ -140,10 +140,10 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     ok_size = params.cfg.alg['ok_size']
 
     frame = cv2.pyrMeanShiftFiltering(frame, params.cfg.alg['sp'], params.cfg.alg['sr'])
-
-    cv2.namedWindow(str(params.cfg.index) + '-' + 'Smooth', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
-    cv2.imshow(str(params.cfg.index) + '-' + 'Smooth', frame)
-    cv2.waitKey(1)
+    if params.cfg.show_window:
+        cv2.namedWindow(str(params.cfg.index) + '-' + 'Smooth', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+        cv2.imshow(str(params.cfg.index) + '-' + 'Smooth', frame)
+        cv2.waitKey(1)
     # adaptive thresh by size
     thresh_binary = adaptive_thresh_size(frame, block_size=params.cfg.alg['block_size'],
                                          C=params.cfg.alg['mean'])
