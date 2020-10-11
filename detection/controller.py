@@ -240,7 +240,7 @@ class TaskBasedDetectorController(DetectorController):
 
     def __init__(self, server_cfg: ServerConfig, cfg: VideoConfig, stream_path: Path, candidate_path: Path,
                  frame_path: Path, frame_queue: Queue, index_pool: Queue, msg_queue: Queue, streaming_queue: List,
-                 render_notify_queue, frame_cache: SharedMemoryFrameCache,recoder) -> None:
+                 render_notify_queue, frame_cache: SharedMemoryFrameCache, recoder) -> None:
         super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool, msg_queue, frame_cache)
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
@@ -548,36 +548,21 @@ class TaskBasedDetectorController(DetectorController):
             current_index = self.pre_cnt
             rects = []
             if self.cfg.show_window:
-                cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
-                frame = original_frame
-                if len(frames_results):
-                    for rect in frames_results[0]:
-                        if rect[4] > self.cfg.alg['ssd_confidence']:
-                            cv2.imwrite(f'data/frames/{self.cfg.index}_{current_index}.png',
-                                        cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
-                            color = np.random.randint(0, 255, size=(3,))
-                            color = [int(c) for c in color]
-                            # get a square bbox, the real bbox of width and height is universal as 224 * 224 or 448 * 448
-                            p1, p2 = bbox_points(self.cfg, rect, original_frame.shape)
-                            # write text
-                            frame = paint_chinese_opencv(frame, '江豚', p1)
-                            cv2.rectangle(frame, (rect[0], rect[1]), (rect[2], rect[3]), color, 2)
-                            cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
-                cv2.imshow(str(self.cfg.index), frame)
-                cv2.waitKey(1)
+                self.debug_show_window(original_frame, current_index, frames_results)
 
             if len(frames_results):
                 for frame_result in frames_results:
                     if len(frame_result):
                         rects = [r for r in frame_result if
-                                 r[4] > self.cfg.alg['ssd_confidence']]
+                                 r[4] > self.cfg.alg['ssd_confidence'] and is_proposal_dolphin_by_color(original_frame,
+                                                                                                        r, self.cfg)]
                         if len(rects):
                             self.result_queue.put((current_index, rects))
                             if len(rects) >= 3:
                                 logger.info(f'To many rect candidates: [{len(rects)}].Abandoned..... ')
                                 return ConstructResult(original_frame, None, None, frame_index=self.pre_cnt)
                             detect_results.append(DetectionResult(rects=rects))
+
                             detect_flag = True
                             self.dol_gone = False
                             logger.info(
@@ -589,7 +574,7 @@ class TaskBasedDetectorController(DetectorController):
                         # self.msg_queue.put(json_msg)
                         # logger.debug(f'put detect message in msg_queue {json_msg}...')
                         # self.render_frame_cache[current_index % self.cache_size] = render_frame
-                        #if self.cfg.render:
+                        # if self.cfg.render:
                         #    self.render_rect_cache[current_index % self.cache_size] = rects
                         self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
@@ -613,6 +598,38 @@ class TaskBasedDetectorController(DetectorController):
             # if self.cfg.push_stream:
             #     self.push_stream_queue.append((original_frame, None, self.pre_cnt))
             self.post_stream_req(None, original_frame)
+
+    def debug_show_window(self, original_frame, current_index, frames_results):
+        """
+        show window and display all proposals in the video frames
+        Args:
+            original_frame:
+            current_index:
+            frames_results:
+
+        Returns:
+
+        """
+        cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
+        frame = original_frame
+        if len(frames_results):
+            for rect in frames_results[0]:
+                if rect[4] > self.cfg.alg['ssd_confidence']:
+                    cv2.imwrite(f'data/frames/{self.cfg.index}_{current_index}.png',
+                                cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
+                    # crop_frame = cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB)[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2]), :]
+                    # cv2.imwrite(f'/home/jt1/Desktop/crop_images/{current_index}.png', crop_frame)
+                    color = np.random.randint(0, 255, size=(3,))
+                    color = [int(c) for c in color]
+                    # get a square bbox, the real bbox of width and height is universal as 224 * 224 or 448 * 448
+                    p1, p2 = bbox_points(self.cfg, rect, original_frame.shape)
+                    # write text
+                    frame = paint_chinese_opencv(frame, '江豚', p1)
+                    cv2.rectangle(frame, (rect[0], rect[1]), (rect[2], rect[3]), color, 2)
+                    cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
+                                cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
+        cv2.imshow(str(self.cfg.index), frame)
+        cv2.waitKey(1)
 
     def update_detect_handler(self, current_index):
         """
