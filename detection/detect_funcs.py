@@ -215,7 +215,7 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     return res
 
 
-def is_proposal_dolphin_by_color(img, rect, cfg: VideoConfig):
+def is_proposal_dolphin_by_color(img, rect, white_rects, cfg: VideoConfig):
     """
     filter proposals that are not black enough using color threshold.
     Args:
@@ -226,6 +226,8 @@ def is_proposal_dolphin_by_color(img, rect, cfg: VideoConfig):
     Returns:
 
     """
+    if not cfg.alg['enable_color']:
+        return True
     proposal = img[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2]), :]
     color_range = cfg.alg['color_range']
     img_original_copy = proposal.copy()
@@ -236,7 +238,11 @@ def is_proposal_dolphin_by_color(img, rect, cfg: VideoConfig):
     m_g = np.sum(img_original_copy[:, :, 1] * mask) / (np.sum(mask))
     m_r = np.sum(img_original_copy[:, :, 2] * mask) / (np.sum(mask))
     print(f'Controller [{cfg.index}]:  mean color of proposal [{m_b},{m_g},{m_r}]')
-    return m_b < color_range[0] and m_g < color_range[1] and m_r < color_range[2]
+    is_black = m_b < color_range[0] and m_g < color_range[1] and m_r < color_range[2]
+    # save filter rects
+    if not is_black:
+        white_rects.append(rect)
+    return is_black
 
 
 def cal_block_bgr_mean(frame, label, label_map):

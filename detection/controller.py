@@ -27,7 +27,7 @@ from utils.cache import SharedMemoryFrameCache
 from . import Detector
 from .capture import *
 from .detect_funcs import *
-from .params import DispatchBlock
+from .params import DispatchBlock, FrameStorage
 # from utils import NoDaemonPool as Pool
 from .ssd import SSDDetector
 
@@ -160,15 +160,19 @@ class DetectorController(object):
                 # r = self.get_result_from_queue()
                 if not self.result_queue.empty():
                     # result_queue = self.result_queue.get(timeout=1)
-                    frame_index, rects = self.result_queue.get(timeout=1)
-                    frame = self.original_frame_cache[frame_index]
+                    # frame_index, rects = self.result_queue.get(timeout=1)
+                    frame_storage: FrameStorage = self.result_queue.get(timeout=1)
+                    frame = self.original_frame_cache[frame_storage.frame_index]
                     self.result_cnt += 1
-                    current_time = generate_time_stamp() + '_'
-                    img_name = current_time + str(self.result_cnt) + '.png'
-                    target = self.result_path / img_name
-                    cv2.imwrite(str(target), frame)
-                    self.label_crop(frame, img_name, rects)
-                    self.save_bbox(img_name, rects)
+                    # current_time = generate_time_stamp() + '_'
+                    current_time = generate_time_stamp()
+                    # img_name = current_time + str(self.result_cnt) + '.png'
+                    if frame_storage.save_original_crop:
+                        self.save_patch(self.result_cnt, frame, current_time, frame_storage.rects, square=False)
+                    if frame_storage.save_square_crop:
+                        self.save_patch(self.result_cnt, frame, current_time, frame_storage.rects, square=True)
+                    if frame_storage.save_frame:
+                        self.save_frame(self.result_cnt, current_time, frame, frame_storage)
             except Exception as e:
                 logger.error(e)
                 traceback.print_exc()
@@ -224,11 +228,27 @@ class DetectorController(object):
     def construct(self, *args) -> ConstructResult:
         pass
 
-    def label_crop(self, frame, label_name, rects):
+    def save_patch(self, save_cnt, frame, current_time, rects, square=False):
         for idx, rect in enumerate(rects):
-            crop_path = self.crop_result_path / (str(idx) + '_' + label_name)
-            cropped = crop_by_rect(self.cfg, rect, frame)
-            cv2.imwrite(str(crop_path), cropped)
+            crop_path = self.crop_result_path / f'{self.cfg.index}_{current_time}_c_{save_cnt}_{str(idx)}.png'
+            cropped = crop_by_rect(self.cfg, rect, frame) if square else crop_from_original(frame, rect)
+            cv2.imwrite(str(crop_path), cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB))
+            logger.info(self.LOG_PREFIX + f'Square proposal patch saved into {crop_path}, square [{square}]')
+
+    # def save_original_patch(self, save_cnt, frame, current_time, rects):
+    #    for idx, rect in enumerate(rects):
+    #        crop_path = self.crop_result_path / f'{self.cfg.index}_{current_time}_f_{save_cnt}_{str(idx)}.png'
+    #        cropped = frame[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2]), :]
+    #        cv2.imwrite(str(crop_path), cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB))
+    #        logger.info(self.LOG_PREFIX + f'Original proposal PATCH saved into {crop_path}')
+
+    def save_frame(self, idx, current_time, frame, frame_storage):
+        img_name = f'{self.cfg.index}_{current_time}_{idx}.png'
+        target = str(self.result_path / img_name)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        cv2.imwrite(target, frame)
+        self.save_bbox(img_name, frame_storage.rects)
+        logger.info(self.LOG_PREFIX + f'Original proposal FRAME saved into {target}')
 
 
 class TaskBasedDetectorController(DetectorController):
@@ -536,6 +556,14 @@ class TaskBasedDetectorController(DetectorController):
         # self.push_stream_queue.append((original_frame, None, self.pre_cnt))
 
     def model_based(self, args, original_frame):
+        """
+        use deep detection model to extract object
+        Args:
+            args:
+            original_frame:
+
+        Returns:
+        """
         model_instance = args[2]
         if self.pre_cnt % self.cfg.sample_rate == 0:
             start = time.time()
@@ -547,22 +575,34 @@ class TaskBasedDetectorController(DetectorController):
             detect_flag = False
             current_index = self.pre_cnt
             rects = []
+            filter_rects = []
             if self.cfg.show_window:
                 self.debug_show_window(original_frame, current_index, frames_results)
 
             if len(frames_results):
                 for frame_result in frames_results:
                     if len(frame_result):
+                        # filter by confidence and some hard rules
                         rects = [r for r in frame_result if
                                  r[4] > self.cfg.alg['ssd_confidence'] and is_proposal_dolphin_by_color(original_frame,
-                                                                                                        r, self.cfg)]
+                                                                                                        r, filter_rects,
+                                                                                                        self.cfg
+                                                                                                        )]
+                        # save original filtered rects.
+                        if len(filter_rects):
+                            self.result_queue.put(
+                                FrameStorage(current_index, filter_rects, save_frame=False, save_square_crop=False,
+                                             save_original_crop=True))
+
                         if len(rects):
-                            self.result_queue.put((current_index, rects))
+                            # notify result saver to store these frames that conclude proposals.
+                            # see self.write_frame_work()
+                            self.result_queue.put(FrameStorage(current_index, rects))
+                            # abandon if result represent to many proposals.
                             if len(rects) >= 3:
                                 logger.info(f'To many rect candidates: [{len(rects)}].Abandoned..... ')
                                 return ConstructResult(original_frame, None, None, frame_index=self.pre_cnt)
                             detect_results.append(DetectionResult(rects=rects))
-
                             detect_flag = True
                             self.dol_gone = False
                             logger.info(
@@ -576,6 +616,9 @@ class TaskBasedDetectorController(DetectorController):
                         # self.render_frame_cache[current_index % self.cache_size] = render_frame
                         # if self.cfg.render:
                         #    self.render_rect_cache[current_index % self.cache_size] = rects
+
+                        # post proposal rects to forward filtering process, complete object tracing,
+                        # and get object's speed and continues time
                         self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
                         self.recorder.record()
@@ -591,6 +634,8 @@ class TaskBasedDetectorController(DetectorController):
             self.update_render(current_index)
             self.update_detect_handler(current_index)
             # threading.Thread(target=self.str.notify, args=(current_index,), daemon=True).start()
+
+            #
             construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results,
                                                frame_index=self.pre_cnt)
             self.post_stream_req(construct_result, original_frame)
@@ -611,12 +656,12 @@ class TaskBasedDetectorController(DetectorController):
 
         """
         cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
-        frame = original_frame
+        frame = original_frame.copy()
         if len(frames_results):
             for rect in frames_results[0]:
                 if rect[4] > self.cfg.alg['ssd_confidence']:
-                    cv2.imwrite(f'data/frames/{self.cfg.index}_{current_index}.png',
-                                cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
+                    # cv2.imwrite(f'data/frames/{self.cfg.index}_{current_index}.png',
+                    #            cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
                     # crop_frame = cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB)[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2]), :]
                     # cv2.imwrite(f'/home/jt1/Desktop/crop_images/{current_index}.png', crop_frame)
                     color = np.random.randint(0, 255, size=(3,))
@@ -628,7 +673,7 @@ class TaskBasedDetectorController(DetectorController):
                     cv2.rectangle(frame, (rect[0], rect[1]), (rect[2], rect[3]), color, 2)
                     cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
                                 cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
-        cv2.imshow(str(self.cfg.index), frame)
+        cv2.imshow(str(self.cfg.index), cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         cv2.waitKey(1)
 
     def update_detect_handler(self, current_index):
@@ -658,6 +703,7 @@ class TaskBasedDetectorController(DetectorController):
         :return:
         """
         # if forward filtering is enabled, video render notification is under control by DetectionSignalHandler
+        # in other word, forward filter functionality is excluded with render functionality.
         if self.cfg.render and not self.cfg.forward_filter:
             self.render_notify_queue.put(ArrivalMessage(current_index, ArrivalMsgType.DETECTION))
 
@@ -674,7 +720,7 @@ class TaskBasedDetectorController(DetectorController):
 
     def get_model_result(self, original_frame, model, server_cfg: ServerConfig, inference_detector=None):
         """
-        get detection result from ssd model
+        get detection result from ssd model or cascade-rcnn model
         :param original_frame: numpy frame
         :param model: model instance
         :return:
@@ -772,10 +818,13 @@ class TaskBasedDetectorController(DetectorController):
     def start(self, pool: Pool):
         try:
             self.status.set(SystemStatus.RUNNING)
+            # run system signal listener
             threading.Thread(target=self.listen, daemon=True).start()
+            # run frame saver
             threading.Thread(target=self.write_frame_work, daemon=True).start()
             # threading.Thread(target=self.display, daemon=True).start()
             # threading.Thread(target=self.loop_stack, daemon=True).start()
+            # run main controller
             self.control()
             return True
         except Exception as e:

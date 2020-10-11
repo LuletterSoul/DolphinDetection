@@ -146,11 +146,25 @@ def _bbox_points(w, h, rect, shape, delta_x=0, delta_y=0):
 
 
 def crop_by_rect(cfg: VideoConfig, rect, frame):
+    """
+    crop rect alignment with definiton
+    Args:
+        cfg:
+        rect:
+        frame:
+
+    Returns:
+
+    """
     shape = frame.shape
     p1, p2 = bbox_points(cfg, rect, shape)
     start_x, start_y = p1
     end_x, end_y = p2
     return cv2.resize(frame[start_y:end_y, start_x:end_x], (cfg.bbox['w'], cfg.bbox['h']))
+
+
+def crop_from_original(frame, rect):
+    return frame[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2]), :]
 
 
 def crop_by_rect_wh(w, h, rect, frame):
