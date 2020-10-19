@@ -38,7 +38,7 @@ max_streams_cache: 5000
 online: vlc_rtsp
 cap_loop: false
 sample_internal: 15
-save_box: true
+save_box: false
 show_box: true
 cv_only: true
 ssd_divide_four: false
