@@ -400,7 +400,12 @@ class DetectionStreamRender(FrameArrivalHandler):
             f'seconds.Done write detection stream frame into: [{str(target)}]')
         preview_photo = self.original_frame_cache[current_idx]
         preview_photo_path = self.preview_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
-        cv2.imwrite(str(preview_photo_path), cv2.cvtColor(preview_photo, cv2.COLOR_RGB2BGR))
+        preview_big_photo_path = self.preview_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}_big.jpg'
+        preview_big = cv2.cvtColor(preview_photo, cv2.COLOR_RGB2BGR)
+        preview_small = cv2.resize(preview_big,dsize=(0,0),fx=0.25,fy=0.25)
+
+        cv2.imwrite(str(preview_photo_path), preview_small)
+        cv2.imwrite(str(preview_big_photo_path), preview_big)
         self.post_handle(current_time, post_filter_event, target, task_cnt, preview_photo_path)
         # if msg.no_wait:
         # release lock status

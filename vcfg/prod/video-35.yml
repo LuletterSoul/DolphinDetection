@@ -80,9 +80,9 @@ alg:
   area: 400
   area_ratio: 0.03
   color_range:
-    - 80
-    - 80
-    - 80
+    - 95
+    - 95
+    - 95
   color_scale: -1
   enable_color: true
   speed_x_thresh: 15
@@ -91,6 +91,6 @@ alg:
   disappear_frames_thresh: 12
   angle_thresh: 3
   track_confidence: 0.85
-  ssd_confidence: 0.75
+  ssd_confidence: 0.95
   cascade_model_path: mmdetection/work_dirs/0925_jt003_sync/epoch_20.pth
   cascade_model_cfg:  mmdetection/configs/cascade_rcnn/0925_jt003_sync.py
