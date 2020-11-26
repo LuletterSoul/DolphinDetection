@@ -97,7 +97,8 @@ def detect_based_mog2(frame, block, params: DetectorParams):
     # binary = cv2.erode(binary, erode_kernel)
     binary = cv2.dilate(binary, kernel)
     # img_con, contours, hierarchy = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-    num_labels, label_map, stats, centroids = cv2.connectedComponentsWithStats(binary)
+    num_labels, label_map, stats, centroids = cv2.connectedComponentsWithStats(
+        binary)
     rects = []
     regions = []
     status = None
@@ -120,7 +121,8 @@ def detect_based_mog2(frame, block, params: DetectorParams):
     res = DetectionResult(None, None, status, regions, binary, binary, coordinates, params.x_index,
                           params.y_index, block.index, back(rects, params.start, frame.shape, block.shape, params.cfg))
     end = time.time() - start
-    logger.info('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
+    logger.info('Detector: [{},{}]: using [{}] seconds'.format(
+        params.y_index, params.x_index, end))
     # cv2.destroyAllWindows()
     return res
 
@@ -139,9 +141,11 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     dk_size = params.cfg.alg['dk_size']
     ok_size = params.cfg.alg['ok_size']
 
-    frame = cv2.pyrMeanShiftFiltering(frame, params.cfg.alg['sp'], params.cfg.alg['sr'])
+    frame = cv2.pyrMeanShiftFiltering(
+        frame, params.cfg.alg['sp'], params.cfg.alg['sr'])
     if params.cfg.show_window:
-        cv2.namedWindow(str(params.cfg.index) + '-' + 'Smooth', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+        cv2.namedWindow(str(params.cfg.index) + '-' + 'Smooth',
+                        cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
         cv2.imshow(str(params.cfg.index) + '-' + 'Smooth', frame)
         cv2.waitKey(1)
     # adaptive thresh by size
@@ -150,34 +154,40 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     # TODO using multiple scales thresh to filter small object or noises
     # remove small objects
     if ok_size != -1:
-        open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ok_size, ok_size))
+        open_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (ok_size, ok_size))
         binary = cv2.morphologyEx(thresh_binary, cv2.MORPH_OPEN, open_kernel)
     else:
         binary = thresh_binary
 
     # enlarge candidates a little
     if dk_size != -1:
-        dilated_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dk_size, dk_size))
+        dilated_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (dk_size, dk_size))
         binary = cv2.dilate(binary, dilated_kernel)
 
     color_scale = params.cfg.alg['color_scale']
     color_range = params.cfg.alg['color_range']
     global_mean = cv2.mean(frame)
     if color_scale != -1:
-        color_range = [global_mean[0] / color_scale, global_mean[1] / color_scale, global_mean[2] / color_scale]
+        color_range = [global_mean[0] / color_scale,
+                       global_mean[1] / color_scale, global_mean[2] / color_scale]
 
     # global_mean = cv2.mean(frame)
 
     # compute linked components
-    num_components, label_map, rects, centroids = cv2.connectedComponentsWithStats(binary)
+    num_components, label_map, rects, centroids = cv2.connectedComponentsWithStats(
+        binary)
 
     binary_map = np.zeros(binary.shape, dtype=np.uint8)
     global_binary_map = np.zeros(binary.shape, dtype=np.uint8)
     for i in range(1, num_components):
         global_binary_map[label_map == i] = 255
     if params.cfg.show_window:
-        cv2.namedWindow(str(params.cfg.index) + '-' + 'Global Binary', cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
-        cv2.imshow(str(params.cfg.index) + '-' + 'Global Binary', global_binary_map)
+        cv2.namedWindow(str(params.cfg.index) + '-' + 'Global Binary',
+                        cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+        cv2.imshow(str(params.cfg.index) + '-' +
+                   'Global Binary', global_binary_map)
         cv2.waitKey(1)
     filtered_rects = []
     block_bgr_means = []  # candidate block color mean
@@ -196,7 +206,8 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
             # merge all white blocks into a single binary map
             filtered_rects.append(rects[i])
     # rect coordinates in original frame
-    original_rects = back(filtered_rects, params.start, frame.shape, block.shape, params.cfg)
+    original_rects = back(filtered_rects, params.start,
+                          frame.shape, block.shape, params.cfg)
 
     # load rect width and height thresh value from configuration
     # rect_width_thresh = params.cfg.alg['rwt']
@@ -211,7 +222,8 @@ def adaptive_thresh_with_rules(frame, block, params: DetectorParams):
     res = DetectionResult(None, None, None, None, binary_map, binary, [], params.x_index,
                           params.y_index, block.index, original_rects, rects)
     end = time.time() - start
-    logger.debug('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
+    logger.debug('Detector: [{},{}]: using [{}] seconds'.format(
+        params.y_index, params.x_index, end))
     return res
 
 
@@ -232,12 +244,14 @@ def is_proposal_dolphin_by_color(img, rect, white_rects, cfg: VideoConfig):
     color_range = cfg.alg['color_range']
     img_original_copy = proposal.copy()
     img_original = cv2.cvtColor(proposal, cv2.COLOR_BGR2GRAY)
-    retval, img_global = cv2.threshold(img_original, 130, 255, cv2.THRESH_BINARY)
+    retval, img_global = cv2.threshold(
+        img_original, 130, 255, cv2.THRESH_BINARY)
     mask = 1 - img_global / 255
     m_b = np.sum(img_original_copy[:, :, 0] * mask) / (np.sum(mask))
     m_g = np.sum(img_original_copy[:, :, 1] * mask) / (np.sum(mask))
     m_r = np.sum(img_original_copy[:, :, 2] * mask) / (np.sum(mask))
-    print(f'Controller [{cfg.index}]:  mean color of proposal [{m_b},{m_g},{m_r}]')
+    logger.debug(
+        f'Controller [{cfg.index}]:  mean color of proposal [{m_b},{m_g},{m_r}]')
     is_black = m_b < color_range[0] and m_g < color_range[1] and m_r < color_range[2]
     # save filter rects
     if not is_black:
@@ -279,7 +293,7 @@ def is_block_black(frame, i, label_map, color_range):
     logger.info(f'Block mean: {mean}')
     logger.info(f'Color range {color_range}')
     return mean[0] < color_range[0] and mean[1] < color_range[1] and mean[2] < \
-           color_range[2]
+        color_range[2]
 
 
 def adaptive_thresh_mask_no_rules(frame, mask, block, params: DetectorParams):
@@ -297,13 +311,15 @@ def adaptive_thresh_mask_no_rules(frame, mask, block, params: DetectorParams):
         return None
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-    adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=51, C=params.cfg.alg['mean'])
+    adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(
+        5, 5), block_size=51, C=params.cfg.alg['mean'])
     dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                          iterations=1)
     # exclude region mask
     dilated = cv2.bitwise_and(dilated, mask)
     # return value number of findContours will be different opencv version will be different
-    contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    contours, hierarchy = cv2.findContours(
+        dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     # imcon,contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE) three return values
     rects = []
     regions = []
@@ -320,7 +336,8 @@ def adaptive_thresh_mask_no_rules(frame, mask, block, params: DetectorParams):
     res = DetectionResult(None, None, status, regions, dilated, dilated, coordinates, params.x_index,
                           params.y_index, block.index, back(rects, params.start, frame.shape, block.shape, params.cfg))
     end = time.time() - start
-    logger.debug('Detector: [{},{}]: using [{}] seconds'.format(params.y_index, params.x_index, end))
+    logger.debug('Detector: [{},{}]: using [{}] seconds'.format(
+        params.y_index, params.x_index, end))
     return res
 
 
@@ -330,12 +347,14 @@ def detect(frame):
         return None
     # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     # _, t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
-    adaptive_thresh = adaptive_thresh_size(frame, kernel_size=(5, 5), block_size=21, C=40)
+    adaptive_thresh = adaptive_thresh_size(
+        frame, kernel_size=(5, 5), block_size=21, C=40)
     cv2.imshow('CV', adaptive_thresh)
     cv2.waitKey(0)
     dilated = cv2.dilate(adaptive_thresh, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
                          iterations=1)
-    img_con, contours, hierarchy = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    img_con, contours, hierarchy = cv2.findContours(
+        dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
     rects = []
     for c in contours:
         rect = cv2.boundingRect(c)
@@ -391,7 +410,8 @@ def construct(results: List[DetectionResult], params: ConstructParams):
     # constructed_frame = self.construct_rgb(sub_frames)
     # constructed_binary = self.construct_gray(sub_binary)
     # constructed_thresh = self.construct_gray(sub_thresh)
-    logger.info('Controller [{}]: Construct frames into a original frame....'.format(params.cfg.index))
+    logger.info('Controller [{}]: Construct frames into a original frame....'.format(
+        params.cfg.index))
     try:
         # self.construct_cnt += 1
         current_index = results[0].frame_index
@@ -407,7 +427,8 @@ def construct(results: List[DetectionResult], params: ConstructParams):
                 params.result_queue.put(original_frame)
                 last_detection = time.time()
                 if r.frame_index not in params.original_frame_cache:
-                    logger.info('Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
+                    logger.info(
+                        'Unknown frame index: [{}] to fetch frame in cache.'.format(r.frame_index))
                     continue
                 for rect in r.rects:
                     color = np.random.randint(0, 255, size=(3,))

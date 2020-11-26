@@ -125,7 +125,7 @@ class FrameArrivalHandler(object):
 
     def notify(self, msg: ArrivalMessage):
         """
-        execute some analysis tasks asynchronously before the the future frame comes
+        lock the frame window, execute some analysis tasks asynchronously before the the future frame comes
         :param msg:
         :return:
         """
