@@ -1,10 +1,10 @@
-index: 34
-name: xiaguan_point
-camera_id: camera_bp_1
-channel: 3
+index: 68
+name: test_bp_2
+camera_id: test_camera_bp_2
+channel: 7
 shape:
-  - 1080
-  - 1920
+  - 2160
+  - 3840
   - 3
 ip: 222.190.243.176
 dip: http://10.196.122.94:8080
@@ -35,14 +35,14 @@ draw_boundary: false
 enable: false
 filtered_ratio: 0.5
 max_streams_cache: 5000
-online: vlc_rtsp
+online: offline
 cap_loop: false
 sample_internal: 15
 save_box: false
 show_box: true
 cv_only: true
 ssd_divide_four: false
-rtsp: rtsp://10.196.122.98/cvcam/24/stream1
+rtsp: rtsp://10.196.122.98/cvcam/21/stream1
 push_to: rtsp://192.168.0.116/yz
 write_timestamp: false
 enable_sample_frame: false
@@ -80,11 +80,10 @@ alg:
   area: 400
   area_ratio: 0.03
   color_range:
-    - 95
-    - 95
-    - 95
+    - 80
+    - 80
+    - 80
   color_scale: -1
-  enable_color: true
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36
@@ -92,5 +91,5 @@ alg:
   angle_thresh: 3
   track_confidence: 0.85
   ssd_confidence: 0.95
-  cascade_model_path: mmdetection/work_dirs/1125_jt003_neg_bg/epoch_24.pth
-  cascade_model_cfg:  mmdetection/configs/cascade_rcnn/0925_jt003_sync.py
+  cascade_model_path: mmdetection/work_dirs/cascade_rcnn_r50_caffe_fpn_1x_coco_Yuzhui_0602/latest.pth
+  cascade_model_cfg:  mmdetection/configs/cascade_rcnn/cascade_rcnn_r50_caffe_fpn_1x_coco.py
