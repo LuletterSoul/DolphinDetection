@@ -268,3 +268,10 @@ mmdetection/work_dirs
 *.pth
 *.py~
 *.sh~
+
+
+http.sh
+http_service.py
+run_5-7-2.sh
+run_5-7-3.sh
+default.mp4
