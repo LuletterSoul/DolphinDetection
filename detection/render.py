@@ -40,9 +40,8 @@ from utils import preprocess, crop_by_se, logger
 from utils.cache import SharedMemoryFrameCache
 
 
-import cv2
-import time
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image,  ImageFont
+
 text_params = dict({
     "font": ImageFont.truetype("./static/msyh.ttc", 50, encoding="uft-8"),
     "color": (255, 255, 255),
@@ -302,14 +301,18 @@ class DetectionStreamRender(FrameArrivalHandler):
             next_cnt = 1
         render_cnt = 0
         rects = []
+        local_time = time.localtime()
         for index in range(next_cnt, end_cnt + 1):
             frame = self.original_frame_cache[index].copy()
             if frame is None:
                 print(f'Frame is none for [{index}]')
                 continue
 
-            local_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            # frame = add_text_logo(frame, local_time, logo, text_params=text_params, logo_params=logo_params)
+            clt = local_time.copy()
+
+            clt.tm_sec = clt.tm_sec + (index % 24)
+            fmt_local_time = time.strftime("%Y-%m-%d %H:%M:%S", clt)
+            frame = add_text_logo(frame, fmt_local_time, logo, text_params=text_params, logo_params=logo_params)
             # tmp_rects = self.render_rect_cache[index % self.cache_size]
             # self.render_rect_cache[index % self.cache_size] = None
             # if current frame has bbox, just update the bbox position, and clear counting

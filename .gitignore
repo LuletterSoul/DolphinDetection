@@ -270,3 +270,6 @@ mmdetection/work_dirs
 *.sh~
 
 *.mp4
+
+.vscode
+.idea
