@@ -19,12 +19,15 @@ from multiprocessing.managers import SharedMemoryManager
 from pathlib import Path
 from typing import List
 import numpy as np
+import os
+import traceback
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import stream
 from config import VideoConfig, ServerConfig
-from .capture import VideoOfflineCapture, VideoOnlineSampleCapture, VideoRtspCapture, VideoRtspVlcCapture
+from .capture import VideoOfflineCapture, VideoOnlineSampleCapture, VideoRtspCapture, VideoRtspVlcCapture, \
+    VideoOfflineVlcCapture
 from pysot.tracker.service import TrackingService
 from stream.rtsp import PushStreamer
 from stream.websocket import websocket_client
@@ -168,6 +171,18 @@ class DetectionMonitor(object):
         clean_dir(self.region_path)
 
 
+class DetectionRecorder(object):
+    def __init__(self, save_dir, timestamp):
+        self.save_dir = save_dir
+        self.timestamp = timestamp
+        self.detect_time = Manager().Value('i', 0)
+
+    def record(self):
+        self.detect_time.set(self.detect_time.get() + 1)
+        with open(f'{self.save_dir}/{self.timestamp}.txt', 'w') as f:
+            f.write(str(self.detect_time.get()))
+
+
 class EmbeddingControlMonitor(DetectionMonitor):
     """
     add controller embedding
@@ -183,9 +198,9 @@ class EmbeddingControlMonitor(DetectionMonitor):
         self.init_caches()
         self.push_streamers = [PushStreamer(cfg, self.stream_stacks[idx]) for idx, cfg in enumerate(self.cfgs)]
         # self.stream_stacks = [Manager().list() for c in self.cfgs]
-
         self.caps = []
         self.controllers = []
+        self.recorder = DetectionRecorder(self.region_path, self.time_stamp)
 
     def init_caches(self):
         for idx, cfg in enumerate(self.cfgs):
@@ -214,6 +229,8 @@ class EmbeddingControlMonitor(DetectionMonitor):
                 self.init_rtsp_caps(c, idx)
             elif c.online == 'vlc_rtsp':
                 self.init_vlc_rtsp_caps(c, idx)
+            elif c.online == 'vlc_offline':
+                self.init_vlc_offline_caps(c, idx)
             elif c.online == 'offline':
                 self.init_offline_caps(c, idx)
 
@@ -245,6 +262,9 @@ class EmbeddingControlMonitor(DetectionMonitor):
                                      c, idx, c.sample_rate))
 
     def init_vlc_rtsp_caps(self, c, idx):
+        pass
+
+    def init_vlc_offline_caps(self, c, idx):
         pass
 
     def init_rtsp_caps(self, c, idx):
@@ -333,6 +353,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                   self.controllers[idx].original_stream_path,
                                   self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
                                   self.render_notify_queues[idx], self.region_path / str(c.index),
+                                  self.controllers[idx].preview_path,
                                   self.controllers[idx].detect_params) for idx, c
             in
             enumerate(self.cfgs)]
@@ -348,6 +369,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                    self.controllers[idx].original_stream_path,
                                    self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
                                    self.render_notify_queues[idx], self.region_path / str(c.index),
+                                   self.controllers[idx].preview_path,
                                    self.track_requester, self.render_notify_queues[idx],
                                    self.controllers[idx].detect_params) for idx, c
             in
@@ -365,8 +387,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                         self.region_path / str(cfg.index), self.frame_path / str(cfg.index),
                                         self.caps_queue[idx], self.pipes[idx], self.msg_queue[idx],
                                         self.stream_stacks[idx],
-                                        self.render_notify_queues[idx], self.frame_caches[idx]
-                                        )
+                                        self.render_notify_queues[idx], self.frame_caches[idx],
+                                        self.recorder)
             for
             idx, cfg in enumerate(self.cfgs)]
 
@@ -396,6 +418,23 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                 c.sample_rate)
         )
 
+    def init_vlc_offline_caps(self, c, idx):
+        """
+
+        init offline vlc video stream reciever
+        Args:
+            c:
+            idx:
+        Returns:
+        """
+        self.caps.append(
+            VideoOfflineVlcCapture(self.stream_path / str(c.index), self.sample_path / str(c.index),
+                                   self.offline_path / str(c.index),
+                                   self.pipes[idx],
+                                   self.caps_queue[idx], c, idx, self.controllers[idx], self.shut_down_event,
+                                   c.sample_rate,
+                                   delete_post=False))
+
     def init_offline_caps(self, c, idx):
         """
         init offline rtsp video stream reciever
@@ -412,15 +451,25 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                         delete_post=False))
 
     def cancel(self):
-        for idx, cap in enumerate(self.caps):
-            cap.quit.set()
-            self.controllers[idx].quit.set()
-            self.push_streamers[idx].quit.set()
-            self.stream_renders[idx].quit.set()
-            if self.cfgs[idx].use_sm:
-                self.frame_caches[idx].close()
-                self.stream_stacks[idx][0].close()
+        total_detection_cnt = 0
+        try:
+            for idx, cap in enumerate(self.caps):
+                total_detection_cnt += self.controllers[idx].global_index.get()
+                print(total_detection_cnt)
+                cap.quit.set()
+                self.controllers[idx].quit.set()
+                self.push_streamers[idx].quit.set()
+                self.stream_renders[idx].quit.set()
+                if self.cfgs[idx].use_sm:
+                    self.frame_caches[idx].close()
+                    # self.stream_stacks[idx][0].close()
             self.track_service.cancel()
+        except Exception as e:
+            traceback.print_exc()
+        # persist the number of  total detection frames
+        print(f'Write total detection cnt: {total_detection_cnt}')
+        with open(f'{self.region_path}/{self.time_stamp}_total_cnt.txt', 'w') as f:
+            f.write(str(total_detection_cnt))
 
     def init_websocket_clients(self):
         """
@@ -468,7 +517,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                 self.task_futures.append(
                     self.process_pool.apply_async(self.caps[i].read, (self.scfg,)))
                 # self.task_futures[-1].get()
-                #self.task_futures.append(
+                # self.task_futures.append(
                 #    self.process_pool.apply_async(self.push_streamers[i].push_stream, ()))
                 self.task_futures.append(self.process_pool.apply_async(self.stream_renders[i].
                                                                        loop, ()))
@@ -485,7 +534,7 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                         logger.info(
                             '*******************************Controller [{}]: waiting process canceled********************************'.format(
                                 self.cfgs[idx].index))
-                        r.get()
+                        # r.get()
                         logger.info(
                             '*******************************Controller [{}]: exit********************************'.format(
                                 self.cfgs[idx].index))

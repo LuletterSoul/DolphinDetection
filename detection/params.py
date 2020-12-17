@@ -94,6 +94,15 @@ class ReconstructResult(object):
         self.reconstruct_rct = rct
 
 
+class FrameStorage(object):
+    def __init__(self, frame_index, rects, save_frame=True, save_square_crop=True, save_original_crop=False):
+        self.frame_index = frame_index
+        self.rects = rects
+        self.save_frame = save_frame
+        self.save_square_crop = save_square_crop
+        self.save_original_crop = save_original_crop
+
+
 class DetectorParams(object):
 
     def __init__(self, x_step, y_step, x_index, y_index, cfg: VideoConfig, region_save_path: Path) -> None:

@@ -268,3 +268,5 @@ mmdetection/work_dirs
 *.pth
 *.py~
 *.sh~
+
+*.mp4

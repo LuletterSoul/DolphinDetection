@@ -21,13 +21,13 @@ import numpy as np
 
 from classfy.model import DolphinClassifier
 from config import ModelType
-from render import ArrivalMessage, ArrivalMsgType
+from .render import ArrivalMessage, ArrivalMsgType
 from stream.websocket import *
 from utils.cache import SharedMemoryFrameCache
 from . import Detector
 from .capture import *
 from .detect_funcs import *
-from .params import DispatchBlock
+from .params import DispatchBlock, FrameStorage
 # from utils import NoDaemonPool as Pool
 from .ssd import SSDDetector
 
@@ -60,6 +60,7 @@ class DetectorController(object):
         self.rect_stream_path = self.candidate_path / 'render-streams'
         self.original_stream_path = self.candidate_path / 'original-streams'
         self.test_path = self.candidate_path / 'tests'
+        self.preview_path = self.candidate_path / 'preview'
         self.create_workspace()
 
         self.result_cnt = 0
@@ -67,14 +68,17 @@ class DetectorController(object):
         self.y_num = cfg.routine['row']
         self.x_step = 0
         self.y_step = 0
-        self.block_info = BlockInfo(self.y_num, self.x_num, self.y_step, self.x_step)
+        self.block_info = BlockInfo(
+            self.y_num, self.x_num, self.y_step, self.x_step)
 
         self.frame_queue = frame_queue
         self.msg_queue = msg_queue
         self.result_queue = Manager().Queue(self.cfg.max_streams_cache)
         self.quit = Manager().Event()
         self.quit.clear()
+
         self.status = Manager().Value('i', SystemStatus.SHUT_DOWN)
+        self.global_index = Manager().Value('i', 0)
 
         self.next_prepare_event = Manager().Event()
         self.next_prepare_event.clear()
@@ -87,8 +91,9 @@ class DetectorController(object):
         self.original_frame_cache = frame_cache
 
         # bbox cache, retrieval by frame index,none represent this frame don't exist bbox
-        self.render_rect_cache = Manager().list()
-        self.render_rect_cache[:] = [None] * self.cache_size
+        # self.render_rect_cache = Manager().list()
+        self.render_rect_cache = Manager().dict()
+        # self.render_rect_cache[:] = [None] * self.cache_size
         self.LOG_PREFIX = f'Controller [{self.cfg.index}]: '
         self.save_cache = {}
 
@@ -101,14 +106,17 @@ class DetectorController(object):
         frame, original_frame = preprocess(frame, self.cfg)
         self.x_step = int(frame.shape[1] / self.x_num)
         self.y_step = int(frame.shape[0] / self.y_num)
-        self.block_info = BlockInfo(self.y_num, self.x_num, self.y_step, self.x_step)
+        self.block_info = BlockInfo(
+            self.y_num, self.x_num, self.y_step, self.x_step)
 
     def init_detectors(self):
-        logger.info('Init total [{}] detectors....'.format(self.x_num * self.y_num))
+        logger.info('Init total [{}] detectors....'.format(
+            self.x_num * self.y_num))
         self.detectors = []
         for i in range(self.x_num):
             for j in range(self.y_num):
-                region_detector_path = self.block_path / (str(i) + '-' + str(j))
+                region_detector_path = self.block_path / \
+                    (str(i) + '-' + str(j))
                 index = self.x_num * i + j
                 self.detectors.append(
                     Detector(self.x_step, self.y_step, i, j, self.cfg, self.send_pipes[index],
@@ -124,6 +132,7 @@ class DetectorController(object):
         self.original_stream_path.mkdir(exist_ok=True, parents=True)
         self.block_path.mkdir(exist_ok=True, parents=True)
         self.test_path.mkdir(exist_ok=True, parents=True)
+        self.preview_path.mkdir(exist_ok=True, parents=True)
 
     def start(self, pool):
         self.status.set(SystemStatus.RUNNING)
@@ -155,15 +164,23 @@ class DetectorController(object):
                 # r = self.get_result_from_queue()
                 if not self.result_queue.empty():
                     # result_queue = self.result_queue.get(timeout=1)
-                    frame_index, rects = self.result_queue.get(timeout=1)
-                    frame = self.original_frame_cache[frame_index]
+                    # frame_index, rects = self.result_queue.get(timeout=1)
+                    frame_storage: FrameStorage = self.result_queue.get(
+                        timeout=1)
+                    frame = self.original_frame_cache[frame_storage.frame_index]
                     self.result_cnt += 1
-                    current_time = generate_time_stamp() + '_'
-                    img_name = current_time + str(self.result_cnt) + '.png'
-                    target = self.result_path / img_name
-                    cv2.imwrite(str(target), frame)
-                    self.label_crop(frame, img_name, rects)
-                    self.save_bbox(img_name, rects)
+                    # current_time = generate_time_stamp() + '_'
+                    current_time = generate_time_stamp()
+                    # img_name = current_time + str(self.result_cnt) + '.png'
+                    if frame_storage.save_original_crop:
+                        self.save_patch(
+                            self.result_cnt, frame, current_time, frame_storage.rects, square=False)
+                    if frame_storage.save_square_crop:
+                        self.save_patch(
+                            self.result_cnt, frame, current_time, frame_storage.rects, square=True)
+                    if frame_storage.save_frame:
+                        self.save_frame(self.result_cnt,
+                                        current_time, frame, frame_storage)
             except Exception as e:
                 logger.error(e)
                 traceback.print_exc()
@@ -181,16 +198,20 @@ class DetectorController(object):
 
     def construct_rgb(self, sub_frames):
         sub_frames = np.array(sub_frames)
-        sub_frames = np.reshape(sub_frames, (self.x_num, self.y_num, self.x_step, self.y_step, 3))
+        sub_frames = np.reshape(
+            sub_frames, (self.x_num, self.y_num, self.x_step, self.y_step, 3))
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3, 4))
-        constructed_frame = np.reshape(sub_frames, (self.x_num * self.x_step, self.y_num * self.y_step, 3))
+        constructed_frame = np.reshape(
+            sub_frames, (self.x_num * self.x_step, self.y_num * self.y_step, 3))
         return constructed_frame
 
     def construct_gray(self, sub_frames):
         sub_frames = np.array(sub_frames)
-        sub_frames = np.reshape(sub_frames, (self.y_num, self.x_num, self.y_step, self.x_step))
+        sub_frames = np.reshape(
+            sub_frames, (self.y_num, self.x_num, self.y_step, self.x_step))
         sub_frames = np.transpose(sub_frames, (0, 2, 1, 3))
-        constructed_frame = np.reshape(sub_frames, (self.y_num * self.y_step, self.x_num * self.x_step))
+        constructed_frame = np.reshape(
+            sub_frames, (self.y_num * self.y_step, self.x_num * self.x_step))
         return constructed_frame
 
     def save_bbox(self, frame_name, boundary_rect):
@@ -211,7 +232,7 @@ class DetectorController(object):
                 save_file[key] = self.save_cache[key]
 
             fw = open(bbox_path, 'w')
-            fw.write(json.dumps(self.save_cache, indent=4))
+            fw.write(json.dumps(save_file, indent=4))
             fw.close()
 
             self.save_cache = {}
@@ -219,11 +240,32 @@ class DetectorController(object):
     def construct(self, *args) -> ConstructResult:
         pass
 
-    def label_crop(self, frame, label_name, rects):
+    def save_patch(self, save_cnt, frame, current_time, rects, square=False):
         for idx, rect in enumerate(rects):
-            crop_path = self.crop_result_path / (str(idx) + '_' + label_name)
-            cropped = crop_by_rect(self.cfg, rect, frame)
-            cv2.imwrite(str(crop_path), cropped)
+            crop_path = self.crop_result_path / \
+                f'{self.cfg.index}_{current_time}_c_{save_cnt}_{str(idx)}.png'
+            cropped = crop_by_rect(
+                self.cfg, rect, frame) if square else crop_from_original(frame, rect)
+            cv2.imwrite(str(crop_path), cv2.cvtColor(
+                cropped, cv2.COLOR_BGR2RGB))
+            logger.info(
+                self.LOG_PREFIX + f'Square proposal patch saved into {crop_path}, square [{square}]')
+
+    # def save_original_patch(self, save_cnt, frame, current_time, rects):
+    #    for idx, rect in enumerate(rects):
+    #        crop_path = self.crop_result_path / f'{self.cfg.index}_{current_time}_f_{save_cnt}_{str(idx)}.png'
+    #        cropped = frame[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2]), :]
+    #        cv2.imwrite(str(crop_path), cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB))
+    #        logger.info(self.LOG_PREFIX + f'Original proposal PATCH saved into {crop_path}')
+
+    def save_frame(self, idx, current_time, frame, frame_storage):
+        img_name = f'{self.cfg.index}_{current_time}_{idx}.png'
+        target = str(self.result_path / img_name)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        cv2.imwrite(target, frame)
+        self.save_bbox(img_name, frame_storage.rects)
+        logger.info(self.LOG_PREFIX +
+                    f'Original proposal FRAME saved into {target}')
 
 
 class TaskBasedDetectorController(DetectorController):
@@ -235,8 +277,9 @@ class TaskBasedDetectorController(DetectorController):
 
     def __init__(self, server_cfg: ServerConfig, cfg: VideoConfig, stream_path: Path, candidate_path: Path,
                  frame_path: Path, frame_queue: Queue, index_pool: Queue, msg_queue: Queue, streaming_queue: List,
-                 render_notify_queue, frame_cache: SharedMemoryFrameCache) -> None:
-        super().__init__(cfg, stream_path, candidate_path, frame_path, frame_queue, index_pool, msg_queue, frame_cache)
+                 render_notify_queue, frame_cache: SharedMemoryFrameCache, recoder) -> None:
+        super().__init__(cfg, stream_path, candidate_path, frame_path,
+                         frame_queue, index_pool, msg_queue, frame_cache)
         # self.construct_params = ray.put(
         #     ConstructParams(self.result_queue, self.original_frame_cache, self.render_frame_cache,
         #                     self.render_rect_cache, self.stream_render, 500, self.cfg))
@@ -253,8 +296,8 @@ class TaskBasedDetectorController(DetectorController):
         self.frame_stack = Manager().list()
         self.detect_handler = None
         # self.stream_render = stream_render
-        self.global_index = Manager().Value('i', 0)
         self.render_notify_queue = render_notify_queue
+        self.recorder = recoder
         self.init_control_range()
         self.init_detectors()
 
@@ -281,7 +324,8 @@ class TaskBasedDetectorController(DetectorController):
                 self.x_num * self.y_num))
         for i in range(self.x_num):
             for j in range(self.y_num):
-                region_detector_path = self.block_path / (str(i) + '-' + str(j))
+                region_detector_path = self.block_path / \
+                    (str(i) + '-' + str(j))
                 # index = self.col * i + j
                 # self.detectors.append(
                 #     TaskBasedDetector(self.col_step, self.row_step, i, j, self.cfg, self.send_pipes[index],
@@ -303,7 +347,8 @@ class TaskBasedDetectorController(DetectorController):
         frame, _ = preprocess(empty, self.cfg)
         self.x_step = int(frame.shape[1] / self.x_num)
         self.y_step = int(frame.shape[0] / self.y_num)
-        self.block_info = BlockInfo(self.y_num, self.x_num, self.y_step, self.x_step)
+        self.block_info = BlockInfo(
+            self.y_num, self.x_num, self.y_step, self.x_step)
 
     def collect(self, args):
         return [f.result() for f in args]
@@ -370,13 +415,15 @@ class TaskBasedDetectorController(DetectorController):
                     self.result_queue.put((r.frame_index, r.rects))
                     rects = []
                     if len(r.rects) >= 5:
-                        logger.info(f'To many rect candidates: [{len(r.rects)}].Abandoned..... ')
+                        logger.info(
+                            f'To many rect candidates: [{len(r.rects)}].Abandoned..... ')
                         return ConstructResult(original_frame, None, None, frame_index=current_index)
                     for rect in r.rects:
                         start = time.time()
                         detect_result = True
                         if not self.cfg.cv_only:
-                            candidate = crop_by_rect(self.cfg, rect, render_frame)
+                            candidate = crop_by_rect(
+                                self.cfg, rect, render_frame)
                             obj_class, output = _model.predict(candidate)
                             detect_result = (obj_class == 0)
                             logger.debug(
@@ -391,10 +438,11 @@ class TaskBasedDetectorController(DetectorController):
                     if push_flag:
                         json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                                          timestamp=current_index, rects=r.rects, dol_id=self.dol_id,
-                                                         camera_id=self.cfg.camera_id)
+                                                         camera_id=self.cfg.camera_id, cfg=self.cfg)
                         self.msg_queue.put(json_msg)
                         if self.cfg.render:
-                            self.render_rect_cache[current_index % self.cache_size] = r.rects
+                            # self.render_rect_cache[current_index % self.cache_size] = r.rects
+                            self.render_rect_cache[current_index] = r.rects
                         self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
                     else:
@@ -404,7 +452,8 @@ class TaskBasedDetectorController(DetectorController):
                                                                     timestamp=current_index, dol_id=self.dol_id,
                                                                     camera_id=self.cfg.camera_id)
                             self.msg_queue.put(empty_msg)
-                            logger.info(self.LOG_PREFIX + f'Send empty msg: {empty_msg}')
+                            logger.info(self.LOG_PREFIX +
+                                        f'Send empty msg: {empty_msg}')
                             self.dol_id += 1
                             self.dol_gone = True
             self.update_render(current_index)
@@ -426,6 +475,8 @@ class TaskBasedDetectorController(DetectorController):
         os.environ["CUDA_VISIBLE_DEVICES"] = f'{int(self.cfg.index) % 4}'
 
         from mmdetection import init_detector
+        import torch
+        torch.set_num_threads(1)
         classifier = None
         model = None
 
@@ -433,7 +484,8 @@ class TaskBasedDetectorController(DetectorController):
         # every frame looper will occupy single model instance by now
         # TODO less model instances,but could be shared by all detectors
         if self.server_cfg.detect_mode == ModelType.SSD:
-            model = SSDDetector(model_path=self.server_cfg.detect_model_path, device_id='0')
+            model = SSDDetector(
+                model_path=self.server_cfg.detect_model_path, device_id='0')
             model.run()
             logger.info(
                 f'*******************************Capture [{self.cfg.index}]: Running SSD Model********************************')
@@ -473,7 +525,8 @@ class TaskBasedDetectorController(DetectorController):
                 s = time.time()
                 self.dispatch(frame, None, model, classifier, current_index)
                 e = 1 / (time.time() - s)
-                logger.debug(self.LOG_PREFIX + f'Detection Process Speed: [{round(e, 2)}]/FPS')
+                logger.debug(self.LOG_PREFIX +
+                             f'Detection Process Speed: [{round(e, 2)}]/FPS')
             except Exception as e:
                 logger.error(e)
                 traceback.print_exc()
@@ -495,7 +548,8 @@ class TaskBasedDetectorController(DetectorController):
         self.original_frame_cache[self.global_index.get()] = frame
         self.global_index.set(self.global_index.get() + 1)
         e = 1 / (time.time() - s)
-        logger.debug(self.LOG_PREFIX + f'Global Cache Writing Speed: [{round(e, 2)}]/FPS')
+        logger.debug(self.LOG_PREFIX +
+                     f'Global Cache Writing Speed: [{round(e, 2)}]/FPS')
 
     def dispatch(self, *args):
         """
@@ -528,47 +582,55 @@ class TaskBasedDetectorController(DetectorController):
         # self.push_stream_queue.append((original_frame, None, self.pre_cnt))
 
     def model_based(self, args, original_frame):
+        """
+        use deep detection model to extract object
+        Args:
+            args:
+            original_frame:
+
+        Returns:
+        """
         model_instance = args[2]
         if self.pre_cnt % self.cfg.sample_rate == 0:
             start = time.time()
-            frames_results = self.get_model_result(original_frame, model_instance, self.server_cfg)
+            frames_results = self.get_model_result(
+                original_frame, model_instance, self.server_cfg)
             logger.debug(
-                self.LOG_PREFIX + f'Model Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
+                self.LOG_PREFIX + f'Model [{self.cfg.index}]: Operation Speed Rate: [{round(1 / (time.time() - start), 2)}]/FPS')
             # render_frame = original_frame.copy()
             detect_results = []
             detect_flag = False
             current_index = self.pre_cnt
             rects = []
+            filter_rects = []
             if self.cfg.show_window:
-                cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
-                frame = original_frame
-                if len(frames_results):
-                    for rect in frames_results[0]:
-                        if rect[4] > self.cfg.alg['ssd_confidence']:
-                            cv2.imwrite(f'data/frames/{self.cfg.index}_{current_index}.png',
-                                        cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
-                            color = np.random.randint(0, 255, size=(3,))
-                            color = [int(c) for c in color]
-                            # get a square bbox, the real bbox of width and height is universal as 224 * 224 or 448 * 448
-                            p1, p2 = bbox_points(self.cfg, rect, original_frame.shape)
-                            # write text
-                            frame = paint_chinese_opencv(frame, '江豚', p1)
-                            cv2.rectangle(frame, (rect[0], rect[1]), (rect[2], rect[3]), color, 2)
-                            cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
-                cv2.imshow(str(self.cfg.index), frame)
-                cv2.waitKey(1)
+                self.debug_show_window(
+                    original_frame, current_index, frames_results)
 
             if len(frames_results):
                 for frame_result in frames_results:
                     if len(frame_result):
+                        # filter by confidence and some hard rules
                         rects = [r for r in frame_result if
-                                 r[4] > self.cfg.alg['ssd_confidence'] and ((r[2] - r[0]) * (r[3] - r[1]) >
-                                                                            self.cfg.alg['area'])]
+                                 r[4] > self.cfg.alg['ssd_confidence'] and is_proposal_dolphin_by_color(original_frame,
+                                                                                                        r, filter_rects,
+                                                                                                        self.cfg
+                                                                                                        )]
+                        # save original filtered rects.
+                        if len(filter_rects):
+                            self.result_queue.put(
+                                FrameStorage(current_index, filter_rects, save_frame=False, save_square_crop=False,
+                                             save_original_crop=self.cfg.save_box))
+
                         if len(rects):
-                            self.result_queue.put((current_index, rects))
+                            # notify result saver to store these frames that conclude proposals.
+                            # see self.write_frame_work()
+                            self.result_queue.put(
+                                FrameStorage(current_index, rects))
+                            # abandon if result represent to many proposals.
                             if len(rects) >= 3:
-                                logger.info(f'To many rect candidates: [{len(rects)}].Abandoned..... ')
+                                logger.info(
+                                    f'To many rect candidates: [{len(rects)}].Abandoned..... ')
                                 return ConstructResult(original_frame, None, None, frame_index=self.pre_cnt)
                             detect_results.append(DetectionResult(rects=rects))
                             detect_flag = True
@@ -576,28 +638,34 @@ class TaskBasedDetectorController(DetectorController):
                             logger.info(
                                 f'============================Controller [{self.cfg.index}]: Dolphin Detected in frame [{current_index}]============================')
                     if detect_flag:
-                        json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
-                                                         timestamp=current_index, rects=rects, dol_id=self.dol_id,
-                                                         camera_id=self.cfg.camera_id)
-                        self.msg_queue.put(json_msg)
-                        logger.debug(f'put detect message in msg_queue {json_msg}...')
+                        # json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
+                        #                                 timestamp=current_index, rects=rects, dol_id=self.dol_id,
+                        #                                 camera_id=self.cfg.camera_id)
+                        # self.msg_queue.put(json_msg)
+                        # logger.debug(f'put detect message in msg_queue {json_msg}...')
                         # self.render_frame_cache[current_index % self.cache_size] = render_frame
-                        if self.cfg.render:
-                            self.render_rect_cache[current_index % self.cache_size] = rects
+                        # if self.cfg.render:
+                        #    self.render_rect_cache[current_index % self.cache_size] = rects
+
+                        # post proposal rects to forward filtering process, complete object tracing,
+                        # and get object's speed and continues time
                         self.forward_filter(current_index, rects)
                         self.notify_render(current_index)
-                    else:
-                        if not self.dol_gone:
-                            empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
-                                                                    channel=self.cfg.channel,
-                                                                    timestamp=current_index, dol_id=self.dol_id,
-                                                                    camera_id=self.cfg.camera_id)
-                            self.dol_id += 1
-                            self.msg_queue.put(empty_msg)
-                            self.dol_gone = True
+                        self.recorder.record()
+                    # else:
+                    #    if not self.dol_gone:
+                    # empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
+                    #                                        channel=self.cfg.channel,
+                    #                                        timestamp=current_index, dol_id=self.dol_id,
+                    #                                        camera_id=self.cfg.camera_id)
+                    # self.dol_id += 1
+                    # self.msg_queue.put(empty_msg)
+                    #        self.dol_gone = True
             self.update_render(current_index)
             self.update_detect_handler(current_index)
             # threading.Thread(target=self.str.notify, args=(current_index,), daemon=True).start()
+
+            #
             construct_result = ConstructResult(None, None, None, None, detect_flag, detect_results,
                                                frame_index=self.pre_cnt)
             self.post_stream_req(construct_result, original_frame)
@@ -606,6 +674,40 @@ class TaskBasedDetectorController(DetectorController):
             #     self.push_stream_queue.append((original_frame, None, self.pre_cnt))
             self.post_stream_req(None, original_frame)
 
+    def debug_show_window(self, original_frame, current_index, frames_results):
+        """
+        show window and display all proposals in the video frames
+        Args:
+            original_frame:
+            current_index:
+            frames_results:
+
+        Returns:
+
+        """
+        cv2.namedWindow(str(self.cfg.index),
+                        cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
+        frame = original_frame.copy()
+        if len(frames_results):
+            for rect in frames_results[0]:
+                if rect[4] > self.cfg.alg['ssd_confidence']:
+                    # cv2.imwrite(f'data/frames/{self.cfg.index}_{current_index}.png',
+                    #            cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB))
+                    # crop_frame = cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB)[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2]), :]
+                    # cv2.imwrite(f'/home/jt1/Desktop/crop_images/{current_index}.png', crop_frame)
+                    color = np.random.randint(0, 255, size=(3,))
+                    color = [int(c) for c in color]
+                    # get a square bbox, the real bbox of width and height is universal as 224 * 224 or 448 * 448
+                    p1, p2 = bbox_points(self.cfg, rect, original_frame.shape)
+                    # write text
+                    frame = paint_chinese_opencv(frame, '江豚', p1)
+                    cv2.rectangle(
+                        frame, (rect[0], rect[1]), (rect[2], rect[3]), color, 2)
+                    cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
+                                cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
+        cv2.imshow(str(self.cfg.index), cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        cv2.waitKey(1)
+
     def update_detect_handler(self, current_index):
         """
         update frame index maintained by detect handler
@@ -613,7 +715,8 @@ class TaskBasedDetectorController(DetectorController):
         :return:
         """
         if self.cfg.forward_filter:
-            self.detect_handler.reset(ArrivalMessage(current_index, ArrivalMsgType.UPDATE))
+            self.detect_handler.reset(ArrivalMessage(
+                current_index, ArrivalMsgType.UPDATE))
 
     def update_render(self, current_index):
         """
@@ -624,7 +727,8 @@ class TaskBasedDetectorController(DetectorController):
 
         # if forward filtering is enabled, video render notification is under control by DetectionSignalHandler
         if self.cfg.render and not self.cfg.forward_filter:
-            self.render_notify_queue.put(ArrivalMessage(current_index, ArrivalMsgType.UPDATE))
+            self.render_notify_queue.put(ArrivalMessage(
+                current_index, ArrivalMsgType.UPDATE))
 
     def notify_render(self, current_index):
         """
@@ -633,8 +737,10 @@ class TaskBasedDetectorController(DetectorController):
         :return:
         """
         # if forward filtering is enabled, video render notification is under control by DetectionSignalHandler
+        # in other word, forward filter functionality is excluded with render functionality.
         if self.cfg.render and not self.cfg.forward_filter:
-            self.render_notify_queue.put(ArrivalMessage(current_index, ArrivalMsgType.DETECTION))
+            self.render_notify_queue.put(ArrivalMessage(
+                current_index, ArrivalMsgType.DETECTION))
 
     def forward_filter(self, current_index, rects):
         """
@@ -644,12 +750,13 @@ class TaskBasedDetectorController(DetectorController):
         :return:
         """
         if self.cfg.forward_filter:
-            self.detect_handler.notify(ArrivalMessage(current_index, ArrivalMsgType.DETECTION, rects=rects))
+            self.detect_handler.notify(ArrivalMessage(
+                current_index, ArrivalMsgType.DETECTION, rects=rects))
         # TODO control instant detection signal commit
 
     def get_model_result(self, original_frame, model, server_cfg: ServerConfig, inference_detector=None):
         """
-        get detection result from ssd model
+        get detection result from ssd model or cascade-rcnn model
         :param original_frame: numpy frame
         :param model: model instance
         :return:
@@ -690,9 +797,11 @@ class TaskBasedDetectorController(DetectorController):
         if self.cfg.push_stream:
             if self.cfg.use_sm:
                 self.push_stream_queue[0][0] = original_frame
-                self.push_stream_queue[1].append((construct_result, self.pre_cnt))
+                self.push_stream_queue[1].append(
+                    (construct_result, self.pre_cnt))
             else:
-                self.push_stream_queue.append((original_frame, construct_result, self.pre_cnt))
+                self.push_stream_queue.append(
+                    (original_frame, construct_result, self.pre_cnt))
 
     def classify_based(self, args, original_frame):
         """
@@ -706,7 +815,8 @@ class TaskBasedDetectorController(DetectorController):
             async_futures = []
             frame, original_frame = preprocess(original_frame, self.cfg)
             if self.cfg.show_window:
-                cv2.namedWindow(str(self.cfg.index), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+                cv2.namedWindow(str(self.cfg.index),
+                                cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
                 cv2.imshow(str(self.cfg.index), frame)
                 cv2.waitKey(0)
             s = time.time()
@@ -717,7 +827,8 @@ class TaskBasedDetectorController(DetectorController):
                 # TODO Perform detection acceleration by dispatching frame block to multiple processes
             e = 1 / (time.time() - s)
             # logger.debug(self.LOG_PREFIX + f'Coarser Detection Speed: [{round(e, 2)}]/FPS')
-            proc_res: ConstructResult = self.collect_and_reconstruct(async_futures, args[3], original_frame)
+            proc_res: ConstructResult = self.collect_and_reconstruct(
+                async_futures, args[3], original_frame)
             frame = proc_res.frame
             proc_res.frame = None
             self.post_stream_req(proc_res, frame)
@@ -747,10 +858,13 @@ class TaskBasedDetectorController(DetectorController):
     def start(self, pool: Pool):
         try:
             self.status.set(SystemStatus.RUNNING)
+            # run system signal listener
             threading.Thread(target=self.listen, daemon=True).start()
+            # run frame saver
             threading.Thread(target=self.write_frame_work, daemon=True).start()
             # threading.Thread(target=self.display, daemon=True).start()
             # threading.Thread(target=self.loop_stack, daemon=True).start()
+            # run main controller
             self.control()
             return True
         except Exception as e:

@@ -1,0 +1,95 @@
+index: 44
+name: xiaguan_point
+camera_id: camera_bp_1
+channel: 10
+shape:
+  - 1080
+  - 1920
+  - 3
+ip: 222.190.243.176
+dip: http://10.196.122.96:8080
+port: '8081'
+suffix: ''
+headers: {}
+m3u8_url: ''
+url: ''
+roi:
+  x: 0
+  y: 60
+  width: -1
+  height: -1
+resize:
+  width: 1000
+  height: -1
+  scale: -1
+show_window: false
+push_stream: false
+window_position:
+  x: 100
+  y: 100
+routine:
+  row: 1
+  col: 1
+sample_rate: 1
+draw_boundary: false
+enable: false
+filtered_ratio: 0.5
+max_streams_cache: 5000
+online: vlc_rtsp
+cap_loop: false
+sample_internal: 15
+save_box: true
+show_box: true
+cv_only: true
+ssd_divide_four: false
+rtsp: rtsp://10.196.122.98/cvcam/24/stream1
+push_to: rtsp://192.168.0.116/yz
+write_timestamp: false
+enable_sample_frame: false
+rtsp_saved_per_frame: 240
+future_frames: 76
+detect_internal: 72
+search_window_size: 125
+use_sm: false
+cache_size: 700
+similarity_thresh: 0.05
+pre_cache: 48
+render: true
+post_filter: false
+forward_filter: false
+limit_freq: false
+freq_thresh: 60
+bbox:
+  w: 224
+  h: 224
+alg:
+  real_shape:
+    - 2160
+    - 3840
+    - 3
+  type: thresh
+  sp: 10
+  sr: 60
+  dk_size: -1
+  ok_size: 3
+  mean: 40
+  block_size: 101
+  filtered_by_wh: false
+  rwt: 120
+  rht: 25
+  area: 400
+  area_ratio: 0.03
+  color_range:
+    - 80
+    - 80
+    - 80
+  color_scale: -1
+  speed_x_thresh: 15
+  speed_y_thresh: 15
+  continuous_time_thresh: 36
+  disappear_frames_thresh: 12
+  angle_thresh: 3
+  track_confidence: 0.85
+  ssd_confidence: 0.95
+  cascade_model_path: mmdetection/work_dirs/cascade_rcnn_r50_caffe_fpn_1x_coco/latest.pth
+  cascade_model_cfg:  mmdetection/configs/cascade_rcnn/cascade_rcnn_r50_caffe_fpn_1x_coco.py

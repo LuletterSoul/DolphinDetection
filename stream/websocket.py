@@ -109,13 +109,25 @@ async def websocket_client_async(q):
         logger.error(e)
 
 
-def creat_position_json(rects):
+def creat_position_json(rects, cfg: VideoConfig):
     """
     :param rects: [(x,y,w,h),(x,y,w,h)]
     :return:json
+    Args:
+        cfg:
     """
+    new_rects = rects.copy()
+    if 'real_shape' in cfg.alg:
+        # recover original size such as 1080P position back to 4K
+        real_shape = cfg.alg['real_shape']
+        current_shape = cfg.shape
+        ratio = real_shape[0] / current_shape[0]
+        new_rects = []
+        for rect in rects:
+            r = [rect[0] * ratio, rect[1] * ratio, rect[2] * ratio, rect[3] * ratio]
+            new_rects.append(r)
     position = []
-    for rect in rects:
+    for rect in new_rects:
         position.append({'lx': int(rect[0]), 'ly': int(rect[1]), 'rx': int(rect[2]), 'ry': int(rect[3])})
     position_json = json.dumps(position)
     return position_json
@@ -140,8 +152,8 @@ def creat_detect_empty_msg_json(video_stream, channel, timestamp, dol_id=10000, 
     return msg_json
 
 
-def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id, camera_id):
-    position_json = creat_position_json(rects)
+def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id, camera_id, cfg):
+    position_json = creat_position_json(rects, cfg)
     msg = {
         'cmdType': 'notify',
         "appId": "10080",
@@ -160,8 +172,9 @@ def creat_detect_msg_json(video_stream, channel, timestamp, rects, dol_id, camer
     return msg_json
 
 
-def creat_packaged_msg_json(filename, path, cfg: VideoConfig, camera_id, channel):
+def creat_packaged_msg_json(filename, path, cfg: VideoConfig, camera_id, channel, preview_name):
     url = os.path.join(cfg.dip, 'video', cfg.date, str(cfg.index), filename)
+    preview = os.path.join(cfg.dip, 'preview', cfg.date, str(cfg.index), preview_name)
     msg = {
         'cmdType': 'notify',
         'clientId': 'jt001',
@@ -171,7 +184,8 @@ def creat_packaged_msg_json(filename, path, cfg: VideoConfig, camera_id, channel
             'notifyType': 'packagedNotify',
             'filename': filename,
             'path': path,
-            'url': url
+            'url': url,
+            'preview': preview
         }
     }
     msg_json = json.dumps(msg)

@@ -16,7 +16,7 @@ import vlc
 import ctypes
 import time
 import cv2
-import numpy
+import numpy as np
 from PIL import Image
 import queue
 
@@ -54,11 +54,22 @@ def put_queue(opaque, picture):
     """
     global current_index, q
     current_index += 1
-    img = Image.frombuffer("RGBA", (VIDEOWIDTH, VIDEOHEIGHT), buf, "raw", "BGRA", 0, 1)
-    # img = cv2.cvtColor(numpy.array(img), cv2.COLOR_RGB2BGR)
-    q.put(numpy.array(img)[:, :, :3])
-    #q.put(numpy.array(img))
+    img = Image.frombuffer("RGBA", (VIDEOWIDTH, VIDEOHEIGHT), buf, "raw", "RGBA", 0, 1)
+    # img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    q.put(np.array(img)[:, :, :3])
+    # q.put(img)
+
+    #img = Image.frombuffer("RGB", (VIDEOWIDTH, VIDEOHEIGHT), buf, "raw", "BGR", 0, 1)
+    #q.put(np.array(img))
+
     # print(os.getpid())
+
+    #img = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+    # q.put(img)
+
+    # q.put(np.array(img))
+    # img = np.ndarray((VIDEOHEIGHT, VIDEOWIDTH, 3), dtype=np.uint8, buffer=buf)
+    # q.put(numpy.array(img)[:, :, :3])
     # cv2.namedWindow('image', cv2.WINDOW_FREERATIO)
     # cv2.imshow('image', img)
     # cv2.waitKey(1)
@@ -103,5 +114,5 @@ def run(src, shape):
     m = vlcInstance.media_new(src)
     mp = vlc.libvlc_media_player_new_from_media(m)
     vlc.libvlc_video_set_callbacks(mp, _lockcb, None, put_queue, None)
-    mp.video_set_format("BGRA", VIDEOWIDTH, VIDEOHEIGHT, VIDEOWIDTH * 4)
+    mp.video_set_format("RGBA", VIDEOWIDTH, VIDEOHEIGHT, VIDEOWIDTH * 4)
     mp.play()

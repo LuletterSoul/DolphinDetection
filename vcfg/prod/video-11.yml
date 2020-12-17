@@ -63,6 +63,10 @@ bbox:
   w: 224
   h: 224
 alg:
+  real_shape:
+    - 2160
+    - 3840
+    - 3
   type: thresh
   sp: 10
   sr: 60
@@ -83,6 +87,6 @@ alg:
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36
-  disappear_frames_thresh: 3
+  disappear_frames_thresh: 12
   track_confidence: 0.95
   ssd_confidence: 0.86

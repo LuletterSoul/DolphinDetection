@@ -1,3 +1,3 @@
 #!/bin/bash
 #
-python app.py --env prod --http_ip 127.0.0.1 --http_port 8080 --cd_id 0 --dt_id 0 --enable 7 --use_sm 7 --run_direct
+python app.py --env prod  --enable 31,32,33,34  --enable_forward_filter 31,32,33,34 --use_sm 31,32,33,34  --send_msg --show_windows  31
