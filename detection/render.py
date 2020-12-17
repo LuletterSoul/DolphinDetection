@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from multiprocessing import Manager
 from multiprocessing.queues import Queue
 from typing import List
+import traceback
 
 import cv2
 import numpy as np
@@ -38,21 +39,22 @@ from utils import bbox_points, generate_time_stamp, get_local_time
 from utils import paint_chinese_opencv, add_text_logo
 from utils import preprocess, crop_by_se, logger
 from utils.cache import SharedMemoryFrameCache
+from datetime import datetime, timedelta
 
 
 from PIL import Image,  ImageFont
 
-text_params = dict({
-    "font": ImageFont.truetype("./static/msyh.ttc", 50, encoding="uft-8"),
-    "color": (255, 255, 255),
-    "location": (40, 40),
-    "bold_offset": 1
-})
+text_params = {
+    "font": ImageFont.truetype("./static/msyh.ttc", 47, encoding="uft-8"),
+    "color": (252, 255, 255),
+    "location": (37, 40),
+    "bold_offset": -2
+}
 
-logo_params = dict({
-    "location": (0, 0),
-#    "reduce_ratio": 8
-})
+logo_params = {
+    "location": (-2, 0),
+    "reduce_ratio": 6
+}
 
 logo = Image.open("./static/eco_eye_logo.png")
 
@@ -107,7 +109,8 @@ class FrameArrivalHandler(object):
         self.notify_queue = notify_queue
         self.LOG_PREFIX = f'Frame Arrival Handler [{self.cfg.index}]: '
         self.post_filter = Filter(self.cfg, region_path, detect_params)
-        self.last_detection = time.time()  # record the last task triggered time.
+        # record the last task triggered time.
+        self.last_detection = time.time()
         self.pre_candidate_rect = []  # record the last rects seed for detection or tracking
         self.task_msg_queue = Manager().Queue()
         self.dis_thresh = max(self.cfg.shape[0], self.cfg.shape[1]) * 1 / 4
@@ -183,7 +186,8 @@ class FrameArrivalHandler(object):
             for old in self.pre_candidate_rect:
                 for new in msg.rects:
                     if Obj.cal_dst(old, new) > self.dis_thresh:
-                        logger.info(f'Distance betweent new rect and old rect: [{Obj.cal_dst(old, new)}]')
+                        logger.info(
+                            f'Distance betweent new rect and old rect: [{Obj.cal_dst(old, new)}]')
                         new_rects.append(new)
             return new_rects
 
@@ -219,7 +223,8 @@ class FrameArrivalHandler(object):
             logger.debug(
                 f"{self.LOG_PREFIX} {task_type} " +
                 f"[{task_cnt}] wait [{round(time.time() - start, 2)}] seconds")
-            logger.debug(f'{self.LOG_PREFIX} Rect Render Task [{task_cnt}] frames accessible...')
+            logger.debug(
+                f'{self.LOG_PREFIX} Rect Render Task [{task_cnt}] frames accessible...')
 
     def listen(self):
         if self.quit.wait():
@@ -296,23 +301,23 @@ class DetectionStreamRender(FrameArrivalHandler):
         :param end_cnt:
         :return:
         """
-
         if next_cnt < 1:
             next_cnt = 1
         render_cnt = 0
         rects = []
-        local_time = time.localtime()
+        #local_time = datetime.now()
         for index in range(next_cnt, end_cnt + 1):
             frame = self.original_frame_cache[index].copy()
             if frame is None:
                 print(f'Frame is none for [{index}]')
                 continue
 
-            clt = local_time.copy()
-
-            clt.tm_sec = clt.tm_sec + (index % 24)
-            fmt_local_time = time.strftime("%Y-%m-%d %H:%M:%S", clt)
-            frame = add_text_logo(frame, fmt_local_time, logo, text_params=text_params, logo_params=logo_params)
+            #clt = local_time
+            #clt = clt + timedelta(seconds=index % 24)
+        # fmt_local_time = clt.strftime("%Y-%m-%d %H:%M:%S")
+            # frame = add_text_logo(
+            #    Image.fromarray(frame), fmt_local_time, logo, text_params=text_params, logo_params=logo_params)
+            print(f"Done with frame {index}")
             # tmp_rects = self.render_rect_cache[index % self.cache_size]
             # self.render_rect_cache[index % self.cache_size] = None
             # if current frame has bbox, just update the bbox position, and clear counting
@@ -324,7 +329,8 @@ class DetectionStreamRender(FrameArrivalHandler):
                 rects = self.render_rect_cache[index]
 
             # each bbox will last 1.5s in 25FPS video
-            logger.debug(self.LOG_PREFIX + f'Render rect frame idx {index}, rects {rects}')
+            logger.debug(self.LOG_PREFIX +
+                         f'Render rect frame idx {index}, rects {rects}')
             is_render = render_cnt <= 36
             if is_render:
                 for rect in rects:
@@ -334,10 +340,10 @@ class DetectionStreamRender(FrameArrivalHandler):
                     p1, p2 = bbox_points(self.cfg, rect, frame.shape)
                     # write text
                     # frame = paint_chinese_opencv(frame, '江豚', p1)
-                    cv2.rectangle(frame, p1, p2, color, 2)
+                    frame = cv2.rectangle(frame, p1, p2, color, 2)
                     if self.scfg.detect_mode != ModelType.CLASSIFY and len(rect) >= 5:
-                        cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
+                        frame = cv2.putText(frame, str(round(rect[4], 2)), (p2[0], p2[1]),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2, cv2.LINE_AA)
                 render_cnt += 1
             next_cnt += 1
             video_write.write(frame)
@@ -372,18 +378,21 @@ class DetectionStreamRender(FrameArrivalHandler):
                     time.sleep(0.5)
                     if try_times > 100:
                         try_times = 0
-                        logger.info(f'Try time overflow.round to the next cnt: [{try_times}]')
+                        logger.info(
+                            f'Try time overflow.round to the next cnt: [{try_times}]')
                         next_cnt += 1
                     logger.info(f'Lost frame index: [{next_cnt}]')
 
                 end = time.time()
                 if end - start > 30:
-                    logger.info('Task time overflow, complete previous render task.')
+                    logger.info(
+                        'Task time overflow, complete previous render task.')
                     break
             except Exception as e:
                 end = time.time()
                 if end - start > 30:
-                    logger.info('Task time overflow, complete previous render task.')
+                    logger.info(
+                        'Task time overflow, complete previous render task.')
                     break
                 logger.error(e)
         return next_cnt
@@ -401,12 +410,14 @@ class DetectionStreamRender(FrameArrivalHandler):
         task_cnt = self.task_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
         # target = self.rect_stream_path / (current_time + str(task_cnt) + '.mp4')
-        target = self.rect_stream_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
+        target = self.rect_stream_path / \
+            f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
         logger.debug(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # fourcc = cv2.VideoWriter_fourcc(*'avc1')
         # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
-        video_write = FFMPEG_MP4Writer(str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
+        video_write = FFMPEG_MP4Writer(
+            str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
         next_cnt = current_idx - self.future_frames
         # next_cnt = self.write_render_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
         #                                         frame_cache)
@@ -416,22 +427,28 @@ class DetectionStreamRender(FrameArrivalHandler):
         self.wait(task_cnt, 'Rect Render Task', msg)
         end_cnt = current_idx + self.future_frames
         try:
-            next_cnt = self.write_render_video_work(video_write, next_cnt, end_cnt)
+            next_cnt = self.write_render_video_work(
+                video_write, next_cnt, end_cnt)
         except Exception as e:
+            traceback.print_exc()
             logger.error(e)
-        video_write.release()
+        finally:
+            video_write.release()
         logger.info(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
             f'seconds.Done write detection stream frame into: [{str(target)}]')
         preview_photo = self.original_frame_cache[current_idx]
-        preview_photo_path = self.preview_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
-        preview_big_photo_path = self.preview_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}_big.jpg'
+        preview_photo_path = self.preview_path / \
+            f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
+        preview_big_photo_path = self.preview_path / \
+            f'{current_time}_{self.cfg.index}_{str(task_cnt)}_big.jpg'
         preview_big = cv2.cvtColor(preview_photo, cv2.COLOR_RGB2BGR)
-        preview_small = cv2.resize(preview_big,dsize=(0,0),fx=0.25,fy=0.25)
+        preview_small = cv2.resize(preview_big, dsize=(0, 0), fx=0.25, fy=0.25)
 
         cv2.imwrite(str(preview_photo_path), preview_small)
         cv2.imwrite(str(preview_big_photo_path), preview_big)
-        self.post_handle(current_time, post_filter_event, target, task_cnt, preview_photo_path)
+        self.post_handle(current_time, post_filter_event,
+                         target, task_cnt, preview_photo_path)
         # if msg.no_wait:
         # release lock status
         # self.original_frame_cache.release()
@@ -450,19 +467,23 @@ class DetectionStreamRender(FrameArrivalHandler):
         post_filter_event.clear()
         task_cnt = self.task_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
-        target = self.original_stream_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
+        target = self.original_stream_path / \
+            f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
         logger.debug(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
-        video_write = FFMPEG_MP4Writer(str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
+        video_write = FFMPEG_MP4Writer(
+            str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
         # if not video_write.isOpened():
         #     logger.error(f'Video Render [{self.index}]: Error Opened Video Writer')
 
         next_cnt = current_idx - self.future_frames
-        next_cnt = self.write_original_video_work(video_write, next_cnt, current_idx)
+        next_cnt = self.write_original_video_work(
+            video_write, next_cnt, current_idx)
         self.wait(task_cnt, 'Original Render Task', msg)
         end_cnt = next_cnt + self.future_frames
-        next_cnt = self.write_original_video_work(video_write, next_cnt, end_cnt)
+        next_cnt = self.write_original_video_work(
+            video_write, next_cnt, end_cnt)
         video_write.release()
         logger.debug(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: ' +
@@ -480,15 +501,18 @@ class DetectionStreamRender(FrameArrivalHandler):
         :param task_cnt: current video counting
         :return:
         """
-        origin_video_path = self.original_stream_path / (current_time + str(task_cnt) + '.mp4')
+        origin_video_path = self.original_stream_path / \
+            (current_time + str(task_cnt) + '.mp4')
         if self.cfg.post_filter:
-            self.do_post_filter(origin_video_path, preview, task_cnt, post_filter_event)
+            self.do_post_filter(origin_video_path, preview,
+                                task_cnt, post_filter_event)
         else:
             msg_json = creat_packaged_msg_json(filename=str(target.name), path=str(target), cfg=self.cfg,
                                                camera_id=self.cfg.camera_id, channel=self.cfg.channel,
                                                preview_name=str(preview.name))
             self.msg_queue.put(msg_json)
-            logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+            logger.info(self.LOG_PREFIX +
+                        f'Send packaged message: {msg_json} to msg_queue...')
 
     def do_post_filter(self, target, preview, task_cnt, post_filter_event):
         """
@@ -503,7 +527,8 @@ class DetectionStreamRender(FrameArrivalHandler):
         # blocked until original video generation is done.
         post_filter_event.wait()
         # execute post filter
-        is_contain_dolphin, dol_rects = self.post_filter.post_filter_video(str(target), task_cnt)
+        is_contain_dolphin, dol_rects = self.post_filter.post_filter_video(
+            str(target), task_cnt)
         if is_contain_dolphin:
             """
             post filter think it is a video clip with dolphin
@@ -512,7 +537,8 @@ class DetectionStreamRender(FrameArrivalHandler):
                                                camera_id=self.cfg.camera_id, channel=self.cfg.channel,
                                                preview_name=preview.name)
             self.msg_queue.put(msg_json)
-            logger.info(self.LOG_PREFIX + f'Send packaged message: {msg_json} to msg_queue...')
+            logger.info(self.LOG_PREFIX +
+                        f'Send packaged message: {msg_json} to msg_queue...')
 
 
 class Obj(object):
@@ -642,7 +668,8 @@ class Obj(object):
         angle = (180 * radian) / math.pi  # 角度
         logger.info(f'Line fitting: a: {a}, b: {b}, angle: {round(angle, 2)}')
         if abs(angle) < self.cfg.alg['angle_thresh']:
-            logger.info(f'Line fitting: angle is below the thresold, fitting successful.')
+            logger.info(
+                f'Line fitting: angle is below the thresold, fitting successful.')
             return True
         else:
             return False
@@ -754,7 +781,8 @@ class DetectionSignalHandler(FrameArrivalHandler):
         """
         current_index = msg.current_index
         if not self.cfg.forward_filter:
-            logger.info(self.LOG_PREFIX + f'The signal forward operation is disabled by configuration.')
+            logger.info(
+                self.LOG_PREFIX + f'The signal forward operation is disabled by configuration.')
         self.wait(self.task_cnt, 'Detection Signal Handle', msg)
         # rects = self.render_rect_cache[current_index % self.cache_size]
         # lock the whole window in case cached was covered by the future arrival frames.
@@ -764,13 +792,16 @@ class DetectionSignalHandler(FrameArrivalHandler):
         task_cnt = self.task_cnt
         if rects is not None:
             track_start = time.time()
-            result_sets, _ = self.track_requester.request(self.cfg.index, current_index, rects)
+            result_sets, _ = self.track_requester.request(
+                self.cfg.index, current_index, rects)
             # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
             self.detect_num += 1
-            is_contain_dolphin, traces = self.post_filter.filter_by_obj_match_analyze(result_sets, task_cnt)
+            is_contain_dolphin, traces = self.post_filter.filter_by_obj_match_analyze(
+                result_sets, task_cnt)
             track_end = time.time()
             track_consume = track_end - track_start
-            logger.info(f'{self.LOG_PREFIX}: Filter result: contain dolphin: {is_contain_dolphin}')
+            logger.info(
+                f'{self.LOG_PREFIX}: Filter result: contain dolphin: {is_contain_dolphin}')
             if is_contain_dolphin:
                 self.trigger_rendering(current_index, traces, track_consume)
                 self.task_cnt += 1
@@ -785,8 +816,10 @@ class DetectionSignalHandler(FrameArrivalHandler):
         """
         self.write_bbox(traces, time_consume)
         # send message via message pipe
-        self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.DETECTION, True))
-        self.render_queue.put(ArrivalMessage(current_index, ArrivalMsgType.UPDATE))
+        self.render_queue.put(ArrivalMessage(
+            current_index, ArrivalMsgType.DETECTION, True))
+        self.render_queue.put(ArrivalMessage(
+            current_index, ArrivalMsgType.UPDATE))
 
     def write_bbox(self, traces, time_consume):
         # cnt = 0
@@ -841,7 +874,8 @@ class Filter(object):
         detect_params = []
         for i in range(x_num):
             for j in range(y_num):
-                region_detector_path = self.block_path / (str(i) + '-' + str(j))
+                region_detector_path = self.block_path / \
+                    (str(i) + '-' + str(j))
                 detect_params.append(
                     DetectorParams(x_step, y_step, i, j, self.cfg, region_detector_path))
         return detect_params
@@ -887,14 +921,16 @@ class Filter(object):
             sub_results = sub_results[0]
             if not init:
                 dirname = os.path.dirname(video_path)
-                filename, extention = os.path.splitext(os.path.basename(video_path))
+                filename, extention = os.path.splitext(
+                    os.path.basename(video_path))
                 # fourcc = cv2.VideoWriter_fourcc(*'MP4V')
                 # out_path = os.path.join(dirname, f'{filename}_binary.mp4')
                 # shape = sub_results.binary.shape
                 # video_writer = cv2.VideoWriter(out_path, fourcc, 25, (shape[1], shape[0]))
                 init = True
             if video_writer is not None:
-                video_writer.write(cv2.cvtColor(sub_results.binary, cv2.COLOR_GRAY2BGR))
+                video_writer.write(cv2.cvtColor(
+                    sub_results.binary, cv2.COLOR_GRAY2BGR))
             for rect in rects:
                 if rect[2] - rect[0] > 15 and rect[3] - rect[1] > 15 and 100 < rect[1] < 900:
                     temp.append(rect)
@@ -932,7 +968,8 @@ class Filter(object):
         """
         logger.info(f'Post filter [{self.cfg.index}, {task_cnt}]: started...')
         if not os.path.exists(video_path):
-            logger.info(f'Post filter [{self.cfg.index}, {task_cnt}]: {video_path} is not exists...')
+            logger.info(
+                f'Post filter [{self.cfg.index}, {task_cnt}]: {video_path} is not exists...')
             return False
         result_set = self.detect_video(video_path)
         if len(result_set) <= 1:
@@ -978,8 +1015,10 @@ class Filter(object):
                     pre_center_y = (pre_rect[1] + pre_rect[3]) / 2
                     current_center_x = (current_rect[0] + current_rect[2]) / 2
                     current_center_y = (current_rect[1] + current_rect[3]) / 2
-                    speed_x = abs(pre_center_x - current_center_x) / abs(pre_idx - current_idx)
-                    speed_y = abs(pre_center_y - current_center_y) / abs(pre_idx - current_idx)
+                    speed_x = abs(pre_center_x - current_center_x) / \
+                        abs(pre_idx - current_idx)
+                    speed_y = abs(pre_center_y - current_center_y) / \
+                        abs(pre_idx - current_idx)
                     speed_x_set.append(speed_x)
                     speed_y_set.append(speed_y)
                     # logger.info(f'speed_x={speed_x}')

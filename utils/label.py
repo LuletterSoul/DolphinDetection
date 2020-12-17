@@ -72,7 +72,8 @@ class Labeler(object):
         sample_jsons = {}
         for idx, p in enumerate(all_path):
             # js = json.load(open(template_json))
-            js = {} if not self.use_template else json.load(open(template_json))
+            js = {} if not self.use_template else json.load(
+                open(template_json))
             base_name = os.path.basename(str(p))
             img = cv2.imread(str(p))
             if img is None:
@@ -153,13 +154,17 @@ def on_select_roi(event, x, y, flags, param: EventParam):
         target.start = np.array([x, y])
         cv2.circle(img2, (x, y), 1, (0, 255, 0), 1)
         cv2.imshow(window_name, img2)
-    elif event == cv2.EVENT_MOUSEMOVE and (flags & cv2.EVENT_FLAG_LBUTTON):  # 按住左键拖曳
-        cv2.rectangle(img2, (target.start[0], target.start[1]), (x, y), (255, 0, 0), 1)
+    # 按住左键拖曳
+    elif event == cv2.EVENT_MOUSEMOVE and (flags & cv2.EVENT_FLAG_LBUTTON):
+        cv2.rectangle(
+            img2, (target.start[0], target.start[1]), (x, y), (255, 0, 0), 1)
         cv2.imshow(window_name, img2)
     elif event == cv2.EVENT_LBUTTONUP:  # 左键释放
         target.end = np.array([x, y])
-        cv2.rectangle(img2, (target.start[0], target.start[1]), (target.end[0], target.end[1]), (0, 0, 255), 1)
-        logger.info('Confirm roi: start :{}, end:{} y/n?'.format(target.start, target.end))
+        cv2.rectangle(img2, (target.start[0], target.start[1]),
+                      (target.end[0], target.end[1]), (0, 0, 255), 1)
+        logger.info(
+            'Confirm roi: start :{}, end:{} y/n?'.format(target.start, target.end))
         target.crop_label_img = img2
         cv2.imshow(window_name, img2)
 
@@ -194,22 +199,29 @@ def add_text_logo(image, text, logo, text_params, logo_params):
         img_ret should be saved as PNG format, JPEG format maybe cause fault.
     """
     # add text
-    img = image.convert("RGBA")
+    img = image.convert("RGB")
     img_x, img_y = img.size
-    text_overlay = Image.new("RGBA", img.size, (255, 255, 255, 0))
+    text_overlay = Image.new("RGB", img.size, (255, 255, 255, 0))
     img_draw = ImageDraw.Draw(text_overlay)
-    
-    text_size_x, text_size_y = img_draw.textsize(text, font=text_params["font"])
-    text_location = (img_x - text_size_x - text_params["location"][0], text_params["location"][1])
-    img_draw.text(text_location, text, font=text_params["font"], fill=text_params["color"])
-    img_draw.text((text_location[0] + text_params["bold_offset"], text_location[1] + text_params["bold_offset"]), text, font=text_params["font"], fill=text_params["color"])
-    img_draw.text((text_location[0] - text_params["bold_offset"], text_location[1] - text_params["bold_offset"]), text, font=text_params["font"], fill=text_params["color"])
-    img_draw.text((text_location[0] - text_params["bold_offset"], text_location[1] + text_params["bold_offset"]), text, font=text_params["font"], fill=text_params["color"])
-    img_draw.text((text_location[0] + text_params["bold_offset"], text_location[1] - text_params["bold_offset"]), text, font=text_params["font"], fill=text_params["color"])
+
+    text_size_x, text_size_y = img_draw.textsize(
+        text, font=text_params["font"])
+    text_location = (img_x - text_size_x -
+                     text_params["location"][0], text_params["location"][1])
+    img_draw.text(text_location, text,
+                  font=text_params["font"], fill=text_params["color"])
+    img_draw.text((text_location[0] + text_params["bold_offset"], text_location[1] +
+                   text_params["bold_offset"]), text, font=text_params["font"], fill=text_params["color"])
+    img_draw.text((text_location[0] - text_params["bold_offset"], text_location[1] -
+                   text_params["bold_offset"]), text, font=text_params["font"], fill=text_params["color"])
+    img_draw.text((text_location[0] - text_params["bold_offset"], text_location[1] +
+                   text_params["bold_offset"]), text, font=text_params["font"], fill=text_params["color"])
+    img_draw.text((text_location[0] + text_params["bold_offset"], text_location[1] -
+                   text_params["bold_offset"]), text, font=text_params["font"], fill=text_params["color"])
     img_ret = Image.alpha_composite(img, text_overlay)
 
     # add logo
-    logo = logo.convert("RGBA")
+    logo = logo.convert("RGB")
     logo_x, logo_y = logo.size
     scale = logo_params["reduce_ratio"]
     logo_scale = max(img_x / (scale * logo_x), img_y / (scale * logo_y))
@@ -219,27 +231,26 @@ def add_text_logo(image, text, logo, text_params, logo_params):
 
     img_ret.paste(logo, logo_params["location"], logo_mask)
     # img_ret.show()
+    return np.asarray(img_ret)
 
-    return img_ret
 
-
-#text_params = dict({
+# text_params = dict({
 #    "font": ImageFont.truetype("msyh.ttc", 50, encoding="uft-8"),
 #    "color": (255, 255, 255),
 #    "location": (40, 40),
 #    "bold_offset": 1
-#})
+# })
 
-#logo_params = dict({
+# logo_params = dict({
 #    "location": (0, 0),
 #    "reduce_ratio": 8
-#})
+# })
 
 
 #text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 #text = "下关码头 / " + text
 
-#if __name__ == "__main__":
+# if __name__ == "__main__":
 #    im = Image.open("1.png")
 #    logo = Image.open("eco_eye_logo.png")
 #    im_ret = add_text_logo(im, text, logo, text_params=text_params, logo_params=logo_params)
