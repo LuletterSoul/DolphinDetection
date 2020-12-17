@@ -38,6 +38,7 @@ from utils import bbox_points, generate_time_stamp, get_local_time
 from utils import paint_chinese_opencv
 from utils import preprocess, crop_by_se, logger
 from utils.cache import SharedMemoryFrameCache
+from utils import crop_and_up_sample_image
 
 
 class ArrivalMsgType:
@@ -318,6 +319,47 @@ class DetectionStreamRender(FrameArrivalHandler):
             video_write.write(frame)
         return next_cnt
 
+    def write_sub_up_sampled_video_work(self, next_cnt, end_cnt, sub_video_name, scale, dst_shape, center):
+        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+        video_size = (dst_shape[0], dst_shape[1])
+        # todo add up sample video save dir
+        video_path = self.rect_stream_path / sub_video_name
+        video_writer = cv2.VideoWriter(video_path, fourcc, 24, video_size)
+        for index in range(next_cnt, end_cnt + 1):
+            frame = self.original_frame_cache[index]
+            up_sampled_img = crop_and_up_sample_image(frame, center, scale, dst_shape)
+            video_writer.write(up_sampled_img)
+        video_writer.release()
+
+    def write_up_sampled_video_work(self, next_cnt, end_cnt, video_name, scale, dst_shape):
+        """
+        write up sampled frame into a video
+        :param next_cnt: video start frame index
+        :param end_cnt:
+        :param video_name
+        :param scale
+        :param dst_shape
+        :return:
+        """
+        if next_cnt < 1:
+            next_cnt = 1
+        rects = []
+        for index in range(next_cnt, end_cnt + 1):
+            if index in self.render_rect_cache:
+                rects = self.render_rect_cache[index]
+                if len(rects) > 0:
+                    break
+        if len(rects) > 0:
+            cnt = 0
+            for rect in rects:
+                center = [round((rect[0] + rect[2]) / 2), round((rect[1] + rect[3]) / 2)]
+                sub_video_name = f'{os.path.splitext(video_name)[0]}_{cnt}.mp4'
+                cnt += 1
+                sub_up_sample_thread = threading.Thread(
+                    target=self.write_sub_up_sampled_video_work,
+                    args=(next_cnt, end_cnt, sub_video_name, scale, dst_shape, center,), daemon=True)
+                sub_up_sample_thread.start()
+
     def write_original_video_work(self, video_write, next_cnt, end_cnt):
         """
         write original frame into video.
@@ -392,6 +434,8 @@ class DetectionStreamRender(FrameArrivalHandler):
         end_cnt = current_idx + self.future_frames
         try:
             next_cnt = self.write_render_video_work(video_write, next_cnt, end_cnt)
+            video_name = f'{current_time}_{self.cfg.index}_{str(task_cnt)}_up_sampled.mp4'
+            self.write_up_sampled_video_work(current_idx, end_cnt, video_name, scale=2, dst_shape=[1920, 1080])
         except Exception as e:
             logger.error(e)
         video_write.release()
@@ -402,7 +446,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         preview_photo_path = self.preview_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
         preview_big_photo_path = self.preview_path / f'{current_time}_{self.cfg.index}_{str(task_cnt)}_big.jpg'
         preview_big = cv2.cvtColor(preview_photo, cv2.COLOR_RGB2BGR)
-        preview_small = cv2.resize(preview_big,dsize=(0,0),fx=0.25,fy=0.25)
+        preview_small = cv2.resize(preview_big, dsize=(0, 0), fx=0.25, fy=0.25)
 
         cv2.imwrite(str(preview_photo_path), preview_small)
         cv2.imwrite(str(preview_big_photo_path), preview_big)

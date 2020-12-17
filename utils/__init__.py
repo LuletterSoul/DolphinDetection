@@ -17,4 +17,5 @@ from .log import *
 from .thresh import *
 from .common import *
 from .concurrecy import *
+from .upsample_image import *
 
