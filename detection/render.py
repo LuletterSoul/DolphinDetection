@@ -35,9 +35,27 @@ from stream.rtsp import FFMPEG_MP4Writer
 # from .manager import DetectorController
 from stream.websocket import creat_packaged_msg_json, creat_detect_msg_json, creat_detect_empty_msg_json
 from utils import bbox_points, generate_time_stamp, get_local_time
-from utils import paint_chinese_opencv
+from utils import paint_chinese_opencv, add_text_logo
 from utils import preprocess, crop_by_se, logger
 from utils.cache import SharedMemoryFrameCache
+
+
+import cv2
+import time
+from PIL import Image, ImageDraw, ImageFont
+text_params = dict({
+    "font": ImageFont.truetype("./static/msyh.ttc", 50, encoding="uft-8"),
+    "color": (255, 255, 255),
+    "location": (40, 40),
+    "bold_offset": 1
+})
+
+logo_params = dict({
+    "location": (0, 0),
+#    "reduce_ratio": 8
+})
+
+logo = Image.open("./static/eco_eye_logo.png")
 
 
 class ArrivalMsgType:
@@ -279,6 +297,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         :param end_cnt:
         :return:
         """
+
         if next_cnt < 1:
             next_cnt = 1
         render_cnt = 0
@@ -288,6 +307,9 @@ class DetectionStreamRender(FrameArrivalHandler):
             if frame is None:
                 print(f'Frame is none for [{index}]')
                 continue
+
+            local_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            # frame = add_text_logo(frame, local_time, logo, text_params=text_params, logo_params=logo_params)
             # tmp_rects = self.render_rect_cache[index % self.cache_size]
             # self.render_rect_cache[index % self.cache_size] = None
             # if current frame has bbox, just update the bbox position, and clear counting
