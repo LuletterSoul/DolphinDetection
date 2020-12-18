@@ -21,6 +21,7 @@ import cv2
 import numpy as np
 import time
 from PIL import Image, ImageDraw, ImageFont
+from datetime import datetime, timedelta
 
 
 class Labeler(object):
@@ -199,9 +200,9 @@ def add_text_logo(image, text, logo, text_params, logo_params):
         img_ret should be saved as PNG format, JPEG format maybe cause fault.
     """
     # add text
-    img = image.convert("RGB")
+    img = image.convert("RGBA")
     img_x, img_y = img.size
-    text_overlay = Image.new("RGB", img.size, (255, 255, 255, 0))
+    text_overlay = Image.new("RGBA", img.size, (255, 255, 255, 0))
     img_draw = ImageDraw.Draw(text_overlay)
 
     text_size_x, text_size_y = img_draw.textsize(
@@ -221,7 +222,7 @@ def add_text_logo(image, text, logo, text_params, logo_params):
     img_ret = Image.alpha_composite(img, text_overlay)
 
     # add logo
-    logo = logo.convert("RGB")
+    logo = logo.convert("RGBA")
     logo_x, logo_y = logo.size
     scale = logo_params["reduce_ratio"]
     logo_scale = max(img_x / (scale * logo_x), img_y / (scale * logo_y))
@@ -232,6 +233,21 @@ def add_text_logo(image, text, logo, text_params, logo_params):
     img_ret.paste(logo, logo_params["location"], logo_mask)
     # img_ret.show()
     return np.asarray(img_ret)
+
+
+
+def paste_logo(image, template, text, scale,location,thickness=5):
+    """
+    """
+    #b, g, r, a = cv2.split(template)
+    #alpha = cv2.merge((a, a, a))
+    ret = cv2.add(image, template)
+
+    font = cv2.FONT_HERSHEY_COMPLEX
+
+    ret = cv2.putText(ret, text, location, font, scale, (255,255,255),thickness)
+
+    return ret
 
 
 # text_params = dict({
@@ -250,8 +266,4 @@ def add_text_logo(image, text, logo, text_params, logo_params):
 #text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 #text = "下关码头 / " + text
 
-# if __name__ == "__main__":
-#    im = Image.open("1.png")
-#    logo = Image.open("eco_eye_logo.png")
-#    im_ret = add_text_logo(im, text, logo, text_params=text_params, logo_params=logo_params)
-#    im_ret.save("ret_2.png")
+

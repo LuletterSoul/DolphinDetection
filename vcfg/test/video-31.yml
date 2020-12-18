@@ -64,8 +64,8 @@ bbox:
   h: 224
 alg:
   real_shape:
-    - 2160
-    - 3840
+    - 1080
+    - 1920
     - 3
   type: thresh
   sp: 10

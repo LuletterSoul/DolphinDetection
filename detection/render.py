@@ -36,27 +36,23 @@ from stream.rtsp import FFMPEG_MP4Writer
 # from .manager import DetectorController
 from stream.websocket import creat_packaged_msg_json, creat_detect_msg_json, creat_detect_empty_msg_json
 from utils import bbox_points, generate_time_stamp, get_local_time
-from utils import paint_chinese_opencv, add_text_logo
+from utils import paint_chinese_opencv, add_text_logo, paste_logo
 from utils import preprocess, crop_by_se, logger
 from utils.cache import SharedMemoryFrameCache
 from datetime import datetime, timedelta
 
 
 from PIL import Image,  ImageFont
+logo = cv2.imread('./static/logo.png',-1)
 
-text_params = {
-    "font": ImageFont.truetype("./static/msyh.ttc", 47, encoding="uft-8"),
-    "color": (252, 255, 255),
-    "location": (37, 40),
-    "bold_offset": -2
-}
 
-logo_params = {
-    "location": (-2, 0),
-    "reduce_ratio": 6
-}
+b, g, r, a = cv2.split(logo)
 
-logo = Image.open("./static/eco_eye_logo.png")
+TEMPLATE = cv2.merge((a, a, a))
+FONT_SCALE = 1.6
+FONT_POSITION = (1300,95)
+FONT_SIZE = 4
+
 
 
 class ArrivalMsgType:
@@ -305,19 +301,21 @@ class DetectionStreamRender(FrameArrivalHandler):
             next_cnt = 1
         render_cnt = 0
         rects = []
-        #local_time = datetime.now()
+        local_time = datetime.now()
         for index in range(next_cnt, end_cnt + 1):
             frame = self.original_frame_cache[index].copy()
             if frame is None:
                 print(f'Frame is none for [{index}]')
                 continue
 
-            #clt = local_time
-            #clt = clt + timedelta(seconds=index % 24)
-        # fmt_local_time = clt.strftime("%Y-%m-%d %H:%M:%S")
-            # frame = add_text_logo(
-            #    Image.fromarray(frame), fmt_local_time, logo, text_params=text_params, logo_params=logo_params)
-            print(f"Done with frame {index}")
+
+            clt = local_time
+            clt = clt + timedelta(seconds=index % 24)
+            fmt_local_time = clt.strftime("%Y-%m-%d %H:%M:%S")
+            frame =  paste_logo(frame,TEMPLATE, fmt_local_time,FONT_SCALE,FONT_POSITION,FONT_SIZE)
+            #frame = add_text_logo(
+            #   Image.fromarray(frame), fmt_local_time, logo, text_params=text_params, logo_params=logo_params)
+            #print(f"Done with frame {index}")
             # tmp_rects = self.render_rect_cache[index % self.cache_size]
             # self.render_rect_cache[index % self.cache_size] = None
             # if current frame has bbox, just update the bbox position, and clear counting

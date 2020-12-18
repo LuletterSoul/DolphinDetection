@@ -34,7 +34,16 @@ def test_label():
     labeler = Labeler(LABEL_IMAGE_PATH, LABEL_SAVE_PATH, LABEL_SAVE_PATH, LABEL_TARGET_PATH)
     labeler.label()
 
+if __name__ == "__main__":
+   img =  cv2.imread('./static/test.png')
+   logo = cv2.imread('./static/logo.png',-1)
 
-if __name__ == '__main__':
-    test_label()
+   local_time = datetime.now()
+   b, g, r, a = cv2.split(logo)
+   template = cv2.merge((a, a, a))
+   fmt_local_time = local_time.strftime("%Y-%m-%d %H:%M:%S")
+   im_ret =  paste_logo(img,template, fmt_local_time,1.6,(1300,95),4)
+   cv2.imshow('Logo',im_ret)
+   cv2.waitKey(0)
+
     # test_crop_by_roi()
