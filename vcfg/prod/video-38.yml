@@ -1,7 +1,7 @@
-index: 37
+index: 38
 name: xiaguan_point
 camera_id: camera_bp_1
-channel: 6
+channel: 7
 shape:
   - 2160
   - 3840
@@ -42,7 +42,7 @@ save_box: true
 show_box: true
 cv_only: true
 ssd_divide_four: false
-rtsp: rtsp://10.196.122.98/cvcam/32/stream1
+rtsp: rtsp://10.196.122.98/cvcam/33/stream1
 push_to: rtsp://192.168.0.116/yz
 write_timestamp: false
 enable_sample_frame: false

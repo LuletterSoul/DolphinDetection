@@ -40,19 +40,19 @@ from utils import paint_chinese_opencv, add_text_logo, paste_logo
 from utils import preprocess, crop_by_se, logger
 from utils.cache import SharedMemoryFrameCache
 from datetime import datetime, timedelta
+import copy
 
 
 from PIL import Image,  ImageFont
-logo = cv2.imread('./static/logo.png',-1)
+logo = cv2.imread('./static/logo.png', -1)
 
 
 b, g, r, a = cv2.split(logo)
 
 TEMPLATE = cv2.merge((a, a, a))
 FONT_SCALE = 1.6
-FONT_POSITION = (1300,95)
+FONT_POSITION = (1300, 95)
 FONT_SIZE = 4
-
 
 
 class ArrivalMsgType:
@@ -302,18 +302,20 @@ class DetectionStreamRender(FrameArrivalHandler):
         render_cnt = 0
         rects = []
         local_time = datetime.now()
-        for index in range(next_cnt, end_cnt + 1):
+        begin = next_cnt
+        end = end_cnt + 1
+        for index in range(begin, end):
             frame = self.original_frame_cache[index].copy()
             if frame is None:
                 print(f'Frame is none for [{index}]')
                 continue
 
-
-            clt = local_time
-            clt = clt + timedelta(seconds=index % 24)
+            clt = copy.deepcopy(local_time)
+            clt = clt + timedelta(seconds=(index - begin) // 25)
             fmt_local_time = clt.strftime("%Y-%m-%d %H:%M:%S")
-            frame =  paste_logo(frame,TEMPLATE, fmt_local_time,FONT_SCALE,FONT_POSITION,FONT_SIZE)
-            #frame = add_text_logo(
+            frame = paste_logo(frame, TEMPLATE, fmt_local_time,
+                               FONT_SCALE, FONT_POSITION, FONT_SIZE)
+            # frame = add_text_logo(
             #   Image.fromarray(frame), fmt_local_time, logo, text_params=text_params, logo_params=logo_params)
             #print(f"Done with frame {index}")
             # tmp_rects = self.render_rect_cache[index % self.cache_size]

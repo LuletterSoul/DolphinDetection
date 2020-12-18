@@ -91,5 +91,5 @@ alg:
   angle_thresh: 3
   track_confidence: 0.85
   ssd_confidence: 0.95
-  cascade_model_path: mmdetection/work_dirs/cascade_rcnn_r50_caffe_fpn_1x_coco/latest.pth
-  cascade_model_cfg:  mmdetection/configs/cascade_rcnn/cascade_rcnn_r50_caffe_fpn_1x_coco.py
+  cascade_model_path: mmdetection/work_dirs/1125_jt003_neg_bg/epoch_24.pth
+  cascade_model_cfg:  mmdetection/configs/cascade_rcnn/0925_jt003_sync.py

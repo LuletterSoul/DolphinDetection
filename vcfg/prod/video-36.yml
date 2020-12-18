@@ -3,8 +3,8 @@ name: xiaguan_point
 camera_id: camera_bp_1
 channel: 5
 shape:
-  - 1080
-  - 1920
+  - 2160
+  - 3840
   - 3
 ip: 222.190.243.176
 dip: http://10.196.122.96:8080
@@ -42,7 +42,7 @@ save_box: true
 show_box: true
 cv_only: true
 ssd_divide_four: false
-rtsp: rtsp://10.196.122.98/cvcam/16/stream1
+rtsp: rtsp://10.196.122.98/cvcam/31/stream1
 push_to: rtsp://192.168.0.116/yz
 write_timestamp: false
 enable_sample_frame: false
@@ -68,6 +68,7 @@ alg:
     - 3840
     - 3
   type: thresh
+  enable_color: true
   sp: 10
   sr: 60
   dk_size: -1

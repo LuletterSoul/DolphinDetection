@@ -37,6 +37,7 @@ from .capture import VideoRtspCallbackCapture, \
     VideoOfflineCallbackCapture
 from .controller import TaskBasedDetectorController, detect
 from .render import DetectionSignalHandler, DetectionStreamRender
+import time
 
 
 class MonitorType(Enum):
@@ -127,15 +128,18 @@ class DetectionMonitor(object):
 
     def listen(self):
         # Listener(on_press=self.shut_down_from_keyboard).start()
-        threading.Thread(target=self.shut_down_from_keyboard, daemon=True).start()
+        threading.Thread(target=self.shut_down_from_keyboard,
+                         daemon=True).start()
 
-        logger.info('*******************************Monitor: Listening exit event********************************')
+        logger.info(
+            '*******************************Monitor: Listening exit event********************************')
         # if self.runtime != -1:
         #     time.sleep(self.runtime)
         # else:
         #     input('')
         self.shut_down_event.wait()
-        logger.info('*******************************Monitor: preparing exit system********************************')
+        logger.info(
+            '*******************************Monitor: preparing exit system********************************')
         self.cancel()
 
     def cancel(self):
@@ -190,13 +194,15 @@ class EmbeddingControlMonitor(DetectionMonitor):
 
     def __init__(self, cfgs: List[VideoConfig], scfg, stream_path: Path, sample_path: Path, frame_path: Path,
                  region_path, offline_path: Path = None, build_pool=True) -> None:
-        super().__init__(cfgs, scfg, stream_path, sample_path, frame_path, region_path, offline_path, build_pool)
+        super().__init__(cfgs, scfg, stream_path, sample_path,
+                         frame_path, region_path, offline_path, build_pool)
         self.caps_queue = [Manager().Queue() for c in self.cfgs]
         self.msg_queue = [Manager().Queue() for c in self.cfgs]
         self.stream_stacks = []
         self.frame_caches = []
         self.init_caches()
-        self.push_streamers = [PushStreamer(cfg, self.stream_stacks[idx]) for idx, cfg in enumerate(self.cfgs)]
+        self.push_streamers = [PushStreamer(
+            cfg, self.stream_stacks[idx]) for idx, cfg in enumerate(self.cfgs)]
         # self.stream_stacks = [Manager().list() for c in self.cfgs]
         self.caps = []
         self.controllers = []
@@ -204,17 +210,20 @@ class EmbeddingControlMonitor(DetectionMonitor):
 
     def init_caches(self):
         for idx, cfg in enumerate(self.cfgs):
-            template = np.zeros((cfg.shape[1], cfg.shape[0], cfg.shape[2]), dtype=np.uint8)
+            template = np.zeros(
+                (cfg.shape[1], cfg.shape[0], cfg.shape[2]), dtype=np.uint8)
             if cfg.use_sm:
                 frame_cache = SharedMemoryFrameCache(self.frame_cache_manager, cfg.cache_size,
                                                      template.nbytes,
                                                      shape=cfg.shape)
                 self.frame_caches.append(frame_cache)
+                time.sleep(1)
                 self.stream_stacks.append(
                     [frame_cache,
                      Manager().list()])
             else:
-                self.frame_caches.append(ListCache(Manager(), cfg.cache_size, template))
+                self.frame_caches.append(
+                    ListCache(Manager(), cfg.cache_size, template))
                 self.stream_stacks.append(Manager().list())
 
     def init_caps(self):
@@ -314,7 +323,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
 
     def __init__(self, cfgs: List[VideoConfig], scfg, stream_path, sample_path, frame_path, region_path: Path,
                  offline_path=None, build_pool=True) -> None:
-        super().__init__(cfgs, scfg, stream_path, sample_path, frame_path, region_path, offline_path)
+        super().__init__(cfgs, scfg, stream_path, sample_path,
+                         frame_path, region_path, offline_path)
         # self.classify_model = classify_model
         # HandlerSSD.SSD_MODEL = ssd_model
         self.scfg = scfg
@@ -324,7 +334,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
             c.date = self.time_stamp
             # self.process_pool = None
         # self.thread_pool = None
-        self.render_notify_queues = [self.pipe_manager.Queue() for c in self.cfgs]
+        self.render_notify_queues = [
+            self.pipe_manager.Queue() for c in self.cfgs]
         self.stream_renders = []
         self.track_service = None
         self.track_requester = None
@@ -352,7 +363,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                   self.controllers[idx].rect_stream_path,
                                   self.controllers[idx].original_stream_path,
                                   self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
-                                  self.render_notify_queues[idx], self.region_path / str(c.index),
+                                  self.render_notify_queues[idx], self.region_path / str(
+                                      c.index),
                                   self.controllers[idx].preview_path,
                                   self.controllers[idx].detect_params) for idx, c
             in
@@ -368,7 +380,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                                    self.controllers[idx].rect_stream_path,
                                    self.controllers[idx].original_stream_path,
                                    self.controllers[idx].render_rect_cache, self.controllers[idx].original_frame_cache,
-                                   self.render_notify_queues[idx], self.region_path / str(c.index),
+                                   self.render_notify_queues[idx], self.region_path / str(
+                                       c.index),
                                    self.controllers[idx].preview_path,
                                    self.track_requester, self.render_notify_queues[idx],
                                    self.controllers[idx].detect_params) for idx, c
@@ -384,7 +397,9 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         """
         self.controllers = [
             TaskBasedDetectorController(self.scfg, cfg, self.stream_path / str(cfg.index),
-                                        self.region_path / str(cfg.index), self.frame_path / str(cfg.index),
+                                        self.region_path /
+                                        str(cfg.index), self.frame_path /
+                                        str(cfg.index),
                                         self.caps_queue[idx], self.pipes[idx], self.msg_queue[idx],
                                         self.stream_stacks[idx],
                                         self.render_notify_queues[idx], self.frame_caches[idx],
@@ -479,7 +494,8 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         for idx, cfg in enumerate(self.cfgs):
             threading.Thread(target=websocket_client, daemon=True,
                              args=(self.msg_queue[idx], cfg, self.scfg)).start()
-            logger.info(f'Controller [{cfg.index}]: Websocket client [{cfg.index}] is initializing...')
+            logger.info(
+                f'Controller [{cfg.index}]: Websocket client [{cfg.index}] is initializing...')
             # asyncio.get_running_loop().run_until_complete(websocket_client_async(self.msg_queue[idx]))
 
     def call(self):
@@ -507,11 +523,13 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
         # Run video capture from stream
         for i, cfg in enumerate(self.cfgs):
             logger.info('Init detector controller [{}]....'.format(cfg.index))
-            task_future = self.process_pool.apply_async(self.controllers[i].start, args=(None,))
+            task_future = self.process_pool.apply_async(
+                self.controllers[i].start, args=(None,))
             # don't call future object get() method before
             # all sub process is init,otherwise will be blocked probably due to some services are looping
             # task_future.get()
-            logger.info('Done init detector controller [{}]....'.format(cfg.index))
+            logger.info(
+                'Done init detector controller [{}]....'.format(cfg.index))
         for i in range(len(self.cfgs)):
             if self.process_pool is not None:
                 self.task_futures.append(
