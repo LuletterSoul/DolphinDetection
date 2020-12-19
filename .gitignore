@@ -273,3 +273,4 @@ mmdetection/work_dirs
 
 .vscode
 .idea
+experiments/

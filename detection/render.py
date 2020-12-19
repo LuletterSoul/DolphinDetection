@@ -39,13 +39,12 @@ from utils import bbox_points, generate_time_stamp, get_local_time
 from utils import paint_chinese_opencv, add_text_logo, paste_logo
 from utils import preprocess, crop_by_se, logger
 from utils.cache import SharedMemoryFrameCache
+from utils import crop_and_up_sample_image
 from datetime import datetime, timedelta
 import copy
 
 
-from PIL import Image,  ImageFont
 logo = cv2.imread('./static/logo.png', -1)
-
 
 b, g, r, a = cv2.split(logo)
 
@@ -53,7 +52,6 @@ TEMPLATE = cv2.merge((a, a, a))
 FONT_SCALE = 1.6
 FONT_POSITION = (1300, 95)
 FONT_SIZE = 4
-
 
 class ArrivalMsgType:
     UPDATE = 1
@@ -277,15 +275,25 @@ class DetectionStreamRender(FrameArrivalHandler):
         current_time = generate_time_stamp('%m%d%H%M%S')
         post_filter_event = threading.Event()
         post_filter_event.clear()
-        # use two independent threads to execute video generation sub-tasks
+
+        # execute rendering task.
         rect_render_thread = threading.Thread(
             target=self.rect_render_task,
             args=(current_idx, current_time, post_filter_event, msg,), daemon=True)
         rect_render_thread.start()
+
+        # execute original video clip saving task.
         original_render_thread = threading.Thread(
             target=self.original_render_task,
             args=(current_idx, current_time, post_filter_event, msg,), daemon=True)
         original_render_thread.start()
+
+        # execute video clip enhancement task.
+        enhance_thread = threading.Thread(
+            target=self.enhance_task,
+            args=(current_idx, current_time, post_filter_event, msg,), daemon=True)
+        enhance_thread.start()
+
         self.task_cnt += 1
         return True
 
@@ -349,6 +357,58 @@ class DetectionStreamRender(FrameArrivalHandler):
             video_write.write(frame)
         return next_cnt
 
+    def write_sub_up_sampled_video_work(self, next_cnt, end_cnt, sub_video_name, scale, dst_shape, center):
+        video_size = (dst_shape[0], dst_shape[1])
+        video_path = str(self.rect_stream_path / sub_video_name)
+        video_writer = FFMPEG_MP4Writer(video_path, video_size, 25)
+        try:
+            local_time = datetime.now()
+            for index in range(next_cnt, end_cnt + 1):
+                frame = self.original_frame_cache[index]
+                if frame is None:
+                    continue
+                clt = copy.deepcopy(local_time)
+                clt = clt + timedelta(seconds=(index - next_cnt) // 25)
+                fmt_local_time = clt.strftime("%Y-%m-%d %H:%M:%S")
+                up_sampled_img = crop_and_up_sample_image(frame, center, scale, dst_shape)
+                up_sampled_img= paste_logo(up_sampled_img, TEMPLATE, fmt_local_time,
+                                FONT_SCALE, FONT_POSITION, FONT_SIZE)
+                video_writer.write(up_sampled_img)
+        except Exception as e:
+            traceback.print_exc()
+        finally:
+            video_writer.release()
+
+    def write_up_sampled_video_work(self, next_cnt, end_cnt, video_name, scale, dst_shape):
+        """
+        write up sampled frame into a video
+        :param next_cnt: video start frame index
+        :param end_cnt:
+        :param video_name
+        :param scale
+        :param dst_shape
+        :return:
+        """
+        if next_cnt < 1:
+            next_cnt = 1
+        rects = []
+        for index in range(next_cnt, end_cnt + 1):
+            if index in self.render_rect_cache:
+                rects = self.render_rect_cache[index]
+                if len(rects) > 0:
+                    break
+        if len(rects) > 0:
+            cnt = 0
+            for rect in rects:
+                center = [int((rect[0] + rect[2]) / 2), int((rect[1] + rect[3]) / 2)]
+                sub_video_name = f'{os.path.splitext(video_name)[0]}_{cnt}.mp4'
+                cnt += 1
+                #sub_up_sample_thread = threading.Thread(
+                #    target=self.write_sub_up_sampled_video_work,
+                #    args=(next_cnt, end_cnt, sub_video_name, scale, dst_shape, center,), daemon=True)
+                self.write_sub_up_sampled_video_work(next_cnt,end_cnt,sub_video_name,scale, dst_shape,center)
+                #sub_up_sample_thread.start()
+
     def write_original_video_work(self, video_write, next_cnt, end_cnt):
         """
         write original frame into video.
@@ -397,62 +457,82 @@ class DetectionStreamRender(FrameArrivalHandler):
                 logger.error(e)
         return next_cnt
 
-    def rect_render_task(self, current_idx, current_time, post_filter_event, msg: ArrivalMessage):
+    def enhance_task(self, current_idx, current_time, post_filter_event, msg: ArrivalMessage):
         """
-        generate a short-time dolphin video with bbox indicator.
-        :param current_idx: start frame index in a slide window
-        :param current_time:
-        :param post_filter_event:
-        :param msg: arrival message
-        :return:
         """
         start = time.time()
         task_cnt = self.task_cnt
-        # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
-        # target = self.rect_stream_path / (current_time + str(task_cnt) + '.mp4')
-        target = self.rect_stream_path / \
-            f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
-        logger.debug(
-            f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
-        # fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
-        video_write = FFMPEG_MP4Writer(
-            str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
+       
         next_cnt = current_idx - self.future_frames
-        # next_cnt = self.write_render_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
-        #                                         frame_cache)
-        # the future frames count
-        # next_frame_cnt = 48
-        # wait the futures frames is accessable
-        self.wait(task_cnt, 'Rect Render Task', msg)
+        video_name =  f'{current_time}_{self.cfg.index}_{str(task_cnt)}_pro.mp4'
+        logger.debug(
+            f'Video Render [{self.index}]: Enhance Task [{task_cnt}]')
+        self.wait(task_cnt, 'Enhanced Task', msg)
         end_cnt = current_idx + self.future_frames
         try:
-            next_cnt = self.write_render_video_work(
-                video_write, next_cnt, end_cnt)
+            self.write_up_sampled_video_work(next_cnt, end_cnt, video_name, scale=2, dst_shape=[1920, 1080])
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
-        finally:
-            video_write.release()
         logger.info(
-            f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
-            f'seconds.Done write detection stream frame into: [{str(target)}]')
-        preview_photo = self.original_frame_cache[current_idx]
-        preview_photo_path = self.preview_path / \
-            f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
-        preview_big_photo_path = self.preview_path / \
-            f'{current_time}_{self.cfg.index}_{str(task_cnt)}_big.jpg'
-        preview_big = cv2.cvtColor(preview_photo, cv2.COLOR_RGB2BGR)
-        preview_small = cv2.resize(preview_big, dsize=(0, 0), fx=0.25, fy=0.25)
+            f'Video Render [{self.index}]: Enhancement Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}]')
 
-        cv2.imwrite(str(preview_photo_path), preview_small)
-        cv2.imwrite(str(preview_big_photo_path), preview_big)
-        self.post_handle(current_time, post_filter_event,
-                         target, task_cnt, preview_photo_path)
-        # if msg.no_wait:
-        # release lock status
-        # self.original_frame_cache.release()
-        # logger.info('Release original frame cache')
+    def rect_render_task(self, current_idx, current_time, post_filter_event, msg: ArrivalMessage):
+            """
+            generate a short-time dolphin video with bbox indicator.
+            :param current_idx: start frame index in a slide window
+            :param current_time:
+            :param post_filter_event:
+            :param msg: arrival message
+            :return:
+            """
+            start = time.time()
+            task_cnt = self.task_cnt
+            # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
+            # target = self.rect_stream_path / (current_time + str(task_cnt) + '.mp4')
+            target = self.rect_stream_path / \
+                f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
+            logger.debug(
+                f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
+            # fourcc = cv2.VideoWriter_fourcc(*'avc1')
+            # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
+            video_write = FFMPEG_MP4Writer(
+                str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
+            next_cnt = current_idx - self.future_frames
+            # next_cnt = self.write_render_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
+            #                                         frame_cache)
+            # the future frames count
+            # next_frame_cnt = 48
+            # wait the futures frames is accessable
+            self.wait(task_cnt, 'Rect Render Task', msg)
+            end_cnt = current_idx + self.future_frames
+            try:
+                next_cnt = self.write_render_video_work(
+                    video_write, next_cnt, end_cnt)
+            except Exception as e:
+                traceback.print_exc()
+                logger.error(e)
+            finally:
+                video_write.release()
+            logger.info(
+                f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
+                f'seconds.Done write detection stream frame into: [{str(target)}]')
+            preview_photo = self.original_frame_cache[current_idx]
+            preview_photo_path = self.preview_path / \
+                f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
+            preview_big_photo_path = self.preview_path / \
+                f'{current_time}_{self.cfg.index}_{str(task_cnt)}_big.jpg'
+            preview_big = cv2.cvtColor(preview_photo, cv2.COLOR_RGB2BGR)
+            preview_small = cv2.resize(preview_big, dsize=(0, 0), fx=0.25, fy=0.25)
+
+            cv2.imwrite(str(preview_photo_path), preview_small)
+            cv2.imwrite(str(preview_big_photo_path), preview_big)
+            self.post_handle(current_time, post_filter_event,
+                            target, task_cnt, preview_photo_path)
+            # if msg.no_wait:
+            # release lock status
+            # self.original_frame_cache.release()
+            # logger.info('Release original frame cache')
 
     def original_render_task(self, current_idx, current_time, post_filter_event, msg: ArrivalMessage):
         """
