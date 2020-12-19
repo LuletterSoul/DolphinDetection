@@ -8,11 +8,11 @@ shape:
   - 3
 ip: 222.190.243.176
 dip: http://10.196.122.94:8080
-port: '8081'
-suffix: ''
+port: "8081"
+suffix: ""
 headers: {}
-m3u8_url: ''
-url: ''
+m3u8_url: ""
+url: ""
 roi:
   x: 0
   y: 60
@@ -22,7 +22,7 @@ resize:
   width: 1000
   height: -1
   scale: -1
-show_window: true
+show_window: false
 push_stream: false
 window_position:
   x: 100
@@ -36,9 +36,9 @@ enable: false
 filtered_ratio: 0.5
 max_streams_cache: 5000
 online: offline
-cap_loop: false
+cap_loop: true
 sample_internal: 15
-save_box: true
+save_box: false
 show_box: true
 cv_only: true
 ssd_divide_four: false
@@ -51,7 +51,7 @@ future_frames: 76
 detect_internal: 72
 search_window_size: 125
 use_sm: false
-cache_size: 700
+cache_size: 1500
 similarity_thresh: 0.05
 pre_cache: 48
 render: true
@@ -64,8 +64,8 @@ bbox:
   h: 224
 alg:
   real_shape:
-    - 2160
-    - 3840
+    - 1080
+    - 1920
     - 3
   type: thresh
   sp: 10
@@ -80,10 +80,11 @@ alg:
   area: 400
   area_ratio: 0.03
   color_range:
-    - 80
-    - 80
-    - 80
+    - 95
+    - 95
+    - 95
   color_scale: -1
+  enable_color: true
   speed_x_thresh: 15
   speed_y_thresh: 15
   continuous_time_thresh: 36
@@ -91,5 +92,5 @@ alg:
   angle_thresh: 3
   track_confidence: 0.85
   ssd_confidence: 0.95
-  cascade_model_path: mmdetection/work_dirs/0925_jt003_sync/epoch_17.pth
-  cascade_model_cfg:  mmdetection/configs/cascade_rcnn/0925_jt003_sync.py
+  cascade_model_path: mmdetection/work_dirs/1125_jt003_neg_bg/epoch_24.pth
+  cascade_model_cfg: mmdetection/configs/cascade_rcnn/0925_jt003_sync.py
