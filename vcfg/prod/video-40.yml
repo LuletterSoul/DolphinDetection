@@ -51,7 +51,7 @@ future_frames: 76
 detect_internal: 72
 search_window_size: 125
 use_sm: false
-cache_size: 700
+cache_size: 375
 similarity_thresh: 0.05
 pre_cache: 48
 render: true

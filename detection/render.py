@@ -16,10 +16,11 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from multiprocessing import Manager
+from multiprocessing import Manager,shared_memory
 from multiprocessing.queues import Queue
 from typing import List
 import traceback
+import json
 
 import cv2
 import numpy as np
@@ -67,6 +68,7 @@ class ArrivalMessage(object):
     type: int  # message type See ArriveMsgType
     no_wait: bool = False  # ignore window lock
     rects: List = None  # potential bbox
+    render_dict : str = None
 
 
 class FrameArrivalHandler(object):
@@ -161,16 +163,16 @@ class FrameArrivalHandler(object):
             self.update_record(msg)
             self.task(msg)
         # new candidate may appear during a window
-        else:
-            new_rects = self.cal_potential_new_candidate(msg)
-            if len(new_rects):
-                self.update_record(msg)
-                msg.rects = new_rects
+        #else:
+        #    new_rects = self.cal_potential_new_candidate(msg)
+        #    if len(new_rects):
+        #        self.update_record(msg)
+        #        msg.rects = new_rects
                 # self.task(msg)
                 # put into msg queue, waiting processed until window released.
-                self.task_msg_queue.put(msg)
-                logger.info(
-                    self.LOG_PREFIX + f'Appear new candidate during a window, frame index: {msg.current_index}, {new_rects}.')
+        #        self.task_msg_queue.put(msg)
+        #        logger.info(
+        #            self.LOG_PREFIX + f'Appear new candidate during a window, frame index: {msg.current_index}, {new_rects}.')
 
     def cal_potential_new_candidate(self, msg):
         if msg.rects is None:
@@ -297,7 +299,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         self.task_cnt += 1
         return True
 
-    def write_render_video_work(self, video_write, next_cnt, end_cnt):
+    def write_render_video_work(self, video_write, next_cnt, end_cnt,msg:ArrivalMessage):
         """
         write rendering frame into a video, render bbox if rect cache exists the position record
         :param video_write:
@@ -309,6 +311,8 @@ class DetectionStreamRender(FrameArrivalHandler):
             next_cnt = 1
         render_cnt = 0
         rects = []
+        # rect_shm = shared_memory.ShareableList(name=msg.rect_shm_name)
+        rect_dict = msg.render_dict
         local_time = datetime.now()
         begin = next_cnt
         end = end_cnt + 1
@@ -332,9 +336,12 @@ class DetectionStreamRender(FrameArrivalHandler):
             # if tmp_rects is not None and len(tmp_rects):
             #    render_cnt = 0
             #    rects = tmp_rects
-            if index in self.render_rect_cache:
+            #if index in self.render_rect_cache:
+            #    render_cnt = 0
+            #    rects = self.render_rect_cache[index]
+            if index in rect_dict:
                 render_cnt = 0
-                rects = self.render_rect_cache[index]
+                rects = rect_dict[index]
 
             # each bbox will last 1.5s in 25FPS video
             logger.debug(self.LOG_PREFIX +
@@ -379,7 +386,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         finally:
             video_writer.release()
 
-    def write_up_sampled_video_work(self, next_cnt, end_cnt, video_name, scale, dst_shape):
+    def write_up_sampled_video_work(self, next_cnt, end_cnt, video_name, scale, dst_shape,msg:ArrivalMessage):
         """
         write up sampled frame into a video
         :param next_cnt: video start frame index
@@ -392,9 +399,11 @@ class DetectionStreamRender(FrameArrivalHandler):
         if next_cnt < 1:
             next_cnt = 1
         rects = []
+        rect_dict = msg.render_dict
         for index in range(next_cnt, end_cnt + 1):
-            if index in self.render_rect_cache:
-                rects = self.render_rect_cache[index]
+            if index in rect_dict:
+                # rects = self.render_rect_cache[index]
+                rects = rect_dict[index]
                 if len(rects) > 0:
                     break
         if len(rects) > 0:
@@ -470,7 +479,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         self.wait(task_cnt, 'Enhanced Task', msg)
         end_cnt = current_idx + self.future_frames
         try:
-            self.write_up_sampled_video_work(next_cnt, end_cnt, video_name, scale=2, dst_shape=[1920, 1080])
+            self.write_up_sampled_video_work(next_cnt, end_cnt, video_name, scale=2, dst_shape=[1920, 1080],msg=msg)
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
@@ -508,7 +517,7 @@ class DetectionStreamRender(FrameArrivalHandler):
             end_cnt = current_idx + self.future_frames
             try:
                 next_cnt = self.write_render_video_work(
-                    video_write, next_cnt, end_cnt)
+                    video_write, next_cnt, end_cnt,msg)
             except Exception as e:
                 traceback.print_exc()
                 logger.error(e)
@@ -894,16 +903,17 @@ class DetectionSignalHandler(FrameArrivalHandler):
         :param traces:
         :return:
         """
-        self.write_bbox(traces, time_consume)
+        render_dict = self.write_bbox(traces, time_consume)
         # send message via message pipe
         self.render_queue.put(ArrivalMessage(
-            current_index, ArrivalMsgType.DETECTION, True))
+            current_index, ArrivalMsgType.DETECTION, True, render_dict =render_dict))
         self.render_queue.put(ArrivalMessage(
-            current_index, ArrivalMsgType.UPDATE))
+            current_index, ArrivalMsgType.UPDATE,render_dict=render_dict))
 
     def write_bbox(self, traces, time_consume):
         # cnt = 0
         # self.render_rect_cache[:] = [None] * self.cfg.cache_size
+        render_rect_dict = {}
         for frame_idx, rects in traces.items():
             # old_rects = self.render_rect_cache[frame_idx % self.cache_size]
             if frame_idx in self.render_rect_cache:
@@ -911,6 +921,10 @@ class DetectionSignalHandler(FrameArrivalHandler):
                 self.render_rect_cache[frame_idx] = old_rects + rects
             else:
                 self.render_rect_cache[frame_idx] = rects
+            for idx, rect in enumerate(rects):
+                if type(rect) is np.ndarray:
+                    rects[idx] = rect.tolist()
+            render_rect_dict[frame_idx] = rects
             json_msg = creat_detect_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
                                              timestamp=get_local_time(time_consume), rects=rects, dol_id=self.dol_id,
                                              camera_id=self.cfg.camera_id, cfg=self.cfg)
@@ -918,12 +932,11 @@ class DetectionSignalHandler(FrameArrivalHandler):
             # bbox rendering is post to render
             logger.debug(f'put detect message in msg_queue {json_msg}...')
             # print(rects)
-        empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp,
-                                                channel=self.cfg.channel,
-                                                timestamp=get_local_time(time_consume), dol_id=self.dol_id,
-                                                camera_id=self.cfg.camera_id)
+        #rect_block = shared_memory.ShareableList([json.dumps(render_rect_dict)])
+        empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel, timestamp=get_local_time(time_consume), dol_id=self.dol_id, camera_id=self.cfg.camera_id) 
         self.dol_id += 1
         self.msg_queue.put(empty_msg)
+        return  render_rect_dict
 
 
 class Filter(object):

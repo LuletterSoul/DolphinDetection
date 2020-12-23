@@ -98,6 +98,8 @@ class SharedMemoryFrameCache(object):
         """
         cbt = self.unit * (index % self.cache_size)
         nbt = self.unit * ((index + 1) % self.cache_size)
+        # print(f'Cbt {cbt}')
+        # print(f'Nbt {cbt}')
         if nbt == 0:
             nbt = self.total_bytes
         # print((index + 1) % self.cache_size)
