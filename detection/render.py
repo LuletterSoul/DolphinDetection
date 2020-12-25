@@ -885,7 +885,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
         task_cnt = self.task_cnt
         if rects is not None:
             track_start = time.time()
-            result_sets, _ = self.track_requester.request(
+            _, result_sets= self.track_requester.request(
                 self.cfg.index, current_index, rects)
             # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
             self.detect_num += 1
