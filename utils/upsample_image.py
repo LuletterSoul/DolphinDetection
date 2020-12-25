@@ -60,7 +60,7 @@ def enhance_img(img, scale):
     return sharp_img
 
 
-def crop_and_up_sample_image(img, center, scale, dst_shape):
+def crop_and_up_sample_image(img, center, scale, dst_shape, task_cnt):
     """
 
     :param img: frame，numpy格式
@@ -74,12 +74,13 @@ def crop_and_up_sample_image(img, center, scale, dst_shape):
     left_top = [max(0, center[0] - int(crop_shape[0] / 2)),
                 max(0, center[1] - int(crop_shape[1] / 2))]  # [width, height]
     if left_top[0] + crop_shape[0] >= img_shape[1]:
-        left_top[0] = img_shape[0] - crop_shape[0]
+        left_top[0] = img_shape[1] - crop_shape[0]
 
     if left_top[1] + crop_shape[1] >= img_shape[0]:
-        left_top[1] = img_shape[1] - crop_shape[1]
+        left_top[1] = img_shape[0] - crop_shape[1]
 
     croped_img = img[left_top[1]:left_top[1] + crop_shape[1], left_top[0]:left_top[0] + crop_shape[0], :]
+    #print(f'Task: {task_cnt}, left_top={left_top}, crop_shape={crop_shape}, cropped img.shape={croped_img.shape}')
     upsampled_img = enhance_img(croped_img, scale)
     return upsampled_img
 

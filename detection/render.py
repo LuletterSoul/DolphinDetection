@@ -284,6 +284,7 @@ class DetectionStreamRender(FrameArrivalHandler):
             args=(current_idx, current_time, post_filter_event, msg,), daemon=True)
         rect_render_thread.start()
 
+        print(f'Task {self.task_cnt}: current idx {msg.current_index}')
         # execute original video clip saving task.
         original_render_thread = threading.Thread(
             target=self.original_render_task,
@@ -299,7 +300,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         self.task_cnt += 1
         return True
 
-    def write_render_video_work(self, video_write, next_cnt, end_cnt,msg:ArrivalMessage):
+    def write_render_video_work(self, video_write, next_cnt, end_cnt,msg:ArrivalMessage,task_cnt):
         """
         write rendering frame into a video, render bbox if rect cache exists the position record
         :param video_write:
@@ -316,6 +317,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         local_time = datetime.now()
         begin = next_cnt
         end = end_cnt + 1
+        print(f'Task {task_cnt}: {rect_dict}')
         for index in range(begin, end):
             frame = self.original_frame_cache[index].copy()
             if frame is None:
@@ -364,20 +366,20 @@ class DetectionStreamRender(FrameArrivalHandler):
             video_write.write(frame)
         return next_cnt
 
-    def write_sub_up_sampled_video_work(self, next_cnt, end_cnt, sub_video_name, scale, dst_shape, center):
+    def write_sub_up_sampled_video_work(self, next_cnt, end_cnt, sub_video_name, scale, dst_shape, center, task_cnt):
         video_size = (dst_shape[0], dst_shape[1])
         video_path = str(self.rect_stream_path / sub_video_name)
         video_writer = FFMPEG_MP4Writer(video_path, video_size, 25)
         try:
             local_time = datetime.now()
             for index in range(next_cnt, end_cnt + 1):
-                frame = self.original_frame_cache[index]
+                frame = self.original_frame_cache[index].copy()
                 if frame is None:
                     continue
                 clt = copy.deepcopy(local_time)
                 clt = clt + timedelta(seconds=(index - next_cnt) // 25)
                 fmt_local_time = clt.strftime("%Y-%m-%d %H:%M:%S")
-                up_sampled_img = crop_and_up_sample_image(frame, center, scale, dst_shape)
+                up_sampled_img = crop_and_up_sample_image(frame, center, scale, dst_shape, task_cnt)
                 up_sampled_img= paste_logo(up_sampled_img, TEMPLATE, fmt_local_time,
                                 FONT_SCALE, FONT_POSITION, FONT_SIZE)
                 video_writer.write(up_sampled_img)
@@ -386,7 +388,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         finally:
             video_writer.release()
 
-    def write_up_sampled_video_work(self, next_cnt, end_cnt, video_name, scale, dst_shape,msg:ArrivalMessage):
+    def write_up_sampled_video_work(self, next_cnt, end_cnt, video_name, scale, dst_shape,msg:ArrivalMessage,task_cnt):
         """
         write up sampled frame into a video
         :param next_cnt: video start frame index
@@ -405,17 +407,19 @@ class DetectionStreamRender(FrameArrivalHandler):
                 # rects = self.render_rect_cache[index]
                 rects = rect_dict[index]
                 if len(rects) > 0:
+                    print(f'Task {task_cnt}: first index {index}')
                     break
         if len(rects) > 0:
             cnt = 0
             for rect in rects:
                 center = [int((rect[0] + rect[2]) / 2), int((rect[1] + rect[3]) / 2)]
+                print(f'Task {task_cnt}: center {center}')
                 sub_video_name = f'{os.path.splitext(video_name)[0]}_{cnt}.mp4'
                 cnt += 1
                 #sub_up_sample_thread = threading.Thread(
                 #    target=self.write_sub_up_sampled_video_work,
                 #    args=(next_cnt, end_cnt, sub_video_name, scale, dst_shape, center,), daemon=True)
-                self.write_sub_up_sampled_video_work(next_cnt,end_cnt,sub_video_name,scale, dst_shape,center)
+                self.write_sub_up_sampled_video_work(next_cnt,end_cnt,sub_video_name,scale, dst_shape,center, task_cnt)
                 #sub_up_sample_thread.start()
 
     def write_original_video_work(self, video_write, next_cnt, end_cnt):
@@ -479,7 +483,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         self.wait(task_cnt, 'Enhanced Task', msg)
         end_cnt = current_idx + self.future_frames
         try:
-            self.write_up_sampled_video_work(next_cnt, end_cnt, video_name, scale=2, dst_shape=[1920, 1080],msg=msg)
+            self.write_up_sampled_video_work(next_cnt, end_cnt, video_name, scale=2, dst_shape=[1920, 1080],msg=msg,task_cnt=task_cnt)
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
@@ -517,7 +521,7 @@ class DetectionStreamRender(FrameArrivalHandler):
             end_cnt = current_idx + self.future_frames
             try:
                 next_cnt = self.write_render_video_work(
-                    video_write, next_cnt, end_cnt,msg)
+                    video_write, next_cnt, end_cnt,msg,task_cnt)
             except Exception as e:
                 traceback.print_exc()
                 logger.error(e)
@@ -892,6 +896,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
             logger.info(
                 f'{self.LOG_PREFIX}: Filter result: contain dolphin: {is_contain_dolphin}')
             if is_contain_dolphin:
+                print(f'\n\n\nTask {task_cnt}: tracker trace: {result_sets}')
                 self.trigger_rendering(current_index, traces, track_consume)
                 self.task_cnt += 1
                 self.post_num += 1
