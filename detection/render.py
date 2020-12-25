@@ -16,7 +16,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from multiprocessing import Manager,shared_memory
+from multiprocessing import Manager, shared_memory
 from multiprocessing.queues import Queue
 from typing import List
 import traceback
@@ -44,7 +44,6 @@ from utils import crop_and_up_sample_image
 from datetime import datetime, timedelta
 import copy
 
-
 logo = cv2.imread('./static/logo.png', -1)
 
 b, g, r, a = cv2.split(logo)
@@ -53,6 +52,7 @@ TEMPLATE = cv2.merge((a, a, a))
 FONT_SCALE = 1.6
 FONT_POSITION = (1300, 95)
 FONT_SIZE = 4
+
 
 class ArrivalMsgType:
     UPDATE = 1
@@ -68,7 +68,7 @@ class ArrivalMessage(object):
     type: int  # message type See ArriveMsgType
     no_wait: bool = False  # ignore window lock
     rects: List = None  # potential bbox
-    render_dict : str = None
+    render_dict: str = None
 
 
 class FrameArrivalHandler(object):
@@ -163,13 +163,13 @@ class FrameArrivalHandler(object):
             self.update_record(msg)
             self.task(msg)
         # new candidate may appear during a window
-        #else:
+        # else:
         #    new_rects = self.cal_potential_new_candidate(msg)
         #    if len(new_rects):
         #        self.update_record(msg)
         #        msg.rects = new_rects
-                # self.task(msg)
-                # put into msg queue, waiting processed until window released.
+        # self.task(msg)
+        # put into msg queue, waiting processed until window released.
         #        self.task_msg_queue.put(msg)
         #        logger.info(
         #            self.LOG_PREFIX + f'Appear new candidate during a window, frame index: {msg.current_index}, {new_rects}.')
@@ -300,7 +300,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         self.task_cnt += 1
         return True
 
-    def write_render_video_work(self, video_write, next_cnt, end_cnt,msg:ArrivalMessage,task_cnt):
+    def write_render_video_work(self, video_write, next_cnt, end_cnt, msg: ArrivalMessage, task_cnt):
         """
         write rendering frame into a video, render bbox if rect cache exists the position record
         :param video_write:
@@ -331,14 +331,14 @@ class DetectionStreamRender(FrameArrivalHandler):
                                FONT_SCALE, FONT_POSITION, FONT_SIZE)
             # frame = add_text_logo(
             #   Image.fromarray(frame), fmt_local_time, logo, text_params=text_params, logo_params=logo_params)
-            #print(f"Done with frame {index}")
+            # print(f"Done with frame {index}")
             # tmp_rects = self.render_rect_cache[index % self.cache_size]
             # self.render_rect_cache[index % self.cache_size] = None
             # if current frame has bbox, just update the bbox position, and clear counting
             # if tmp_rects is not None and len(tmp_rects):
             #    render_cnt = 0
             #    rects = tmp_rects
-            #if index in self.render_rect_cache:
+            # if index in self.render_rect_cache:
             #    render_cnt = 0
             #    rects = self.render_rect_cache[index]
             if index in rect_dict:
@@ -380,15 +380,16 @@ class DetectionStreamRender(FrameArrivalHandler):
                 clt = clt + timedelta(seconds=(index - next_cnt) // 25)
                 fmt_local_time = clt.strftime("%Y-%m-%d %H:%M:%S")
                 up_sampled_img = crop_and_up_sample_image(frame, center, scale, dst_shape, task_cnt)
-                up_sampled_img= paste_logo(up_sampled_img, TEMPLATE, fmt_local_time,
-                                FONT_SCALE, FONT_POSITION, FONT_SIZE)
+                up_sampled_img = paste_logo(up_sampled_img, TEMPLATE, fmt_local_time,
+                                            FONT_SCALE, FONT_POSITION, FONT_SIZE)
                 video_writer.write(up_sampled_img)
         except Exception as e:
             traceback.print_exc()
         finally:
             video_writer.release()
 
-    def write_up_sampled_video_work(self, next_cnt, end_cnt, video_name, scale, dst_shape,msg:ArrivalMessage,task_cnt):
+    def write_up_sampled_video_work(self, next_cnt, end_cnt, video_name, scale, dst_shape, msg: ArrivalMessage,
+                                    task_cnt):
         """
         write up sampled frame into a video
         :param next_cnt: video start frame index
@@ -416,11 +417,12 @@ class DetectionStreamRender(FrameArrivalHandler):
                 print(f'Task {task_cnt}: center {center}')
                 sub_video_name = f'{os.path.splitext(video_name)[0]}_{cnt}.mp4'
                 cnt += 1
-                #sub_up_sample_thread = threading.Thread(
+                # sub_up_sample_thread = threading.Thread(
                 #    target=self.write_sub_up_sampled_video_work,
                 #    args=(next_cnt, end_cnt, sub_video_name, scale, dst_shape, center,), daemon=True)
-                self.write_sub_up_sampled_video_work(next_cnt,end_cnt,sub_video_name,scale, dst_shape,center, task_cnt)
-                #sub_up_sample_thread.start()
+                self.write_sub_up_sampled_video_work(next_cnt, end_cnt, sub_video_name, scale, dst_shape, center,
+                                                     task_cnt)
+                # sub_up_sample_thread.start()
 
     def write_original_video_work(self, video_write, next_cnt, end_cnt):
         """
@@ -475,15 +477,16 @@ class DetectionStreamRender(FrameArrivalHandler):
         """
         start = time.time()
         task_cnt = self.task_cnt
-       
+
         next_cnt = current_idx - self.future_frames
-        video_name =  f'{current_time}_{self.cfg.index}_{str(task_cnt)}_pro.mp4'
+        video_name = f'{current_time}_{self.cfg.index}_{str(task_cnt)}_pro.mp4'
         logger.debug(
             f'Video Render [{self.index}]: Enhance Task [{task_cnt}]')
         self.wait(task_cnt, 'Enhanced Task', msg)
         end_cnt = current_idx + self.future_frames
         try:
-            self.write_up_sampled_video_work(next_cnt, end_cnt, video_name, scale=2, dst_shape=[1920, 1080],msg=msg,task_cnt=task_cnt)
+            self.write_up_sampled_video_work(next_cnt, end_cnt, video_name, scale=2, dst_shape=[1920, 1080], msg=msg,
+                                             task_cnt=task_cnt)
         except Exception as e:
             traceback.print_exc()
             logger.error(e)
@@ -491,61 +494,61 @@ class DetectionStreamRender(FrameArrivalHandler):
             f'Video Render [{self.index}]: Enhancement Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}]')
 
     def rect_render_task(self, current_idx, current_time, post_filter_event, msg: ArrivalMessage):
-            """
-            generate a short-time dolphin video with bbox indicator.
-            :param current_idx: start frame index in a slide window
-            :param current_time:
-            :param post_filter_event:
-            :param msg: arrival message
-            :return:
-            """
-            start = time.time()
-            task_cnt = self.task_cnt
-            # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
-            # target = self.rect_stream_path / (current_time + str(task_cnt) + '.mp4')
-            target = self.rect_stream_path / \
-                f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
-            logger.debug(
-                f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
-            # fourcc = cv2.VideoWriter_fourcc(*'avc1')
-            # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
-            video_write = FFMPEG_MP4Writer(
-                str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
-            next_cnt = current_idx - self.future_frames
-            # next_cnt = self.write_render_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
-            #                                         frame_cache)
-            # the future frames count
-            # next_frame_cnt = 48
-            # wait the futures frames is accessable
-            self.wait(task_cnt, 'Rect Render Task', msg)
-            end_cnt = current_idx + self.future_frames
-            try:
-                next_cnt = self.write_render_video_work(
-                    video_write, next_cnt, end_cnt,msg,task_cnt)
-            except Exception as e:
-                traceback.print_exc()
-                logger.error(e)
-            finally:
-                video_write.release()
-            logger.info(
-                f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
-                f'seconds.Done write detection stream frame into: [{str(target)}]')
-            preview_photo = self.original_frame_cache[current_idx]
-            preview_photo_path = self.preview_path / \
-                f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
-            preview_big_photo_path = self.preview_path / \
-                f'{current_time}_{self.cfg.index}_{str(task_cnt)}_big.jpg'
-            preview_big = cv2.cvtColor(preview_photo, cv2.COLOR_RGB2BGR)
-            preview_small = cv2.resize(preview_big, dsize=(0, 0), fx=0.25, fy=0.25)
+        """
+        generate a short-time dolphin video with bbox indicator.
+        :param current_idx: start frame index in a slide window
+        :param current_time:
+        :param post_filter_event:
+        :param msg: arrival message
+        :return:
+        """
+        start = time.time()
+        task_cnt = self.task_cnt
+        # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
+        # target = self.rect_stream_path / (current_time + str(task_cnt) + '.mp4')
+        target = self.rect_stream_path / \
+                 f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
+        logger.debug(
+            f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
+        # fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
+        video_write = FFMPEG_MP4Writer(
+            str(target), (self.cfg.shape[1], self.cfg.shape[0]), 25)
+        next_cnt = current_idx - self.future_frames
+        # next_cnt = self.write_render_video_work(video_write, next_cnt, current_idx, render_cache, rect_cache,
+        #                                         frame_cache)
+        # the future frames count
+        # next_frame_cnt = 48
+        # wait the futures frames is accessable
+        self.wait(task_cnt, 'Rect Render Task', msg)
+        end_cnt = current_idx + self.future_frames
+        try:
+            next_cnt = self.write_render_video_work(
+                video_write, next_cnt, end_cnt, msg, task_cnt)
+        except Exception as e:
+            traceback.print_exc()
+            logger.error(e)
+        finally:
+            video_write.release()
+        logger.info(
+            f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Consume [{round(time.time() - start, 2)}] ' +
+            f'seconds.Done write detection stream frame into: [{str(target)}]')
+        preview_photo = self.original_frame_cache[current_idx]
+        preview_photo_path = self.preview_path / \
+                             f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
+        preview_big_photo_path = self.preview_path / \
+                                 f'{current_time}_{self.cfg.index}_{str(task_cnt)}_big.jpg'
+        preview_big = cv2.cvtColor(preview_photo, cv2.COLOR_RGB2BGR)
+        preview_small = cv2.resize(preview_big, dsize=(0, 0), fx=0.25, fy=0.25)
 
-            cv2.imwrite(str(preview_photo_path), preview_small)
-            cv2.imwrite(str(preview_big_photo_path), preview_big)
-            self.post_handle(current_time, post_filter_event,
-                            target, task_cnt, preview_photo_path)
-            # if msg.no_wait:
-            # release lock status
-            # self.original_frame_cache.release()
-            # logger.info('Release original frame cache')
+        cv2.imwrite(str(preview_photo_path), preview_small)
+        cv2.imwrite(str(preview_big_photo_path), preview_big)
+        self.post_handle(current_time, post_filter_event,
+                         target, task_cnt, preview_photo_path)
+        # if msg.no_wait:
+        # release lock status
+        # self.original_frame_cache.release()
+        # logger.info('Release original frame cache')
 
     def original_render_task(self, current_idx, current_time, post_filter_event, msg: ArrivalMessage):
         """
@@ -561,7 +564,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         task_cnt = self.task_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
         target = self.original_stream_path / \
-            f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
+                 f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
         logger.debug(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
@@ -595,7 +598,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         :return:
         """
         origin_video_path = self.original_stream_path / \
-            (current_time + str(task_cnt) + '.mp4')
+                            (current_time + str(task_cnt) + '.mp4')
         if self.cfg.post_filter:
             self.do_post_filter(origin_video_path, preview,
                                 task_cnt, post_filter_event)
@@ -703,41 +706,10 @@ class Obj(object):
         else:
             return False
 
-    def get_last_rect(self):
-        return self.trace[len(self.trace) - 1]
-
-    def append_with_rules(self, idx, rect):
-        """
-         根据现有轨迹判断找到的最近邻rect是否应该加入轨迹中
-        """
-        if not self.status:
-            # 此物体已停止追踪，不加入
-            return False
-        if len(self.trace) == 0:
-            # 初始化
-            self.trace.append((idx, rect))
-            return True
-        else:
-            idx1, rect1 = self.get_last_rect()
-            if abs(idx1 - idx) > self.cfg.alg['disappear_frames_thresh']:
-                # 超过3帧未出现，停止追踪此物体
-                self.status = False
-                # self.print_obj()
-                # print(f'append idx={idx}, rect={rect}, idx1-idx>3')
-                return False
-            avg_dst = self.cal_dst(rect1, rect) / abs(idx1 - idx)
-            if avg_dst <= 200:
-                # 防止追踪剧烈闪屏
-                self.trace.append((idx, rect))
-                return True
-            else:
-                # self.print_obj()
-                # print(f'append idx={idx}, rect={rect}, dst={dst}, dst>200')
-                return False
-
-    def fitting_horizontal_line(self, float_trace):
+    def fitting_horizontal_line(self, trace, float_trace):
         """
         self.trace 与 float trace拟合直线，判断直线是否是近似的水平线
+        :param trace 要分析的轨迹
         :param float_trace: 与self.trace格式相同,[(idx1, rect1), (idx2, rect2), ...]
         :return: True->拟合出了近似水平线，False->没有拟合出近似水平线
         """
@@ -746,7 +718,7 @@ class Obj(object):
         for idx, rect in float_trace:
             x.append((rect[0] + rect[2]) / 2.0)
             y.append((rect[1] + rect[3]) / 2.0)
-        for idx, rect in self.trace:
+        for idx, rect in trace:
             x.append((rect[0] + rect[2]) / 2.0)
             y.append((rect[1] + rect[3]) / 2.0)
         if len(x) <= 1:
@@ -767,15 +739,15 @@ class Obj(object):
         else:
             return False
 
-    def is_match_with_history_float(self, float_trace_list):
+    def is_match_with_history_float(self, trace, float_trace_list):
         if len(float_trace_list) == 0:
             return False
         for float_trace in float_trace_list:
-            if self.fitting_horizontal_line(float_trace):
+            if self.fitting_horizontal_line(trace, float_trace):
                 return True
         return False
 
-    def predict_category(self, float_trace_list):
+    def predict_trace_category(self, trace, float_trace_list):
         """
         通过分析当前物体轨迹，预测当前物体类别，分析准则有：
         1、物体速度  速度过快是飞鸟
@@ -784,17 +756,16 @@ class Obj(object):
         4、物体与前一个滑动窗口中的漂浮物拟合直线，如近似拟合出一条水平线，则认为是漂浮物
         :return:
         """
-        # if len(self.trace) < 4:
-        #     # 轨迹长度过短，无法分析物体类别
-        #     self.category = 'Unknown'
-        #     return
+        if len(trace) < 4:
+            # 轨迹长度过短，无法分析物体类别
+            return 'Unknown'
         avg_speed_list = []
         continue_idx_sum = 0
         dst_sum = 0
-        area_list = [self.cal_area(self.trace[0][1])]
-        for i in range(1, len(self.trace)):
-            pre_idx, pre_rect = self.trace[i - 1]
-            current_idx, current_rect = self.trace[i]
+        area_list = [self.cal_area(trace[0][1])]
+        for i in range(1, len(trace)):
+            pre_idx, pre_rect = trace[i - 1]
+            current_idx, current_rect = trace[i]
             continue_idx_sum += abs(current_idx - pre_idx)
             area_list.append(self.cal_area(current_rect))
             dst = self.cal_dst(pre_rect, current_rect)
@@ -805,18 +776,63 @@ class Obj(object):
         self.mid_avg_speed = mid_avg_speed
         self.continue_idx_sum = continue_idx_sum
         if mid_avg_speed > self.cfg.alg['speed_x_thresh']:
-            self.category = 'bird'
+            return 'bird'
         elif continue_idx_sum > self.cfg.alg['continuous_time_thresh']:
-            self.category = 'float'
+            return 'float'
         # elif self.is_quadratic_with_negative_a(area_list):
         #    self.category = 'dolphin'
         # else:
-        elif self.is_match_with_history_float(float_trace_list):
-            self.category = 'float'
+        elif self.is_match_with_history_float(trace, float_trace_list):
+            return 'float'
         elif continue_idx_sum <= 1:
-            self.category = 'Unknown'
+            return 'Unknown'
         else:
+            return 'dolphin'
+
+    def predict_category(self, float_trace_list):
+        """
+        通过分析当前物体轨迹，预测当前物体类别，分析准则有：
+        1、物体速度  速度过快是飞鸟
+        2、物体持续时间  持续时间过长是漂浮物
+        # 3、物体面积变化曲线 江豚面积变化曲线大致为开口向下的抛物线
+        4、物体与前一个滑动窗口中的漂浮物拟合直线，如近似拟合出一条水平线，则认为是漂浮物
+        :return:
+        """
+        trace_list = self.split_trace()
+        category_list = []
+        float_trace = None
+        for trace in trace_list:
+            category = self.predict_trace_category(trace, float_trace_list)
+            if category == 'float':
+                float_trace = trace
+        if 'dolphin' in category_list:
             self.category = 'dolphin'
+        elif 'float' in category_list:
+            self.category = 'float'
+            self.trace = float_trace
+        else:
+            self.category = 'UnKnown'
+
+    def split_trace(self):
+        trace_list = []
+        if len(self.trace) <= 1:
+            trace_list.append(self.trace)
+            return trace_list
+        pre_idx, pre_rect = self.trace[0]
+        new_trace = [(pre_idx, pre_rect)]
+        for i in range(1, len(self.trace)):
+            idx, rect = self.trace[i]
+            if abs(idx - pre_idx) > self.cfg.alg['disappear_frames_thresh']:
+                trace_list.append(new_trace.copy())
+                new_trace = [(idx, rect)]
+            elif (self.cal_dst(pre_rect, rect) / abs(idx - pre_idx)) >= 200:
+                trace_list.append(new_trace.copy())
+                new_trace = [(idx, rect)]
+            else:
+                new_trace.append((idx, rect))
+            pre_idx, pre_rect = idx, rect
+        trace_list.append(new_trace.copy())
+        return trace_list
 
 
 class DetectionSignalHandler(FrameArrivalHandler):
@@ -911,9 +927,9 @@ class DetectionSignalHandler(FrameArrivalHandler):
         render_dict = self.write_bbox(traces, time_consume)
         # send message via message pipe
         self.render_queue.put(ArrivalMessage(
-            current_index, ArrivalMsgType.DETECTION, True, render_dict =render_dict))
+            current_index, ArrivalMsgType.DETECTION, True, render_dict=render_dict))
         self.render_queue.put(ArrivalMessage(
-            current_index, ArrivalMsgType.UPDATE,render_dict=render_dict))
+            current_index, ArrivalMsgType.UPDATE, render_dict=render_dict))
 
     def write_bbox(self, traces, time_consume):
         # cnt = 0
@@ -937,11 +953,13 @@ class DetectionSignalHandler(FrameArrivalHandler):
             # bbox rendering is post to render
             logger.debug(f'put detect message in msg_queue {json_msg}...')
             # print(rects)
-        #rect_block = shared_memory.ShareableList([json.dumps(render_rect_dict)])
-        empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel, timestamp=get_local_time(time_consume), dol_id=self.dol_id, camera_id=self.cfg.camera_id) 
+        # rect_block = shared_memory.ShareableList([json.dumps(render_rect_dict)])
+        empty_msg = creat_detect_empty_msg_json(video_stream=self.cfg.rtsp, channel=self.cfg.channel,
+                                                timestamp=get_local_time(time_consume), dol_id=self.dol_id,
+                                                camera_id=self.cfg.camera_id)
         self.dol_id += 1
         self.msg_queue.put(empty_msg)
-        return  render_rect_dict
+        return render_rect_dict
 
 
 class Filter(object):
@@ -973,7 +991,7 @@ class Filter(object):
         for i in range(x_num):
             for j in range(y_num):
                 region_detector_path = self.block_path / \
-                    (str(i) + '-' + str(j))
+                                       (str(i) + '-' + str(j))
                 detect_params.append(
                     DetectorParams(x_step, y_step, i, j, self.cfg, region_detector_path))
         return detect_params
@@ -1114,9 +1132,9 @@ class Filter(object):
                     current_center_x = (current_rect[0] + current_rect[2]) / 2
                     current_center_y = (current_rect[1] + current_rect[3]) / 2
                     speed_x = abs(pre_center_x - current_center_x) / \
-                        abs(pre_idx - current_idx)
+                              abs(pre_idx - current_idx)
                     speed_y = abs(pre_center_y - current_center_y) / \
-                        abs(pre_idx - current_idx)
+                              abs(pre_idx - current_idx)
                     speed_x_set.append(speed_x)
                     speed_y_set.append(speed_y)
                     # logger.info(f'speed_x={speed_x}')
@@ -1146,7 +1164,6 @@ class Filter(object):
         obj_list = self.get_obj_list_from_result_set(result_set)
         flag = False
         traces = {}
-        i = 0
         new_float_trace = []
         for obj in obj_list:
             obj.predict_category(self.float_trace_list)
@@ -1174,45 +1191,14 @@ class Filter(object):
         return math.sqrt(
             math.pow(rect1_center_x - rect2_center_x, 2) + math.pow(rect1_center_y - rect2_center_y, 2))
 
-    def find_nearest_rect(self, obj_last_rect, rects):
-        min_pos = 0
-        min_dst = self.cal_dst(obj_last_rect, rects[0])
-        for i in range(1, len(rects)):
-            dst = self.cal_dst(obj_last_rect, rects[i])
-            if dst < min_dst:
-                min_pos = i
-                min_dst = dst
-        return min_pos
-
     def get_obj_list_from_result_set(self, result_set):
         obj_list = []
         if len(result_set) == 0:
             return obj_list
-        elif len(result_set) == 1:
-            idx, rects = result_set[0]
-            for rect in rects:
-                obj = Obj(len(obj_list), self.cfg)
-                obj.append_with_rules(idx, rect)
-                obj_list.append(obj)
-            return obj_list
-        else:
-            idx, rects = result_set[0]
-            for rect in rects:
-                obj = Obj(len(obj_list), self.cfg)
-                obj.append_with_rules(idx, rect)
-                obj_list.append(obj)
-            for i in range(1, len(result_set)):
-                idx, rects = result_set[i]
-                flag_list = [False] * len(rects)
-                for obj in obj_list:
-                    idx_obj, rect_obj = obj.get_last_rect()
-                    min_pos = self.find_nearest_rect(rect_obj, rects)
-                    if obj.append_with_rules(idx, rects[min_pos]):
-                        flag_list[min_pos] = True
-                for j in range(len(flag_list)):
-                    if not flag_list[j]:
-                        rect = rects[j]
-                        obj = Obj(len(obj_list), self.cfg)
-                        obj.append_with_rules(idx, rect)
-                        obj_list.append(obj)
-            return obj_list
+        for i in range(len(result_set)):
+            obj = Obj(i, self.cfg)
+            result_list = result_set[i]
+            for index, rect in result_list:
+                obj.trace.append((index, rect))
+            obj_list.append(obj)
+        return obj_list
