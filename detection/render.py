@@ -284,7 +284,7 @@ class DetectionStreamRender(FrameArrivalHandler):
             args=(current_idx, current_time, post_filter_event, msg,), daemon=True)
         rect_render_thread.start()
 
-        print(f'Task {self.task_cnt}: current idx {msg.current_index}')
+        # print(f'Task {self.task_cnt}: current idx {msg.current_index}')
         # execute original video clip saving task.
         original_render_thread = threading.Thread(
             target=self.original_render_task,
@@ -317,11 +317,10 @@ class DetectionStreamRender(FrameArrivalHandler):
         local_time = datetime.now()
         begin = next_cnt
         end = end_cnt + 1
-        print(f'Task {task_cnt}: {rect_dict}')
+        # print(f'Task {task_cnt}: {rect_dict}')
         for index in range(begin, end):
             frame = self.original_frame_cache[index].copy()
             if frame is None:
-                print(f'Frame is none for [{index}]')
                 continue
 
             clt = copy.deepcopy(local_time)
@@ -408,13 +407,13 @@ class DetectionStreamRender(FrameArrivalHandler):
                 # rects = self.render_rect_cache[index]
                 rects = rect_dict[index]
                 if len(rects) > 0:
-                    print(f'Task {task_cnt}: first index {index}')
+                    # print(f'Task {task_cnt}: first index {index}')
                     break
         if len(rects) > 0:
             cnt = 0
             for rect in rects:
                 center = [int((rect[0] + rect[2]) / 2), int((rect[1] + rect[3]) / 2)]
-                print(f'Task {task_cnt}: center {center}')
+                # print(f'Task {task_cnt}: center {center}')
                 sub_video_name = f'{os.path.splitext(video_name)[0]}_{cnt}.mp4'
                 cnt += 1
                 # sub_up_sample_thread = threading.Thread(
@@ -485,7 +484,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         self.wait(task_cnt, 'Enhanced Task', msg)
         end_cnt = current_idx + self.future_frames
         try:
-            self.write_up_sampled_video_work(next_cnt, end_cnt, video_name, scale=2, dst_shape=[1920, 1080], msg=msg,
+            self.write_up_sampled_video_work(next_cnt, end_cnt, video_name, scale=4, dst_shape=[1920, 1080], msg=msg,
                                              task_cnt=task_cnt)
         except Exception as e:
             traceback.print_exc()
@@ -803,6 +802,7 @@ class Obj(object):
         float_trace = None
         for trace in trace_list:
             category = self.predict_trace_category(trace, float_trace_list)
+            category_list.append(category)
             if category == 'float':
                 float_trace = trace
         if 'dolphin' in category_list:
@@ -903,6 +903,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
             track_start = time.time()
             _, result_sets= self.track_requester.request(
                 self.cfg.index, current_index, rects)
+            # print(f'\n\n\nTask {task_cnt}: tracker trace: {result_sets}')
             # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
             self.detect_num += 1
             is_contain_dolphin, traces = self.post_filter.filter_by_obj_match_analyze(
@@ -912,7 +913,6 @@ class DetectionSignalHandler(FrameArrivalHandler):
             logger.info(
                 f'{self.LOG_PREFIX}: Filter result: contain dolphin: {is_contain_dolphin}')
             if is_contain_dolphin:
-                print(f'\n\n\nTask {task_cnt}: tracker trace: {result_sets}')
                 self.trigger_rendering(current_index, traces, track_consume)
                 self.task_cnt += 1
                 self.post_num += 1
