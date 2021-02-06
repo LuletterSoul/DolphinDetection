@@ -226,6 +226,7 @@ class FrameArrivalHandler(object):
         if self.quit.wait():
             self.lock_window.set()
             self.status.set(SystemStatus.SHUT_DOWN)
+            self.original_frame_cache.close()
 
     def loop(self):
         """
@@ -378,7 +379,8 @@ class DetectionStreamRender(FrameArrivalHandler):
                 clt = copy.deepcopy(local_time)
                 clt = clt + timedelta(seconds=(index - next_cnt) // 25)
                 fmt_local_time = clt.strftime("%Y-%m-%d %H:%M:%S")
-                up_sampled_img = crop_and_up_sample_image(frame, center, scale, dst_shape, task_cnt)
+                up_sampled_img = crop_and_up_sample_image(
+                    frame, center, scale, dst_shape, task_cnt)
                 up_sampled_img = paste_logo(up_sampled_img, TEMPLATE, fmt_local_time,
                                             FONT_SCALE, FONT_POSITION, FONT_SIZE)
                 video_writer.write(up_sampled_img)
@@ -412,7 +414,8 @@ class DetectionStreamRender(FrameArrivalHandler):
         if len(rects) > 0:
             cnt = 0
             for rect in rects:
-                center = [int((rect[0] + rect[2]) / 2), int((rect[1] + rect[3]) / 2)]
+                center = [int((rect[0] + rect[2]) / 2),
+                          int((rect[1] + rect[3]) / 2)]
                 # print(f'Task {task_cnt}: center {center}')
                 sub_video_name = f'{os.path.splitext(video_name)[0]}_{cnt}.mp4'
                 cnt += 1
@@ -506,7 +509,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
         # target = self.rect_stream_path / (current_time + str(task_cnt) + '.mp4')
         target = self.rect_stream_path / \
-                 f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
+            f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
         logger.debug(
             f'Video Render [{self.index}]: Rect Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # fourcc = cv2.VideoWriter_fourcc(*'avc1')
@@ -534,9 +537,9 @@ class DetectionStreamRender(FrameArrivalHandler):
             f'seconds.Done write detection stream frame into: [{str(target)}]')
         preview_photo = self.original_frame_cache[current_idx]
         preview_photo_path = self.preview_path / \
-                             f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
+            f'{current_time}_{self.cfg.index}_{str(task_cnt)}.jpg'
         preview_big_photo_path = self.preview_path / \
-                                 f'{current_time}_{self.cfg.index}_{str(task_cnt)}_big.jpg'
+            f'{current_time}_{self.cfg.index}_{str(task_cnt)}_big.jpg'
         preview_big = cv2.cvtColor(preview_photo, cv2.COLOR_RGB2BGR)
         preview_small = cv2.resize(preview_big, dsize=(0, 0), fx=0.25, fy=0.25)
 
@@ -563,7 +566,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         task_cnt = self.task_cnt
         # raw_target = self.original_stream_path / (current_time + str(self.task_cnt) + '_raw' + '.mp4')
         target = self.original_stream_path / \
-                 f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
+            f'{current_time}_{self.cfg.index}_{str(task_cnt)}.mp4'
         logger.debug(
             f'Video Render [{self.index}]: Original Render Task [{task_cnt}]: Writing detection stream frame into: [{str(target)}]')
         # video_write = cv2.VideoWriter(str(raw_target), self.fourcc, 24.0, (self.cfg.shape[1], self.cfg.shape[0]), True)
@@ -597,7 +600,7 @@ class DetectionStreamRender(FrameArrivalHandler):
         :return:
         """
         origin_video_path = self.original_stream_path / \
-                            (current_time + str(task_cnt) + '.mp4')
+            (current_time + str(task_cnt) + '.mp4')
         if self.cfg.post_filter:
             self.do_post_filter(origin_video_path, preview,
                                 task_cnt, post_filter_event)
@@ -864,6 +867,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
             logger.info(
                 f'{self.LOG_PREFIX}: All Statistic: detection number: {self.detect_num}, post number: {self.post_num}, '
                 f'filter rate: {round((abs(self.detect_num - self.post_num) / self.detect_num), 4) * 100}%')
+            self.original_frame_cache.close()
 
     def task(self, msg: ArrivalMessage):
         """
@@ -901,7 +905,7 @@ class DetectionSignalHandler(FrameArrivalHandler):
         task_cnt = self.task_cnt
         if rects is not None:
             track_start = time.time()
-            _, result_sets= self.track_requester.request(
+            _, result_sets = self.track_requester.request(
                 self.cfg.index, current_index, rects)
             # print(f'\n\n\nTask {task_cnt}: tracker trace: {result_sets}')
             # is_filter = self.post_filter.filter_by_speed_and_continuous_time(result_sets, task_cnt)
@@ -991,7 +995,7 @@ class Filter(object):
         for i in range(x_num):
             for j in range(y_num):
                 region_detector_path = self.block_path / \
-                                       (str(i) + '-' + str(j))
+                    (str(i) + '-' + str(j))
                 detect_params.append(
                     DetectorParams(x_step, y_step, i, j, self.cfg, region_detector_path))
         return detect_params
@@ -1132,9 +1136,9 @@ class Filter(object):
                     current_center_x = (current_rect[0] + current_rect[2]) / 2
                     current_center_y = (current_rect[1] + current_rect[3]) / 2
                     speed_x = abs(pre_center_x - current_center_x) / \
-                              abs(pre_idx - current_idx)
+                        abs(pre_idx - current_idx)
                     speed_y = abs(pre_center_y - current_center_y) / \
-                              abs(pre_idx - current_idx)
+                        abs(pre_idx - current_idx)
                     speed_x_set.append(speed_x)
                     speed_y_set.append(speed_y)
                     # logger.info(f'speed_x={speed_x}')

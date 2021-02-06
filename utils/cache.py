@@ -108,7 +108,6 @@ class SharedMemoryFrameCache(object):
 
     def close(self):
         self.cache_block.close()
-        self.cache_block.unlink()
 
 
 class ListCache(object):

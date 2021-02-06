@@ -475,9 +475,10 @@ class EmbeddingControlBasedTaskMonitor(EmbeddingControlMonitor):
                 self.controllers[idx].quit.set()
                 self.push_streamers[idx].quit.set()
                 self.stream_renders[idx].quit.set()
-                if self.cfgs[idx].use_sm:
-                    self.frame_caches[idx].close()
-                    # self.stream_stacks[idx][0].close()
+                # if self.cfgs[idx].use_sm:
+                #    self.frame_caches[idx].close()
+                #    self.frame_caches[idx].unlink()
+                # self.stream_stacks[idx][0].close()
             self.track_service.cancel()
         except Exception as e:
             traceback.print_exc()

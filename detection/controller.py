@@ -311,6 +311,7 @@ class TaskBasedDetectorController(DetectorController):
         """
         if self.quit.wait():
             self.status.set(SystemStatus.SHUT_DOWN)
+            self.original_frame_cache.close()
             # self.stream_render.quit.set()
 
     def init_detectors(self):
