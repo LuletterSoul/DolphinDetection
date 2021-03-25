@@ -30,5 +30,5 @@ imagecorruptions==1.1.0
 instaboostfast==0.1.2
 onnx==1.7.0
 Pillow==6.2.2
-PyYAML==5.3.1
+PyYAML==5.4
 seaborn==0.10.1
