@@ -1,5 +1,5 @@
 moviepy==1.0.1
-numpy==1.18.1
+numpy==1.22.0
 asynctest==0.13.0
 mmcv==0.5.4
 pycocotools==2.0
